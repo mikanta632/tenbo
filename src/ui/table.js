@@ -2,7 +2,7 @@
 
 import { h, svg } from "./dom.js";
 import { dealerOf, canRiichi } from "../reduce.js";
-import { kyokuName, windName, fmtPoints, fmtElapsed } from "./format.js";
+import { kyokuName, windName, fmtPoints, fmtElapsed, seatPositions } from "./format.js";
 
 const ICON_RIICHI = `<svg viewBox="0 0 64 24" width="56" height="21" aria-hidden="true">
   <rect x="1" y="4" width="62" height="16" rx="4" fill="#f4f4f4" stroke="#999"/>
@@ -12,22 +12,18 @@ const ICON_RIICHI = `<svg viewBox="0 0 64 24" width="56" height="21" aria-hidden
 const ICON_MELD = `<svg viewBox="0 0 64 28" width="56" height="24" aria-hidden="true">
   <rect x="2" y="3" width="16" height="22" rx="3" fill="#f7f3e8" stroke="#888"/>
   <rect x="24" y="3" width="16" height="22" rx="3" fill="#f7f3e8" stroke="#888"/>
-  <rect x="41" y="8" width="22" height="16" rx="3" fill="#f7f3e8" stroke="#888" transform="rotate(0)"/>
+  <rect x="41" y="8" width="22" height="16" rx="3" fill="#f7f3e8" stroke="#888"/>
   <circle cx="10" cy="14" r="3" fill="#2a7"/>
   <circle cx="32" cy="14" r="3" fill="#2a7"/>
   <circle cx="52" cy="16" r="3" fill="#2a7"/>
 </svg>`;
 
-/** 席 → 画面位置。bottom を自家とし、反時計回りに 右・上・左。 */
-export function seatPositions(bottomSeat, n) {
-  const pos = {};
-  const order = ["bottom", "right", "top", "left"];
-  for (let k = 0; k < 4; k++) {
-    const seat = (bottomSeat + k) % n;
-    if (k < n) pos[order[k]] = seat;
-  }
-  return pos;
-}
+const ICON_KITA = `<svg viewBox="0 0 40 28" width="40" height="28" aria-hidden="true">
+  <rect x="10" y="2" width="20" height="24" rx="3" fill="#f7f3e8" stroke="#888"/>
+  <text x="20" y="20" text-anchor="middle" font-size="15" font-weight="700" fill="#222">北</text>
+</svg>`;
+
+export { seatPositions };
 
 function sticks(count) {
   const shown = Math.min(count, 6);
@@ -39,14 +35,16 @@ function sticks(count) {
 
 /**
  * 対局画面を描画して要素を返す。
- * actions: { onPanel(seat), onRiichi(seat), onMeld(seat, value), onDiff(seat), onUndo(), onSpecial(), onMenu(), onLog() }
+ * actions: { onPanel(seat), onRiichi(seat), onMeld(seat, value), onKita(seat, delta), onDiff(seat),
+ *            onUndo(), onSpecial(), onMenu(), onLog() }
  * diffSeat: 点差を表示中の席（null なら通常表示）
  */
 export function renderTable({ game, state, names, actions, diffSeat = null }) {
   const rule = game.rule;
   const n = rule.playerCount;
   const dealer = dealerOf(state.kyoku, n);
-  const pos = seatPositions(game.bottomSeat ?? 0, n);
+  const pos = seatPositions(game.bottomSeat ?? 0, n, rule.emptySeat);
+  const kita = n === 3 && rule.kitaNuki;
 
   const header = h(
     "header",
@@ -65,7 +63,7 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
 
   const felt = h("div", { class: "felt" });
   for (const [position, seat] of Object.entries(pos)) {
-    felt.append(renderPanel({ position, seat, state, rule, dealer, names, actions, diff: diffSeat === seat }));
+    felt.append(renderPanel({ position, seat, state, rule, dealer, names, actions, diff: diffSeat === seat, kita }));
   }
   felt.append(
     h(
@@ -83,7 +81,7 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
     h("button", { type: "button", class: "btn-flat", onclick: actions.onMenu }, "メニュー"),
   );
 
-  return h("div", { class: "table-screen" }, header, bar, felt, footer);
+  return h("div", { class: `table-screen${kita ? " with-kita" : ""}` }, header, bar, felt, footer);
 }
 
 /** 押した人と他の人との点差（自分 − 相手）。正なら自分が上。 */
@@ -104,7 +102,7 @@ function renderDiffs(seat, state, names) {
   return h("div", { class: "diffs" }, items);
 }
 
-function renderPanel({ position, seat, state, rule, dealer, names, actions, diff = false }) {
+function renderPanel({ position, seat, state, rule, dealer, names, actions, diff = false, kita = false }) {
   const n = rule.playerCount;
   const isDealer = seat === dealer;
   const riichiOn = state.round.riichi[seat];
@@ -179,5 +177,35 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions, diff
     ),
   );
 
-  return h("div", { class: `pgroup pos-${position}`, dataset: { seat: String(seat) } }, h("div", { class: "pbtns" }, riichiBtn, meldBtn), panel);
+  // 三麻: 北抜き。[北抜き] で +1、[枚数] のタップで −1（入れ過ぎの修正）。
+  // 側面パネルの幅を増やさないよう、リーチ・副露と同じ列に並べる
+  const kitaBtns = [];
+  if (kita) {
+    const count = state.round.kita[seat];
+    kitaBtns.push(
+      h(
+        "button",
+        { type: "button", class: "ibtn kita", "aria-label": "北抜き", disabled: state.over, onclick: () => actions.onKita(seat, 1) },
+        svg(ICON_KITA),
+      ),
+      h(
+        "button",
+        {
+          type: "button",
+          class: `kita-count${count > 0 ? " on" : ""}`,
+          "aria-label": `北 ${count}枚（タップで1枚戻す）`,
+          disabled: state.over || count === 0,
+          onclick: () => actions.onKita(seat, -1),
+        },
+        `${count}枚`,
+      ),
+    );
+  }
+
+  return h(
+    "div",
+    { class: `pgroup pos-${position}`, dataset: { seat: String(seat) } },
+    h("div", { class: "pbtns" }, riichiBtn, meldBtn, kitaBtns),
+    panel,
+  );
 }

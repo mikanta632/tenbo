@@ -43,6 +43,37 @@ export function gameId(date) {
   return `g_${date.getFullYear()}${p(date.getMonth() + 1)}${p(date.getDate())}_${p(date.getHours())}${p(date.getMinutes())}`;
 }
 
+/** 画面位置の順。下（自家）から反時計回り。 */
+export const POSITION_ORDER = ["bottom", "right", "top", "left"];
+
+/**
+ * 3人麻雀で使う画面位置。rule.emptySeat の位置を除き、下から反時計回り。
+ */
+export function positionsFor(playerCount, emptySeat = "left") {
+  if (playerCount === 3) return POSITION_ORDER.filter((p) => p !== emptySeat);
+  return POSITION_ORDER.slice();
+}
+
+/**
+ * 席 → 画面位置。bottomSeat を下に置き、反時計回りに席順を割り当てる。
+ * 戻り値は { bottom: seatIndex, right: ..., ... }（3人麻雀は空席の位置を含まない）。
+ */
+export function seatPositions(bottomSeat, playerCount, emptySeat = "left") {
+  const order = positionsFor(playerCount, emptySeat);
+  const pos = {};
+  order.forEach((p, k) => (pos[p] = (bottomSeat + k) % playerCount));
+  return pos;
+}
+
+/** 途中流局の種別名 */
+export const ABORTIVE_KIND_NAMES = Object.freeze({
+  kyuushu: "九種九牌",
+  suufon: "四風連打",
+  suucha_riichi: "四家立直",
+  suukaikan: "四開槓",
+  sanchaho: "三家和",
+});
+
 /** 翻数の表示名。役満は別扱い。 */
 export function hanName(han) {
   if (han >= 13) return "数え役満";

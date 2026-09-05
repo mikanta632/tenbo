@@ -54,6 +54,19 @@ describe("storage", () => {
     assert.deepEqual(st.loadGames().map((g) => g.id), ["g_1", "g_2"]);
   });
 
+  test("updateGame は順序を保って差し替える", () => {
+    const { st } = make();
+    st.init();
+    st.appendGame({ id: "g_1", x: 0 });
+    st.appendGame({ id: "g_2", x: 0 });
+    st.updateGame({ id: "g_1", x: 9 });
+    assert.deepEqual(st.loadGames().map((g) => [g.id, g.x]), [["g_2", 0], ["g_1", 9]]);
+    st.updateGame({ id: "g_none", x: 1 });
+    assert.equal(st.loadGames().length, 2);
+    assert.equal(st.findGame("g_1").x, 9);
+    assert.equal(st.findGame("nope"), null);
+  });
+
   test("壊れた JSON は既定値に落ちる", () => {
     const { ls, st } = make();
     ls.setItem(KEYS.games, "{broken");

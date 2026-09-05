@@ -1,12 +1,13 @@
-// シート（和了入力・流局・手動修正・メニュー・終局）。docs/design.md §8.3
+// シート（和了入力・特殊処理・手動修正・メニュー・終局）。docs/design.md §8.3
 //
 // すべて確定を押すまで点数を動かさない。確定時に onConfirm(event) を呼ぶだけで、
-// イベントの発行と保存は app.js が行う。
+// イベントの発行と保存は app.js が行う。event に deltas は含めない（app 側で埋める）。
+// 各シートは initial（既存イベント）を受け取れる。ログ画面の編集で再利用する。
 
 import { h, clear, append } from "./dom.js";
 import { applyEvent, dealerOf, ranksOf } from "../reduce.js";
 import { withDeltas } from "../edit.js";
-import { fmtPoints, fmtDelta, hanName, windName } from "./format.js";
+import { fmtPoints, fmtDelta, hanName, windName, ABORTIVE_KIND_NAMES } from "./format.js";
 
 // ---- 共通のシート枠 -----------------------------------------------------
 
@@ -51,7 +52,31 @@ function choice(items, selected, onSelect, { class: cls = "" } = {}) {
   );
 }
 
-/** 点数移動のプレビュー表 */
+/** 複数選択のトグル列。set を直接書き換えて onChange() を呼ぶ。 */
+function toggles(items, set, onChange, { class: cls = "" } = {}) {
+  return h(
+    "div",
+    { class: `choice ${cls}` },
+    items.map((it) =>
+      h(
+        "button",
+        {
+          type: "button",
+          class: `chip${set.has(it.value) ? " on" : ""}${it.disabled ? " dim" : ""}`,
+          disabled: !!it.disabled,
+          onclick: () => {
+            if (set.has(it.value)) set.delete(it.value);
+            else set.add(it.value);
+            onChange();
+          },
+        },
+        it.label,
+      ),
+    ),
+  );
+}
+
+/** 点数移動のプレビュー表（供託・リーチ棒の返却を含めた実際の増減） */
 function previewTable({ state, event, rule, names }) {
   const filled = withDeltas(event, state, rule);
   const next = applyEvent(state, filled, rule);
@@ -72,10 +97,35 @@ function previewTable({ state, event, rule, names }) {
   return { el: h("div", { class: "preview" }, rows), filled, next };
 }
 
-// ---- 和了入力（§8.3） -----------------------------------------------------
-//
-// 画面ががたつかないよう、行はすべて常に描画し（使わない行は無効化）、
-// 符と役満の詳細は同じ高さのスロットに入れる。シートの高さは固定。
+function placeholderPreview({ state, names }) {
+  return h(
+    "div",
+    { class: "preview" },
+    names.map((name, i) =>
+      h("div", { class: "prow-line" }, h("span", { class: "pv-name" }, name), h("span", { class: "pv-delta" }, "—"), h("span", { class: "pv-after" }, fmtPoints(state.points[i]))),
+    ),
+  );
+}
+
+function seatLabel(i, state, names) {
+  return `${windName(i, state.kyoku, state.points.length)} ${names[i]}`;
+}
+
+function seatItems(state, names, filter = () => true) {
+  const items = [];
+  for (let i = 0; i < state.points.length; i++) if (filter(i)) items.push({ value: i, label: seatLabel(i, state, names) });
+  return items;
+}
+
+function confirmRow(onConfirm, enabled = true) {
+  return h(
+    "div",
+    { class: "sheet-actions" },
+    h("button", { type: "button", class: "btn-primary", disabled: !enabled, onclick: onConfirm }, "確定"),
+  );
+}
+
+// ---- 和了者フォーム（単独・複数で共用） ---------------------------------
 
 const HAN_ITEMS = [
   { value: 1, label: "1" },
@@ -91,74 +141,176 @@ const HAN_ITEMS = [
 ];
 const FU_ITEMS = [20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110].map((v) => ({ value: v, label: String(v) }));
 
-function seatLabel(i, state, names) {
-  return `${windName(i, state.kyoku, state.points.length)} ${names[i]}`;
+/** Winner（イベント）→ フォーム状態 */
+function winnerState(who, w = null) {
+  const s = { who, han: 1, fu: 30, yakuman: false, yakumanCount: 1, sekininWho: null, sekininCount: 1 };
+  if (w) {
+    if (w.yakumanCount > 0) {
+      s.yakuman = true;
+      s.yakumanCount = w.yakumanCount;
+      if (w.sekinin) {
+        s.sekininWho = w.sekinin.who;
+        s.sekininCount = w.sekinin.yakumanCount;
+      }
+    } else {
+      s.han = w.han;
+      s.fu = w.fu;
+    }
+  }
+  return s;
+}
+
+/** フォーム状態 → Winner */
+function winnerFromState(s, rule) {
+  return {
+    who: s.who,
+    han: s.yakuman ? 0 : s.han,
+    fu: s.yakuman ? 0 : s.fu,
+    yakumanCount: s.yakuman ? s.yakumanCount : 0,
+    sekinin:
+      s.yakuman && rule.sekinin && s.sekininWho !== null
+        ? { who: s.sekininWho, yakumanCount: Math.min(s.sekininCount, s.yakumanCount) }
+        : null,
+    chips: 0,
+  };
+}
+
+function winnerSummary(s) {
+  if (s.yakuman) return ["役満", "ダブル役満", "トリプル役満"][s.yakumanCount - 1];
+  if (s.han >= 5) return hanName(s.han);
+  return `${s.fu}符${s.han}翻`;
 }
 
 /**
- * 和了入力シート。seat の和了を入力する。
- * onConfirm(agariEvent) を呼ぶ。event に deltas は含めない（app 側で埋める）。
+ * 翻・符・役満の詳細を入力するフォーム。行は常に同じ位置に描画する。
+ * 変更のたびに onChange() を呼ぶ（呼び出し側が再描画する）。
+ */
+function winnerForm({ s, state, rule, names, onChange }) {
+  const n = rule.playerCount;
+  const others = [];
+  for (let i = 0; i < n; i++) if (i !== s.who) others.push(i);
+  const frag = document.createDocumentFragment();
+
+  append(frag,
+    h("div", { class: "label" }, "翻"),
+    choice(
+      HAN_ITEMS,
+      s.yakuman ? "yakuman" : s.han,
+      (v) => {
+        if (v === "yakuman") s.yakuman = true;
+        else {
+          s.yakuman = false;
+          s.han = v;
+        }
+        onChange();
+      },
+      { class: "grid5" },
+    ),
+  );
+
+  const slot = h("div", { class: "slot-detail" });
+  if (!s.yakuman) {
+    const fuDim = s.han >= 5;
+    append(slot,
+      h("div", { class: "label" }, fuDim ? `符（${hanName(s.han)}のため不要）` : "符"),
+      choice(
+        FU_ITEMS.map((it) => ({ ...it, disabled: fuDim })),
+        fuDim ? undefined : s.fu,
+        (v) => {
+          s.fu = v;
+          onChange();
+        },
+        { class: "grid4" },
+      ),
+    );
+  } else {
+    const sekininOn = rule.sekinin;
+    append(slot,
+      h("div", { class: "label" }, "役満"),
+      h(
+        "div",
+        { class: "row-inline" },
+        h("span", { class: "inline-label" }, "個数"),
+        choice(
+          [1, 2, 3].map((v) => ({ value: v, label: ["役満", "ダブル", "トリプル"][v - 1] })),
+          s.yakumanCount,
+          (v) => {
+            s.yakumanCount = v;
+            if (s.sekininCount > v) s.sekininCount = v;
+            onChange();
+          },
+        ),
+      ),
+      h(
+        "div",
+        { class: "row-inline" },
+        h("span", { class: "inline-label" }, "包"),
+        choice(
+          [{ value: null, label: "なし", disabled: !sekininOn }, ...others.map((i) => ({ value: i, label: names[i], disabled: !sekininOn }))],
+          sekininOn ? s.sekininWho : undefined,
+          (v) => {
+            s.sekininWho = v;
+            onChange();
+          },
+        ),
+      ),
+      h(
+        "div",
+        { class: "row-inline" },
+        h("span", { class: "inline-label" }, "責任分"),
+        choice(
+          [1, 2, 3].map((v) => ({ value: v, label: String(v), disabled: !sekininOn || s.sekininWho === null || v > s.yakumanCount })),
+          sekininOn && s.sekininWho !== null ? s.sekininCount : undefined,
+          (v) => {
+            s.sekininCount = v;
+            onChange();
+          },
+        ),
+      ),
+    );
+  }
+  frag.append(slot);
+  return frag;
+}
+
+function whoLine(seat, state, names, extra = []) {
+  const n = state.points.length;
+  const dealer = dealerOf(state.kyoku, n);
+  return h(
+    "div",
+    { class: "who-line" },
+    seat !== null ? h("span", { class: "who-wind" }, windName(seat, state.kyoku, n)) : null,
+    seat !== null ? h("span", { class: "who-name" }, names[seat]) : null,
+    seat === dealer ? h("span", { class: "tag" }, "親") : null,
+    state.honba > 0 ? h("span", { class: "tag" }, `${state.honba}本場`) : null,
+    state.kyotaku > 0 ? h("span", { class: "tag" }, `供託${state.kyotaku}`) : null,
+    ...extra,
+  );
+}
+
+// ---- 和了入力（§8.3、単独） -----------------------------------------------
+
+/**
+ * 和了入力シート。seat の和了を入力する。initial に既存の agari イベントを渡せる。
  */
 export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = null }) {
   const n = rule.playerCount;
-  const dealer = dealerOf(state.kyoku, n);
-  const s = {
-    tsumo: true,
-    from: null,
-    han: 1,
-    fu: 30,
-    yakuman: false,
-    yakumanCount: 1,
-    sekininWho: null,
-    sekininCount: 1,
-    ...(initial || {}),
-  };
+  const w0 = initial && initial.winners.find((w) => w.who === seat);
+  const s = winnerState(seat, w0);
+  const f = { tsumo: initial ? initial.tsumo : true, from: initial ? initial.from : null };
   const body = h("div", { class: "sheet-body agari-body" });
-  const isDealer = seat === dealer;
   const others = [];
   for (let i = 0; i < n; i++) if (i !== seat) others.push(i);
 
   function buildEvent() {
-    const winner = {
-      who: seat,
-      han: s.yakuman ? 0 : s.han,
-      fu: s.yakuman ? 0 : s.fu,
-      yakumanCount: s.yakuman ? s.yakumanCount : 0,
-      sekinin:
-        s.yakuman && rule.sekinin && s.sekininWho !== null
-          ? { who: s.sekininWho, yakumanCount: Math.min(s.sekininCount, s.yakumanCount) }
-          : null,
-      chips: 0,
-    };
-    return { t: "agari", tsumo: s.tsumo, from: s.tsumo ? null : s.from, winners: [winner] };
+    return { t: "agari", tsumo: f.tsumo, from: f.tsumo ? null : f.from, winners: [winnerFromState(s, rule)] };
   }
-
-  function valid() {
-    return s.tsumo || s.from !== null;
-  }
-
-  function summaryText() {
-    if (s.yakuman) return ["役満", "ダブル役満", "トリプル役満"][s.yakumanCount - 1];
-    if (s.han >= 5) return hanName(s.han);
-    return `${s.fu}符${s.han}翻`;
-  }
+  const valid = () => f.tsumo || f.from !== null;
 
   function render() {
     clear(body);
+    append(body, whoLine(seat, state, names));
 
-    append(body,
-      h(
-        "div",
-        { class: "who-line" },
-        h("span", { class: "who-wind" }, windName(seat, state.kyoku, n)),
-        h("span", { class: "who-name" }, names[seat]),
-        isDealer ? h("span", { class: "tag" }, "親") : null,
-        state.honba > 0 ? h("span", { class: "tag" }, `${state.honba}本場`) : null,
-        state.kyotaku > 0 ? h("span", { class: "tag" }, `供託${state.kyotaku}`) : null,
-      ),
-    );
-
-    // 和了の形
     append(body,
       h("div", { class: "label" }, "和了の形"),
       choice(
@@ -166,172 +318,141 @@ export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = 
           { value: true, label: "ツモ" },
           { value: false, label: "ロン" },
         ],
-        s.tsumo,
+        f.tsumo,
         (v) => {
-          s.tsumo = v;
+          f.tsumo = v;
           render();
         },
         { class: "big" },
       ),
-    );
-
-    // 放銃者（ツモのときは無効化して残す）
-    append(body,
-      h("div", { class: "label" }, s.tsumo ? "放銃者（ツモのため不要）" : "放銃者"),
+      h("div", { class: "label" }, f.tsumo ? "放銃者（ツモのため不要）" : "放銃者"),
       choice(
-        others.map((i) => ({ value: i, label: seatLabel(i, state, names), disabled: s.tsumo })),
-        s.tsumo ? undefined : s.from,
+        others.map((i) => ({ value: i, label: seatLabel(i, state, names), disabled: f.tsumo })),
+        f.tsumo ? undefined : f.from,
         (v) => {
-          s.from = v;
+          f.from = v;
           render();
         },
         { class: "grid3" },
       ),
+      winnerForm({ s, state, rule, names, onChange: render }),
     );
 
-    // 翻
-    append(body,
-      h("div", { class: "label" }, "翻"),
-      choice(
-        HAN_ITEMS,
-        s.yakuman ? "yakuman" : s.han,
-        (v) => {
-          if (v === "yakuman") s.yakuman = true;
-          else {
-            s.yakuman = false;
-            s.han = v;
-          }
-          render();
-        },
-        { class: "grid5" },
-      ),
-    );
-
-    // 符 または 役満の詳細（同じ高さのスロット）
-    const slot = h("div", { class: "slot-detail" });
-    if (!s.yakuman) {
-      const fuDim = s.han >= 5;
-      append(slot,
-        h("div", { class: "label" }, fuDim ? `符（${hanName(s.han)}のため不要）` : "符"),
-        choice(
-          FU_ITEMS.map((it) => ({ ...it, disabled: fuDim })),
-          fuDim ? undefined : s.fu,
-          (v) => {
-            s.fu = v;
-            render();
-          },
-          { class: "grid4" },
-        ),
-      );
-    } else {
-      const sekininOn = rule.sekinin;
-      append(slot,
-        h("div", { class: "label" }, "役満"),
-        h(
-          "div",
-          { class: "row-inline" },
-          h("span", { class: "inline-label" }, "個数"),
-          choice(
-            [1, 2, 3].map((v) => ({ value: v, label: ["役満", "ダブル", "トリプル"][v - 1] })),
-            s.yakumanCount,
-            (v) => {
-              s.yakumanCount = v;
-              if (s.sekininCount > v) s.sekininCount = v;
-              render();
-            },
-          ),
-        ),
-        h(
-          "div",
-          { class: "row-inline" },
-          h("span", { class: "inline-label" }, "包"),
-          choice(
-            [
-              { value: null, label: "なし", disabled: !sekininOn },
-              ...others.map((i) => ({ value: i, label: names[i], disabled: !sekininOn })),
-            ],
-            sekininOn ? s.sekininWho : undefined,
-            (v) => {
-              s.sekininWho = v;
-              render();
-            },
-          ),
-        ),
-        h(
-          "div",
-          { class: "row-inline" },
-          h("span", { class: "inline-label" }, "責任分"),
-          choice(
-            [1, 2, 3].map((v) => ({
-              value: v,
-              label: String(v),
-              disabled: !sekininOn || s.sekininWho === null || v > s.yakumanCount,
-            })),
-            sekininOn && s.sekininWho !== null ? s.sekininCount : undefined,
-            (v) => {
-              s.sekininCount = v;
-              render();
-            },
-          ),
-        ),
-      );
-    }
-    append(body, slot);
-
-    // 要約とプレビュー（常に同じ行数）
-    let confirmBtn;
     if (valid()) {
       const ev = buildEvent();
       const pv = previewTable({ state, event: ev, rule, names });
       const gain = pv.next.points[seat] - state.points[seat];
       append(body,
-        h("div", { class: "summary" }, summaryText(), h("span", { class: "summary-gain" }, ` ${fmtDelta(gain)}`)),
+        h("div", { class: "summary" }, winnerSummary(s), h("span", { class: "summary-gain" }, ` ${fmtDelta(gain)}`)),
         pv.el,
+        confirmRow(() => onConfirm(ev)),
       );
-      confirmBtn = h("button", { type: "button", class: "btn-primary", onclick: () => onConfirm(ev) }, "確定");
     } else {
       append(body,
-        h("div", { class: "summary" }, summaryText(), h("span", { class: "summary-gain dim" }, " 放銃者を選んでください")),
-        h(
-          "div",
-          { class: "preview" },
-          names.map((name, i) =>
-            h("div", { class: "prow-line" }, h("span", { class: "pv-name" }, name), h("span", { class: "pv-delta" }, "—"), h("span", { class: "pv-after" }, fmtPoints(state.points[i]))),
-          ),
-        ),
+        h("div", { class: "summary" }, winnerSummary(s), h("span", { class: "summary-gain dim" }, " 放銃者を選んでください")),
+        placeholderPreview({ state, names }),
+        confirmRow(null, false),
       );
-      confirmBtn = h("button", { type: "button", class: "btn-primary", disabled: true }, "確定");
     }
-    append(body, h("div", { class: "sheet-actions" }, confirmBtn));
   }
 
   render();
-  return openSheet({ title: "和了入力", body, fixed: true });
+  return openSheet({ title: initial ? "和了の編集" : "和了入力", body, fixed: true });
 }
 
-// ---- 流局（段階2は通常の流局のみ） -----------------------------------------
+// ---- 複数和了（ダブロン・トリロン） -----------------------------------------
 
 /**
- * 流局入力シート。テンパイ者を選んで確定する。
+ * 複数和了シート。放銃者と、和了者ごとの翻符を入力する。
  */
-export function openRyuukyokuSheet({ state, rule, names, onConfirm }) {
+export function openMultiRonSheet({ state, rule, names, onConfirm, initial = null }) {
   const n = rule.playerCount;
-  const tenpai = new Set();
+  let from = initial ? initial.from : null;
+  const forms = new Map(); // who → winnerState
+  if (initial) for (const w of initial.winners) forms.set(w.who, winnerState(w.who, w));
   const body = h("div", { class: "sheet-body" });
 
   function buildEvent() {
-    return {
-      t: "ryuukyoku",
-      type: "exhaustive",
-      abortiveKind: null,
-      tenpai: [...tenpai].sort((a, b) => a - b),
-      nagashiBy: [],
-    };
+    const winners = [...forms.values()].sort((a, b) => a.who - b.who).map((s) => winnerFromState(s, rule));
+    return { t: "agari", tsumo: false, from, winners };
+  }
+  const valid = () => from !== null && forms.size >= 1 && !forms.has(from);
+
+  function render() {
+    clear(body);
+    append(body,
+      whoLine(null, state, names),
+      h("div", { class: "label" }, "放銃者"),
+      choice(
+        seatItems(state, names),
+        from,
+        (v) => {
+          from = v;
+          forms.delete(v);
+          render();
+        },
+        { class: "grid2" },
+      ),
+      h("div", { class: "label" }, "和了者（タップで追加・解除）"),
+    );
+    for (let i = 0; i < n; i++) {
+      if (i === from) continue;
+      const on = forms.has(i);
+      append(body,
+        h(
+          "button",
+          {
+            type: "button",
+            class: `chip wide${on ? " on" : ""}`,
+            onclick: () => {
+              if (on) forms.delete(i);
+              else forms.set(i, winnerState(i));
+              render();
+            },
+          },
+          seatLabel(i, state, names),
+          on ? h("span", { class: "chip-sub" }, ` ${winnerSummary(forms.get(i))}`) : null,
+        ),
+      );
+      if (on) {
+        append(body, h("div", { class: "subform" }, winnerForm({ s: forms.get(i), state, rule, names, onChange: render })));
+      }
+    }
+    if (!rule.multiRon && forms.size > 1) {
+      append(body, h("div", { class: "hint" }, "ルールは頭ハネです。放銃者に最も近い1人だけが和了します"));
+    }
+    if (valid()) {
+      const ev = buildEvent();
+      const pv = previewTable({ state, event: ev, rule, names });
+      append(body, h("div", { class: "summary" }, `${forms.size}人和了`), pv.el, confirmRow(() => onConfirm(ev)));
+    } else {
+      append(body,
+        h("div", { class: "hint" }, from === null ? "放銃者を選んでください" : "和了者を1人以上選んでください"),
+        placeholderPreview({ state, names }),
+        confirmRow(null, false),
+      );
+    }
+  }
+
+  render();
+  return openSheet({ title: "複数和了", body });
+}
+
+// ---- 流局 ------------------------------------------------------------------
+
+/** 通常の流局。テンパイ者を選ぶ。 */
+export function openRyuukyokuSheet({ state, rule, names, onConfirm, initial = null }) {
+  const n = rule.playerCount;
+  const tenpai = new Set(initial ? initial.tenpai : []);
+  const body = h("div", { class: "sheet-body" });
+
+  function buildEvent() {
+    return { t: "ryuukyoku", type: "exhaustive", abortiveKind: null, tenpai: [...tenpai].sort((a, b) => a - b), nagashiBy: [] };
   }
 
   function render() {
     clear(body);
-    append(body, h("div", { class: "label" }, "テンパイ者（タップで切替）"));
+    append(body, whoLine(null, state, names), h("div", { class: "label" }, "テンパイ者（タップで切替）"));
     const row = h("div", { class: "choice" });
     for (let i = 0; i < n; i++) {
       row.append(
@@ -352,27 +473,209 @@ export function openRyuukyokuSheet({ state, rule, names, onConfirm }) {
         ),
       );
     }
-    append(body, row);
     const ev = buildEvent();
     const pv = previewTable({ state, event: ev, rule, names });
     const dealer = dealerOf(state.kyoku, n);
     const stays = rule.renchan === "tenpai" && tenpai.has(dealer);
     append(body,
+      row,
       h("div", { class: "summary" }, stays ? "親テンパイ: 連荘" : "親流れ", `（${state.honba + 1}本場）`),
       pv.el,
-      h("div", { class: "sheet-actions" }, h("button", { type: "button", class: "btn-primary", onclick: () => onConfirm(ev) }, "確定")),
+      confirmRow(() => onConfirm(ev)),
     );
   }
 
   render();
-  return openSheet({ title: "流局", body });
+  return openSheet({ title: initial ? "流局の編集" : "流局", body });
+}
+
+/** 途中流局。種別を選ぶ。点数移動なし、親は連荘。 */
+export function openAbortiveSheet({ state, rule, names, onConfirm, initial = null }) {
+  const kinds = (rule.abortiveRyuukyoku && rule.abortiveRyuukyoku.length ? rule.abortiveRyuukyoku : Object.keys(ABORTIVE_KIND_NAMES)).map((k) => ({
+    value: k,
+    label: ABORTIVE_KIND_NAMES[k] || k,
+  }));
+  let kind = initial ? initial.abortiveKind : kinds[0].value;
+  const body = h("div", { class: "sheet-body" });
+
+  function buildEvent() {
+    return { t: "ryuukyoku", type: "abortive", abortiveKind: kind, tenpai: [], nagashiBy: [] };
+  }
+  function render() {
+    clear(body);
+    append(body,
+      whoLine(null, state, names),
+      h("div", { class: "label" }, "種別"),
+      choice(kinds, kind, (v) => {
+        kind = v;
+        render();
+      }, { class: "grid2" }),
+      h("div", { class: "summary" }, `点数移動なし・親は連荘（${state.honba + 1}本場）`),
+      h("div", { class: "hint" }, "供託はそのまま場に残ります"),
+      confirmRow(() => onConfirm(buildEvent())),
+    );
+  }
+  render();
+  return openSheet({ title: initial ? "途中流局の編集" : "途中流局", body });
+}
+
+/** 流し満貫。成立者と（連荘判定用の）テンパイ者を選ぶ。 */
+export function openNagashiSheet({ state, rule, names, onConfirm, initial = null }) {
+  const n = rule.playerCount;
+  const by = new Set(initial ? initial.nagashiBy : []);
+  const tenpai = new Set(initial ? initial.tenpai : []);
+  const body = h("div", { class: "sheet-body" });
+
+  function buildEvent() {
+    return {
+      t: "ryuukyoku",
+      type: "nagashi",
+      abortiveKind: null,
+      tenpai: [...tenpai].sort((a, b) => a - b),
+      nagashiBy: [...by].sort((a, b) => a - b),
+    };
+  }
+  function render() {
+    clear(body);
+    const items = seatItems(state, names);
+    append(body,
+      whoLine(null, state, names),
+      h("div", { class: "label" }, "流し満貫の成立者"),
+      toggles(items, by, render, { class: "grid2" }),
+      h("div", { class: "label" }, "テンパイ者（連荘の判定に使う。テンパイ料は発生しない）"),
+      toggles(items, tenpai, render, { class: "grid2" }),
+    );
+    if (by.size > 0) {
+      const ev = buildEvent();
+      const pv = previewTable({ state, event: ev, rule, names });
+      const dealer = dealerOf(state.kyoku, n);
+      const stays = rule.renchan === "tenpai" && tenpai.has(dealer);
+      append(body, h("div", { class: "summary" }, stays ? "親テンパイ: 連荘" : "親流れ", `（${state.honba + 1}本場）`), pv.el, confirmRow(() => onConfirm(ev)));
+    } else {
+      append(body, h("div", { class: "hint" }, "成立者を選んでください"), placeholderPreview({ state, names }), confirmRow(null, false));
+    }
+  }
+  render();
+  return openSheet({ title: initial ? "流し満貫の編集" : "流し満貫", body });
+}
+
+// ---- チョンボ ----------------------------------------------------------------
+
+/** チョンボ。誰がチョンボしたかを選ぶ。manual ルールなら deltas を直接指定する。 */
+export function openChomboSheet({ state, rule, names, onConfirm, initial = null }) {
+  const n = rule.playerCount;
+  let who = initial ? initial.who : null;
+  const manual = rule.chomboRule === "manual";
+  const deltas = initial && manual && initial.deltas ? initial.deltas.slice() : new Array(n).fill(0);
+  const body = h("div", { class: "sheet-body" });
+
+  function buildEvent() {
+    const ev = { t: "chombo", who };
+    if (manual) ev.deltas = deltas.slice();
+    return ev;
+  }
+  function render() {
+    clear(body);
+    append(body,
+      whoLine(null, state, names),
+      h("div", { class: "label" }, "チョンボした人"),
+      choice(seatItems(state, names), who, (v) => {
+        who = v;
+        render();
+      }, { class: "grid2" }),
+    );
+    if (manual) {
+      append(body, h("div", { class: "label" }, "点数移動を直接指定"));
+      for (let i = 0; i < n; i++) {
+        append(body,
+          h(
+            "div",
+            { class: "row-inline" },
+            h("span", { class: "inline-label" }, names[i]),
+            h(
+              "div",
+              { class: "choice nowrap" },
+              [-1000, -100, 100, 1000].map((d) =>
+                h("button", { type: "button", class: "chip", onclick: () => {
+                  deltas[i] += d;
+                  render();
+                } }, fmtDelta(d)),
+              ),
+            ),
+            h("span", { class: "inline-value" }, fmtDelta(deltas[i])),
+          ),
+        );
+      }
+    }
+    if (who !== null) {
+      const ev = buildEvent();
+      const pv = previewTable({ state, event: ev, rule, names });
+      const riichiBack = state.round.riichi.filter(Boolean).length;
+      append(body,
+        h("div", { class: "summary" }, "この局はなかったことにする（局・本場は据え置き）"),
+        riichiBack > 0 ? h("div", { class: "hint" }, `この局のリーチ棒 ${riichiBack}本は宣言者に戻ります`) : null,
+        pv.el,
+        confirmRow(() => onConfirm(ev)),
+      );
+    } else {
+      append(body, h("div", { class: "hint" }, "チョンボした人を選んでください"), placeholderPreview({ state, names }), confirmRow(null, false));
+    }
+  }
+  render();
+  return openSheet({ title: initial ? "チョンボの編集" : "チョンボ", body });
+}
+
+// ---- 特殊終局の入口 ----------------------------------------------------------
+
+/**
+ * 特殊終局の種類を選ぶ。onPick(kind) の kind は
+ * "ryuukyoku" | "abortive" | "nagashi" | "multiRon" | "chombo" | "adjust"
+ */
+export function openSpecialMenu({ rule, onPick, title = "特殊終局", withAdjust = true, withAgari = false }) {
+  const items = [
+    withAgari ? ["agari", "和了（1人）", "ツモ・ロン"] : null,
+    ["ryuukyoku", "流局", "テンパイ料と連荘"],
+    ["abortive", "途中流局", "九種九牌・四風連打など"],
+    rule.nagashiMangan ? ["nagashi", "流し満貫", "成立者に満貫"] : null,
+    ["multiRon", "複数和了", "ダブロン・トリロン"],
+    ["chombo", "チョンボ", "罰符を払って局をやり直す"],
+    withAdjust ? ["adjust", "手動修正", "点棒とのズレを直す"] : null,
+  ].filter(Boolean);
+  const body = h("div", { class: "sheet-body" });
+  append(body,
+    h(
+      "div",
+      { class: "menu-list" },
+      items.map(([kind, label, sub]) =>
+        h("button", { type: "button", class: "menu-item", onclick: () => onPick(kind) }, label, h("span", { class: "menu-sub" }, sub)),
+      ),
+    ),
+  );
+  return openSheet({ title, body });
+}
+
+/**
+ * 既存の局末イベントを編集するシートを、イベントの種類に応じて開く。
+ */
+export function openEventEditor({ event, state, rule, names, onConfirm }) {
+  const p = { state, rule, names, onConfirm, initial: event };
+  if (event.t === "agari") {
+    if (event.tsumo || event.winners.length === 1) return openAgariSheet({ ...p, seat: event.winners[0].who });
+    return openMultiRonSheet(p);
+  }
+  if (event.t === "ryuukyoku") {
+    if (event.type === "abortive") return openAbortiveSheet(p);
+    if (event.type === "nagashi") return openNagashiSheet(p);
+    return openRyuukyokuSheet(p);
+  }
+  if (event.t === "chombo") return openChomboSheet(p);
+  throw new Error("編集できないイベント: " + event.t);
 }
 
 // ---- 手動修正 -------------------------------------------------------------
 
 /**
- * メニューから開く。対象者を選び、1タップで adjust イベントを発行する。
- * onAdjust(seat, delta)
+ * 対象者を選び、1タップで adjust イベントを発行する。onAdjust(seat, delta)
  */
 export function openAdjustSheet({ state, rule, names, onAdjust }) {
   const n = rule.playerCount;
@@ -397,9 +700,7 @@ export function openAdjustSheet({ state, rule, names, onAdjust }) {
       h(
         "div",
         { class: "choice big" },
-        steps.map((d) =>
-          h("button", { type: "button", class: "chip", disabled: seat === null, onclick: () => onAdjust(seat, d) }, fmtDelta(d)),
-        ),
+        steps.map((d) => h("button", { type: "button", class: "chip", disabled: seat === null, onclick: () => onAdjust(seat, d) }, fmtDelta(d))),
       ),
       h("div", { class: "hint" }, "精算時に卓外差額として表示されます"),
     );
@@ -442,12 +743,7 @@ export function openOverDialog({ state, rule, names, reason, onSave, onUndo }) {
       "div",
       { class: "preview" },
       order.map((i) =>
-        h(
-          "div",
-          { class: "prow-line" },
-          h("span", { class: "pv-name" }, `${ranks[i] + 1}位 ${names[i]}`),
-          h("span", { class: "pv-after" }, fmtPoints(state.points[i])),
-        ),
+        h("div", { class: "prow-line" }, h("span", { class: "pv-name" }, `${ranks[i] + 1}位 ${names[i]}`), h("span", { class: "pv-after" }, fmtPoints(state.points[i]))),
       ),
     ),
     state.kyotaku > 0 ? h("div", { class: "hint" }, `供託 ${state.kyotaku}本が残っています（精算は段階4で扱います）`) : null,
@@ -461,9 +757,7 @@ export function openOverDialog({ state, rule, names, reason, onSave, onUndo }) {
   return openSheet({ title: "終局", body, kind: "dialog" });
 }
 
-/**
- * アガリやめの選択（§5.6）。
- */
+/** アガリやめの選択（§5.6）。 */
 export function openAgariYameDialog({ dealerName, onYame, onContinue }) {
   const body = h("div", { class: "sheet-body" });
   append(body,
@@ -504,5 +798,34 @@ export function openConfirm({ title, message, okLabel = "OK", onOk }) {
     ),
   );
   sheet = openSheet({ title, body, kind: "dialog" });
+  return sheet;
+}
+
+/** 選択肢だけのシート（ログ画面の行操作など）。items: [{ label, sub?, onPick, danger? }] */
+export function openActionSheet({ title, items }) {
+  const body = h("div", { class: "sheet-body" });
+  let sheet;
+  append(body,
+    h(
+      "div",
+      { class: "menu-list" },
+      items.map((it) =>
+        h(
+          "button",
+          {
+            type: "button",
+            class: `menu-item${it.danger ? " danger" : ""}`,
+            onclick: () => {
+              sheet.close();
+              it.onPick();
+            },
+          },
+          it.label,
+          it.sub ? h("span", { class: "menu-sub" }, it.sub) : null,
+        ),
+      ),
+    ),
+  );
+  sheet = openSheet({ title, body });
   return sheet;
 }

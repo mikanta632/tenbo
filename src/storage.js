@@ -124,6 +124,17 @@ export function createStorage(ls = globalThis.localStorage, now = () => new Date
     saveGames(games) {
       write(KEYS.games, games);
     },
+    /** 終了した対局を id で差し替える（順序は変えない）。無ければ何もしない。 */
+    updateGame(game) {
+      const games = this.loadGames();
+      if (!games.some((g) => g.id === game.id)) return games;
+      const next = games.map((g) => (g.id === game.id ? game : g));
+      write(KEYS.games, next);
+      return next;
+    },
+    findGame(id) {
+      return this.loadGames().find((g) => g.id === id) || null;
+    },
 
     // --- エクスポート／インポート（§9.4） ---
     exportAll() {
