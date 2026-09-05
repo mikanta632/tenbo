@@ -55,6 +55,11 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// 「更新を確認」から明示的に頼まれたときだけ、待機中の新しい版をすぐ有効にする
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+});
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;

@@ -48,7 +48,29 @@ export function renderMisc(props) {
       { class: "card" },
       h("h2", null, "アプリ情報"),
       h("div", { class: "kv" }, h("span", null, "版"), h("b", null, props.version)),
-      h("div", { class: "hint" }, "更新は次にホーム画面から起動し直したときに反映されます。"),
+      updateBlock(props),
     ),
   );
+}
+
+/** 「更新を確認」。onCheckUpdate(setStatus) を呼び、進み具合を文で出す */
+function updateBlock(props) {
+  const status = h("div", { class: "hint", "aria-live": "polite" }, "更新は通常、次にホーム画面から起動し直したときに反映されます。今すぐ確認するにはボタンを押してください。");
+  const btn = h(
+    "button",
+    {
+      type: "button",
+      class: "btn-secondary",
+      onclick: async () => {
+        btn.disabled = true;
+        try {
+          await props.onCheckUpdate((text) => (status.textContent = text));
+        } finally {
+          btn.disabled = false;
+        }
+      },
+    },
+    "更新を確認",
+  );
+  return h("div", null, h("div", { class: "sheet-actions" }, btn), status);
 }

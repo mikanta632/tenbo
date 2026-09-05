@@ -246,7 +246,90 @@ function miscContent() {
     onTestSound: () => playTest(),
     onExport: () => exportJson(),
     onImport: (file) => importJson(file),
+    onCheckUpdate: (setStatus) => checkForUpdate(setStatus),
   });
+}
+
+// ---- 更新の確認（§10） ---------------------------------------------------
+// 新しい版があれば Service Worker に SKIP_WAITING を送り、切り替わったら再読み込みする。
+// 通常の更新は次回起動時だが、ここではユーザーが明示的に頼んだので即時に適用する。
+
+let reloadingForUpdate = false;
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloadingForUpdate) location.reload();
+  });
+}
+
+/** 公開されている最新の版番号を読む（キャッシュを通さない）。取れなければ null */
+async function fetchLatestVersion() {
+  try {
+    const res = await fetch(`./version.js?t=${Date.now()}`, { cache: "no-store" });
+    if (!res.ok) return null;
+    const m = (await res.text()).match(/APP_VERSION\s*=\s*"([^"]+)"/);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+async function checkForUpdate(setStatus) {
+  if (!("serviceWorker" in navigator)) {
+    setStatus("この環境では更新機能が使えません。");
+    return;
+  }
+  if (!navigator.onLine) {
+    setStatus("オフラインです。ネットワークにつないでからもう一度押してください。");
+    return;
+  }
+  setStatus("確認中…");
+  const latest = await fetchLatestVersion();
+  const reg = await navigator.serviceWorker.getRegistration();
+  if (!reg) {
+    setStatus(latest && latest !== APP_VERSION ? `新しい版 ${latest} があります。アプリを開き直すと反映されます。` : `最新です（${APP_VERSION}）。`);
+    return;
+  }
+  try {
+    await reg.update();
+  } catch {
+    setStatus("更新の確認に失敗しました。ネットワークを確認してください。");
+    return;
+  }
+  // 新しい SW がインストール中なら、待機状態になるまで待つ
+  const waitInstalled = (sw) =>
+    new Promise((resolve) => {
+      if (sw.state === "installed") return resolve();
+      sw.addEventListener("statechange", () => {
+        if (sw.state === "installed" || sw.state === "redundant") resolve();
+      });
+    });
+  if (reg.installing) {
+    setStatus(`新しい版${latest ? ` ${latest}` : ""}をダウンロード中…`);
+    await waitInstalled(reg.installing);
+  }
+  if (reg.waiting) {
+    const apply = () => {
+      setStatus("切り替えています…");
+      reloadingForUpdate = true;
+      reg.waiting.postMessage({ type: "SKIP_WAITING" });
+      // controllerchange が来なければ 3秒後に自力で再読み込み
+      setTimeout(() => location.reload(), 3000);
+    };
+    if (game) {
+      closeSheet();
+      openSheetHandle = openConfirm({
+        title: "更新",
+        message: `新しい版${latest ? ` ${latest}` : ""}に切り替えて再読み込みします。進行中の対局は保存されているので消えません。`,
+        okLabel: "切り替える",
+        onOk: apply,
+      });
+      setStatus("新しい版があります。");
+      return;
+    }
+    apply();
+    return;
+  }
+  setStatus(latest && latest !== APP_VERSION ? `新しい版 ${latest} が見つかりましたが、まだ取り込めていません。もう一度押してください。` : `最新です（${APP_VERSION}）。`);
 }
 
 // ---- 対局画面 -----------------------------------------------------------
