@@ -10,8 +10,11 @@
   --accent: #ffb300;
   --danger: #e0533c;
   --ph: 116px;                                  /* パネル群の高さ（ボタン列 + パネル） */
-  --pw: min(340px, calc(100vw - 16px));         /* 上下パネル群の幅 */
-  --pw-side: min(300px, calc(var(--app-h) - 2 * var(--ph) - 210px)); /* 左右パネル群の長さ */
+  /* 左右パネル群が縦に収まる長さ: 卓面の高さ（画面 − 上部・バー・下部 ≈ 130px）から上下パネル群と隙間を引く */
+  --pw-avail: calc(var(--app-h) - 2 * var(--ph) - 154px);
+  /* 上下・左右とも同じ長さにする。小さい画面では収まる長さに全員が合わせる */
+  --pw: min(340px, calc(100vw - 16px), var(--pw-avail));
+  --pw-side: var(--pw);
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
 }
@@ -52,6 +55,26 @@ button:disabled { opacity: 0.4; }
 .points-input { flex: 1; min-width: 0; font: inherit; font-size: 22px; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); background: #0b2a1b; color: var(--digit); font-variant-numeric: tabular-nums; text-align: right; }
 .btn-secondary.danger { color: #ff9d8c; border-color: rgba(255,157,140,0.5); }
 .bar-right { display: flex; gap: 6px; }
+
+/* ---- 初期画面のタブ ---- */
+.tab-shell { display: flex; flex-direction: column; min-height: var(--app-h); }
+.tab-content { flex: 1; padding-bottom: calc(64px + var(--sab)); }
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: flex; background: #0b2a1b; border-top: 1px solid rgba(255,255,255,0.15);
+  padding-bottom: var(--sab);
+}
+body.rotated .tabbar { position: absolute; }
+.tab {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 0 6px; background: none; border: none; color: var(--muted); font-size: 11px;
+}
+.tab.on { color: var(--digit); }
+.tab-icon { font-size: 20px; line-height: 1; }
+.rule-summary { font-size: 13px; color: var(--muted); margin: 4px 0 8px; line-height: 1.5; }
+.row-note { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.settings-screen .row select:disabled, .settings-screen .row input:disabled { opacity: 0.4; }
+.settings-screen .card h2 { margin-bottom: 4px; }
 .choice.segmented { margin-bottom: 8px; }
 .link-btn { background: none; border: none; padding: 0; font: inherit; font-weight: 600; color: var(--digit); text-align: left; }
 .kv-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; }

@@ -14,6 +14,8 @@ export const DEFAULT_RULE = Object.freeze({
   agariYame: true,
   tobi: true,
   tobiLine: 0,
+  nishiIri: false, // 西入。未実装（設定の記録のみ）
+  honbaPoints: 300, // 1本場あたりの加算（ロンで放銃者が払う額）。ツモは各支払者が 1/3 ずつ。0 も可
   abortiveRyuukyoku: ["kyuushu", "suufon", "suucha_riichi", "suukaikan", "sanchaho"],
   nagashiMangan: true,
   riichiUnderThousand: false,
@@ -41,6 +43,7 @@ export const DEFAULT_RULE = Object.freeze({
   rate: 50,
   rateBase: "point",
   ptRounding: "round5", // 五捨六入。"none" なら小数のまま
+  tieBreak: "chiicha", // 同点の扱い。起家に近い方が上位（これのみ実装）
 });
 
 /**

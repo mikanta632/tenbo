@@ -402,6 +402,16 @@ describe("本場の加算", () => {
   test("三麻のツモも各支払者が 100×本場", () => {
     assert.deepEqual(tsumo(w(1, 5, 30), { rule: R3, honba: 2 }), [-4200, 6400, -2200]);
   });
+  test("honbaPoints: 0 なら本場を加算しない", () => {
+    const rule = makeRule({ honbaPoints: 0 });
+    assert.deepEqual(ron(w(1, 1, 30), 2, { rule, honba: 3 }), [0, 1000, -1000, 0]);
+    assert.deepEqual(tsumo(w(0, 5, 30), { rule, honba: 2 }), [12000, -4000, -4000, -4000]);
+  });
+  test("honbaPoints: 1500（ロン 1500×本場、ツモ 各 500×本場）", () => {
+    const rule = makeRule({ honbaPoints: 1500 });
+    assert.deepEqual(ron(w(1, 1, 30), 2, { rule, honba: 1 }), [0, 2500, -2500, 0]);
+    assert.deepEqual(tsumo(w(1, 2, 20), { rule, honba: 1 }), [-1200, 3000, -900, -900]);
+  });
 });
 
 // ---- 境界 4: 責任払い ----------------------------------------------------

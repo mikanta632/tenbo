@@ -76,7 +76,12 @@ export function renderStats({ games, roster, onBack, onPlayer }) {
   return h(
     "div",
     { class: "plain-screen stats-screen" },
-    h("header", { class: "plain-top" }, h("button", { type: "button", class: "btn-flat", onclick: onBack }, "戻る"), h("div", { class: "plain-title" }, `成績（${games.length}対局）`)),
+    h(
+      "header",
+      { class: "plain-top" },
+      onBack ? h("button", { type: "button", class: "btn-flat", onclick: onBack }, "戻る") : null,
+      h("div", { class: "plain-title" }, `戦績（${games.length}対局）`),
+    ),
     games.length === 0
       ? h("section", { class: "card" }, h("div", { class: "hint" }, "終了した対局がありません"))
       : [

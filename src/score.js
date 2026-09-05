@@ -103,12 +103,15 @@ export function winnerDeltas({ rule, dealer, honba, tsumo, from, winner }) {
   // 責任分は基本点を超えない（doubleYakuman が偽のときの保険）
   const sekininBase = sekinin ? Math.min(8000 * sekinin.yakumanCount, base) : 0;
   const normalBase = base - sekininBase;
+  // 本場（§6.2）: ロンは放銃者が honbaPoints × 本場、ツモは各支払者がその 1/3 ずつ。0 なら加算なし
+  const honbaRon = rule.honbaPoints ?? 300;
+  const honbaTsumo = honbaRon / 3;
 
   if (tsumo) {
-    // 非責任分は通常のツモ配分。本場は各支払者が 100×honba を負担する
+    // 非責任分は通常のツモ配分。本場は各支払者が負担する
     for (let s = 0; s < n; s++) {
       if (s === who) continue;
-      const pay = tsumoAmount(normalBase, isDealer, s === dealer) + 100 * honba;
+      const pay = tsumoAmount(normalBase, isDealer, s === dealer) + honbaTsumo * honba;
       deltas[s] -= pay;
       deltas[who] += pay;
     }
@@ -119,7 +122,7 @@ export function winnerDeltas({ rule, dealer, honba, tsumo, from, winner }) {
       deltas[who] += amt;
     }
   } else {
-    const normal = ronAmount(normalBase, isDealer) + 300 * honba;
+    const normal = ronAmount(normalBase, isDealer) + honbaRon * honba;
     deltas[from] -= normal;
     deltas[who] += normal;
     if (sekininBase > 0) {

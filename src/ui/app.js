@@ -1,12 +1,14 @@
 // アプリ本体。画面の切替、イベントの発行と保存、終局処理、ログの編集、精算、成績、設定、エクスポート。
 // 状態は Game（イベント列）だけを持ち、表示はすべて reduce で導出する（§4.1）。
+//
+// 画面: 初期画面はタブ（対局・設定・戦績・その他）。対局中・ログ・結果・個人ページはタブ無しの全画面。
 
 import { createStorage, SCHEMA_VERSION } from "../storage.js";
 import { PRESETS, validateRule } from "../rules.js";
 import { reduce, isEndOfKyoku, agariYameAvailableAfter, dealerOf, kyokuGroups } from "../reduce.js";
 import { appendEvent, undoLast, removeEvent, replaceEvent, insertEvent, deleteKyoku, withEvents } from "../edit.js";
 import { computeSettlement } from "../settlement.js";
-import { clear } from "./dom.js";
+import { clear, h } from "./dom.js";
 import { renderStart } from "./start.js";
 import { renderTable } from "./table.js";
 import { renderLog } from "./log.js";
@@ -14,6 +16,8 @@ import { renderResult } from "./result.js";
 import { renderStats } from "./stats.js";
 import { renderPlayer } from "./player.js";
 import { renderSettings } from "./settings.js";
+import { renderMisc } from "./misc.js";
+import { renderTabBar } from "./tabs.js";
 import {
   openAgariSheet,
   openMultiRonSheet,
@@ -55,22 +59,25 @@ storage.init();
 
 const root = document.getElementById("app");
 let game = storage.loadCurrent();
-let screen = game ? "table" : "start";
+let screen = game ? "table" : "game"; // game | settings | stats | misc | table | log | result | player
 let logTarget = null; // { kind: "current" } | { kind: "finished", id }
 let resultId = null; // 結果画面で見ている終了済み対局の id
-let resultBack = "start"; // 結果画面の「戻る」先
+let resultBack = "game"; // 結果画面の「戻る」先
 let playerId = null; // 個人ページで見ているプレイヤー
+let settingsPc = 4; // 設定タブで開いている人数
 let openSheetHandle = null;
 let elapsedTimer = null;
 let diffSeat = null; // 点差を表示中の席
 let diffTimer = null;
 
-/** 組み込みプリセットに、設定画面で作ったカスタムルールを足す */
-function allPresets() {
-  const out = { ...PRESETS };
-  const custom = customRules();
-  for (const pc of ["4", "3"]) if (custom[pc]) out[`${pc}人カスタム`] = custom[pc];
-  return out;
+/** 新しい対局に使うルール。設定タブで変更していればそれ、なければプリセット */
+function rulesFor(pc) {
+  const custom = customRules()[String(pc)];
+  if (custom) return custom;
+  return Object.values(PRESETS).find((r) => r.playerCount === pc);
+}
+function isCustomRule(pc) {
+  return !!customRules()[String(pc)];
 }
 
 // ---- 効果音: すべてのボタン操作 ---------------------------------------------
@@ -90,6 +97,8 @@ document.addEventListener(
 
 // ---- 画面の切替 ---------------------------------------------------------
 
+const TAB_SCREENS = new Set(["game", "settings", "stats", "misc"]);
+
 function show(next) {
   if (next) screen = next;
   closeSheet();
@@ -98,10 +107,20 @@ function show(next) {
   if (screen === "table" && game) renderTableScreen();
   else if (screen === "log" && logTarget) renderLogScreen();
   else if (screen === "result" && resultId) renderResultScreen();
-  else if (screen === "stats") renderStatsScreen();
   else if (screen === "player" && playerId) renderPlayerScreen();
-  else if (screen === "settings") renderSettingsScreen();
-  else renderStartScreen();
+  else renderTabScreen();
+}
+
+/** タブ付きの初期画面 */
+function renderTabScreen() {
+  stopElapsed();
+  if (!TAB_SCREENS.has(screen)) screen = "game";
+  let content;
+  if (screen === "settings") content = settingsContent();
+  else if (screen === "stats") content = statsContent();
+  else if (screen === "misc") content = miscContent();
+  else content = gameTabContent();
+  root.append(h("div", { class: "tab-shell" }, h("div", { class: "tab-content" }, content), renderTabBar(screen, (key) => show(key))));
 }
 
 function closeSheet() {
@@ -126,72 +145,112 @@ function playerNames(g) {
   return g.seats.map((id) => (roster.find((p) => p.id === id) || { name: "?" }).name);
 }
 
-// ---- 開始画面 -----------------------------------------------------------
+// ---- 対局タブ -----------------------------------------------------------
 
-function renderStartScreen() {
+function gameTabContent() {
+  return renderStart({
+    storage,
+    current: game,
+    rulesFor,
+    onResume: () => show("table"),
+    onDiscard: () => {
+      openSheetHandle = openConfirm({
+        title: "破棄",
+        message: "進行中の対局を破棄します。保存されません。",
+        okLabel: "破棄する",
+        onOk: () => {
+          game = null;
+          storage.clearCurrent();
+          show("game");
+        },
+      });
+    },
+    onStart: (g) => {
+      const errors = validateRule(g.rule);
+      if (errors.length) {
+        alert("ルールが不正: " + errors.join("; "));
+        return;
+      }
+      game = g;
+      storage.saveCurrent(game);
+      show("table");
+    },
+    onOpenResult: (id) => {
+      resultId = id;
+      resultBack = "game";
+      show("result");
+    },
+    onSettings: () => show("settings"),
+  });
+}
+
+// ---- 設定タブ -----------------------------------------------------------
+
+function settingsContent() {
+  return renderSettings({
+    presets: PRESETS,
+    rulesFor,
+    isCustom: isCustomRule,
+    initialPc: settingsPc,
+    version: APP_VERSION,
+    onChange: (pc, rule) => {
+      settingsPc = pc;
+      saveCustomRule(pc, rule);
+    },
+  });
+}
+
+// ---- 戦績タブ・個人ページ（§8.5） ----------------------------------------
+
+function statsContent() {
+  return renderStats({
+    games: storage.loadGames(),
+    roster: storage.loadRoster(),
+    onBack: null,
+    onPlayer: (id) => {
+      playerId = id;
+      show("player");
+    },
+  });
+}
+
+function renderPlayerScreen() {
   stopElapsed();
   root.append(
-    renderStart({
-      storage,
-      current: game,
-      presets: allPresets(),
-      version: APP_VERSION,
-      onResume: () => show("table"),
-      onDiscard: () => {
-        openSheetHandle = openConfirm({
-          title: "破棄",
-          message: "進行中の対局を破棄します。保存されません。",
-          okLabel: "破棄する",
-          onOk: () => {
-            game = null;
-            storage.clearCurrent();
-            show("start");
-          },
-        });
-      },
-      onStart: (g) => {
-        const errors = validateRule(g.rule);
-        if (errors.length) {
-          alert("ルールが不正: " + errors.join("; "));
-          return;
-        }
-        game = g;
-        storage.saveCurrent(game);
-        show("table");
-      },
+    renderPlayer({
+      playerId,
+      roster: storage.loadRoster(),
+      games: storage.loadGames(),
+      onBack: () => show("stats"),
       onOpenResult: (id) => {
         resultId = id;
-        resultBack = "start";
+        resultBack = "player";
         show("result");
       },
-      onStats: () => show("stats"),
-      onSettings: () => show("settings"),
-      onExport: () => exportJson(),
-      onImport: (file) => importJson(file),
+      onRename: (id, name) => {
+        storage.renamePlayer(id, name);
+        show("player");
+      },
     }),
   );
 }
 
-// ---- 設定画面 -----------------------------------------------------------
+// ---- その他タブ -----------------------------------------------------------
 
-function renderSettingsScreen() {
-  stopElapsed();
-  root.append(
-    renderSettings({
-      presets: PRESETS,
-      customRules: customRules(),
-      sound: { enabled: soundEnabled(), voice: voiceName(), voices: jaVoices() },
-      version: APP_VERSION,
-      onBack: () => show("start"),
-      onSound: ({ enabled, voice }) => {
-        setSoundEnabled(enabled);
-        setVoiceName(voice || "");
-        show("settings");
-      },
-      onTestSound: () => playTest(),
-      onSaveRule: (pc, rule) => saveCustomRule(pc, rule),
-    }),
-  );
+function miscContent() {
+  return renderMisc({
+    sound: { enabled: soundEnabled(), voice: voiceName(), voices: jaVoices() },
+    version: APP_VERSION,
+    gamesCount: storage.loadGames().length,
+    onSound: ({ enabled, voice }) => {
+      setSoundEnabled(enabled);
+      setVoiceName(voice || "");
+      show("misc");
+    },
+    onTestSound: () => playTest(),
+    onExport: () => exportJson(),
+    onImport: (file) => importJson(file),
+  });
 }
 
 // ---- 対局画面 -----------------------------------------------------------
@@ -317,7 +376,7 @@ function renderTableScreen() {
             onOk: () => emit({ t: "end" }),
           });
         },
-        onBackToStart: () => show("start"),
+        onBackToStart: () => show("game"),
       });
     },
     onLog: () => {
@@ -384,7 +443,7 @@ function showOver(state, names) {
       storage.clearCurrent();
       game = null;
       resultId = finished.id;
-      resultBack = "start";
+      resultBack = "game";
       show("result");
     },
     onUndo: () => {
@@ -401,7 +460,7 @@ function showOver(state, names) {
         onOk: () => {
           game = null;
           storage.clearCurrent();
-          show("start");
+          show("game");
         },
       });
     },
@@ -422,7 +481,7 @@ function renderResultScreen() {
   stopElapsed();
   const g = storage.findGame(resultId);
   if (!g) {
-    show("start");
+    show("game");
     return;
   }
   root.append(
@@ -437,44 +496,6 @@ function renderResultScreen() {
         show("log");
       },
       onExport: () => exportJson(),
-    }),
-  );
-}
-
-// ---- 成績画面・個人ページ（§8.5） ----------------------------------------
-
-function renderStatsScreen() {
-  stopElapsed();
-  root.append(
-    renderStats({
-      games: storage.loadGames(),
-      roster: storage.loadRoster(),
-      onBack: () => show("start"),
-      onPlayer: (id) => {
-        playerId = id;
-        show("player");
-      },
-    }),
-  );
-}
-
-function renderPlayerScreen() {
-  stopElapsed();
-  root.append(
-    renderPlayer({
-      playerId,
-      roster: storage.loadRoster(),
-      games: storage.loadGames(),
-      onBack: () => show("stats"),
-      onOpenResult: (id) => {
-        resultId = id;
-        resultBack = "player";
-        show("result");
-      },
-      onRename: (id, name) => {
-        storage.renamePlayer(id, name);
-        show("player");
-      },
     }),
   );
 }
@@ -501,7 +522,7 @@ function renderLogScreen() {
   stopElapsed();
   const g = logGame();
   if (!g) {
-    show("start");
+    show("game");
     return;
   }
   const rule = g.rule;
@@ -657,7 +678,7 @@ function importJson(file) {
       onOk: () => {
         storage.importAll(data);
         game = storage.loadCurrent();
-        show(game ? "table" : "start");
+        show(game ? "table" : "game");
       },
     });
   };

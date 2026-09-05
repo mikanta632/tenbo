@@ -1,4 +1,5 @@
-// 開始画面（docs/design.md §8.1）。プレイヤー選択、ルール選択、対局開始／再開、履歴、成績、設定、バックアップ。
+// 対局タブ（docs/design.md §8.1）。プレイヤー選択、人数の選択、対局開始／再開、終了した対局の一覧。
+// ルールの中身は設定タブで編集し、ここでは 4人／3人を選ぶだけ。
 
 import { h, clear } from "./dom.js";
 import { validateRule } from "../rules.js";
@@ -33,19 +34,22 @@ export function seatsFrom4({ posPlayers, chiichaPos }) {
   return { seats, bottomSeat: (n - chiichaPos) % n };
 }
 
+/** ルールの要点を 1行にする */
+function ruleSummary(rule) {
+  const n = rule.playerCount;
+  const len = rule.length === n ? "東風" : "半荘";
+  return `${len} ・ ${fmtPoints(rule.startPoints)}持ち ${fmtPoints(rule.returnPoints)}返し ・ ウマ ${rule.uma.join("/")} ・ ${rule.rate}円/pt`;
+}
+
 /**
- * 開始画面を描画する。
- * props: { storage, current, presets, version, onResume(), onStart(game), onDiscard(),
- *          onOpenResult(gameId), onStats(), onSettings(), onExport(), onImport(file) }
+ * 対局タブを描画する。
+ * props: { storage, current, rulesFor(pc), onResume(), onStart(game), onDiscard(), onOpenResult(gameId), onSettings() }
  */
 export function renderStart(props) {
-  const { storage, current, presets, version } = props;
+  const { storage, current } = props;
   const root = h("div", { class: "start-screen" });
 
-  const presetNames = Object.keys(presets);
-  let presetName = presetNames[0];
-
-  // 4人: 画面位置ごとのプレイヤー。3人: 起家順のプレイヤー
+  let pc = 4;
   const posPlayers = [null, null, null, null];
   let chiichaPos = 0;
   const seatPlayers3 = [null, null, null];
@@ -55,8 +59,7 @@ export function renderStart(props) {
   const last = current || storage.loadGames()[0] || null;
   if (last && last.seats) {
     const n = last.seats.length;
-    const found = presetNames.find((k) => presets[k].playerCount === n);
-    if (found) presetName = found;
+    pc = n === 3 ? 3 : 4;
     if (n === 4) {
       const b = last.bottomSeat ?? 0;
       for (let k = 0; k < 4; k++) posPlayers[k] = last.seats[(b + k) % 4];
@@ -73,22 +76,10 @@ export function renderStart(props) {
     clear(root);
     const roster = storage.loadRoster();
     const nameOf = (id) => (roster.find((p) => p.id === id) || { name: "?" }).name;
-    const rule = presets[presetName];
-    const n = rule.playerCount;
+    const rule = props.rulesFor(pc);
+    const n = pc;
 
-    root.append(
-      h(
-        "header",
-        { class: "start-top" },
-        h("h1", null, "麻雀 点数表示器", h("span", { class: "ver" }, ` v${version}`)),
-        h(
-          "div",
-          { class: "start-nav" },
-          h("button", { type: "button", class: "btn-flat", onclick: props.onStats }, "成績・分析"),
-          h("button", { type: "button", class: "btn-flat", onclick: props.onSettings }, "設定"),
-        ),
-      ),
-    );
+    root.append(h("header", { class: "plain-top" }, h("div", { class: "plain-title" }, "対局")));
 
     if (current) {
       const st = reduce(current.events, current.rule);
@@ -110,18 +101,28 @@ export function renderStart(props) {
 
     const sec = h("section", { class: "card" }, h("h2", null, "新しい対局"));
 
-    // ルール
-    const presetSel = h(
-      "select",
-      {
-        onchange: (e) => {
-          presetName = e.target.value;
-          render();
-        },
-      },
-      presetNames.map((k) => h("option", { value: k, selected: k === presetName }, k)),
+    // 人数
+    sec.append(
+      h(
+        "div",
+        { class: "choice big segmented" },
+        [4, 3].map((k) =>
+          h(
+            "button",
+            {
+              type: "button",
+              class: `chip${pc === k ? " on" : ""}`,
+              onclick: () => {
+                pc = k;
+                render();
+              },
+            },
+            `${k}人麻雀`,
+          ),
+        ),
+      ),
+      h("div", { class: "rule-summary" }, ruleSummary(rule), " ", h("button", { type: "button", class: "link-btn", onclick: props.onSettings }, "設定で変更 ›")),
     );
-    sec.append(h("label", { class: "row" }, h("span", null, "ルール"), presetSel));
 
     // プレイヤー追加
     const nameInput = h("input", { type: "text", placeholder: "名前", autocomplete: "off", enterkeyhint: "done" });
@@ -153,7 +154,6 @@ export function renderStart(props) {
       );
 
     if (n === 4) {
-      // 画面位置ごとに選ぶ
       for (let k = 0; k < 4; k++) {
         const radio = h("input", { type: "radio", name: "chiicha", value: String(k), checked: chiichaPos === k, onchange: () => (chiichaPos = k) });
         sec.append(
@@ -167,7 +167,6 @@ export function renderStart(props) {
         );
       }
     } else {
-      // 起家順に選ぶ。画面上の配置は対局画面の「回転」で合わせる
       for (let k = 0; k < 3; k++) {
         sec.append(h("div", { class: "row seat-row" }, h("span", { class: "pos-label" }, SEAT_NAMES3[k]), playerSelect(seatPlayers3[k], (v) => (seatPlayers3[k] = v))));
       }
@@ -185,8 +184,7 @@ export function renderStart(props) {
             type: "button",
             class: "btn-primary",
             onclick: () => {
-              const rule = presets[presetName];
-              const n = rule.playerCount;
+              const rule = props.rulesFor(pc);
               const errors = validateRule(rule);
               const seatsInfo = n === 4 ? seatsFrom4({ posPlayers, chiichaPos }) : { seats: seatPlayers3.slice(), bottomSeat: bottomSeat3 % 3 };
               if (seatsInfo.seats.some((p) => p === null)) errors.push(`${n}人全員を選んでください`);
@@ -225,33 +223,6 @@ export function renderStart(props) {
       }
       root.append(h("section", { class: "card" }, h("h2", null, `終了した対局（${games.length}）`), list, h("div", { class: "hint" }, "タップで結果を開きます。結果画面のログから修正できます")));
     }
-
-    // バックアップ
-    const fileInput = h("input", {
-      type: "file",
-      accept: "application/json,.json",
-      class: "file-input",
-      onchange: (e) => {
-        const f = e.target.files && e.target.files[0];
-        e.target.value = "";
-        if (f) props.onImport(f);
-      },
-    });
-    root.append(
-      h(
-        "section",
-        { class: "card" },
-        h("h2", null, "バックアップ"),
-        h("div", { class: "hint" }, "データは端末内だけにあります。ホーム画面から削除すると消えるので、JSON を書き出して残してください。"),
-        h(
-          "div",
-          { class: "sheet-actions two" },
-          h("button", { type: "button", class: "btn-secondary", onclick: props.onExport }, "エクスポート"),
-          h("button", { type: "button", class: "btn-secondary", onclick: () => fileInput.click() }, "インポート"),
-        ),
-        fileInput,
-      ),
-    );
   }
 
   render();
