@@ -18,11 +18,6 @@ const ICON_MELD = `<svg viewBox="0 0 64 28" width="56" height="24" aria-hidden="
   <circle cx="52" cy="16" r="3" fill="#2a7"/>
 </svg>`;
 
-const ICON_KITA = `<svg viewBox="0 0 40 28" width="40" height="28" aria-hidden="true">
-  <rect x="10" y="2" width="20" height="24" rx="3" fill="#f7f3e8" stroke="#888"/>
-  <text x="20" y="20" text-anchor="middle" font-size="15" font-weight="700" fill="#222">北</text>
-</svg>`;
-
 export { seatPositions };
 
 function sticks(count) {
@@ -35,7 +30,7 @@ function sticks(count) {
 
 /**
  * 対局画面を描画して要素を返す。
- * actions: { onPanel(seat), onRiichi(seat), onMeld(seat, value), onKita(seat, delta), onDiff(seat),
+ * actions: { onPanel(seat), onRiichi(seat), onMeld(seat, value), onDiff(seat),
  *            onUndo(), onSpecial(), onMenu(), onLog() }
  * diffSeat: 点差を表示中の席（null なら通常表示）
  */
@@ -44,7 +39,6 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
   const n = rule.playerCount;
   const dealer = dealerOf(state.kyoku, n);
   const pos = seatPositions(game.bottomSeat ?? 0, n, rule.emptySeat);
-  const kita = n === 3 && rule.kitaNuki;
 
   const header = h(
     "header",
@@ -63,7 +57,7 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
 
   const felt = h("div", { class: "felt" });
   for (const [position, seat] of Object.entries(pos)) {
-    felt.append(renderPanel({ position, seat, state, rule, dealer, names, actions, diff: diffSeat === seat, kita }));
+    felt.append(renderPanel({ position, seat, state, rule, dealer, names, actions, diff: diffSeat === seat }));
   }
   felt.append(
     h(
@@ -81,7 +75,7 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
     h("button", { type: "button", class: "btn-flat", onclick: actions.onMenu }, "メニュー"),
   );
 
-  return h("div", { class: `table-screen${kita ? " with-kita" : ""}` }, header, bar, felt, footer);
+  return h("div", { class: "table-screen" }, header, bar, felt, footer);
 }
 
 /** 押した人と他の人との点差（自分 − 相手）。正なら自分が上。 */
@@ -102,7 +96,7 @@ function renderDiffs(seat, state, names) {
   return h("div", { class: "diffs" }, items);
 }
 
-function renderPanel({ position, seat, state, rule, dealer, names, actions, diff = false, kita = false }) {
+function renderPanel({ position, seat, state, rule, dealer, names, actions, diff = false }) {
   const n = rule.playerCount;
   const isDealer = seat === dealer;
   const riichiOn = state.round.riichi[seat];
@@ -177,35 +171,10 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions, diff
     ),
   );
 
-  // 三麻: 北抜き。[北抜き] で +1、[枚数] のタップで −1（入れ過ぎの修正）。
-  // 側面パネルの幅を増やさないよう、リーチ・副露と同じ列に並べる
-  const kitaBtns = [];
-  if (kita) {
-    const count = state.round.kita[seat];
-    kitaBtns.push(
-      h(
-        "button",
-        { type: "button", class: "ibtn kita", "aria-label": "北抜き", disabled: state.over, onclick: () => actions.onKita(seat, 1) },
-        svg(ICON_KITA),
-      ),
-      h(
-        "button",
-        {
-          type: "button",
-          class: `kita-count${count > 0 ? " on" : ""}`,
-          "aria-label": `北 ${count}枚（タップで1枚戻す）`,
-          disabled: state.over || count === 0,
-          onclick: () => actions.onKita(seat, -1),
-        },
-        `${count}枚`,
-      ),
-    );
-  }
-
   return h(
     "div",
     { class: `pgroup pos-${position}`, dataset: { seat: String(seat) } },
-    h("div", { class: "pbtns" }, riichiBtn, meldBtn, kitaBtns),
+    h("div", { class: "pbtns" }, riichiBtn, meldBtn),
     panel,
   );
 }

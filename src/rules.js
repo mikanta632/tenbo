@@ -33,7 +33,6 @@ export const DEFAULT_RULE = Object.freeze({
   chomboRule: "mangan",
 
   // 3人麻雀のみ
-  kitaNuki: true,
   emptySeat: "left",
 
   // 終局
@@ -42,8 +41,7 @@ export const DEFAULT_RULE = Object.freeze({
   // 精算
   rate: 50,
   rateBase: "point",
-  ptRounding: "round5",
-  chipValue: 0,
+  ptRounding: "round5", // 五捨六入。"none" なら小数のまま
 });
 
 /**
@@ -58,7 +56,7 @@ export const PRESETS = Object.freeze({
     length: 6,
     startPoints: 35000,
     returnPoints: 40000,
-    uma: [20, 0, -20],
+    uma: [30, -10, -20],
   }),
 });
 

@@ -1,4 +1,4 @@
-// 開始画面（docs/design.md §8.1）。プレイヤー選択、ルールプリセット選択、対局開始／再開、履歴のログ。
+// 開始画面（docs/design.md §8.1）。プレイヤー選択、ルールプリセット選択、対局開始／再開、履歴、成績、バックアップ。
 
 import { h, clear } from "./dom.js";
 import { validateRule } from "../rules.js";
@@ -30,7 +30,8 @@ export function buildGame({ rule, posPlayers, chiichaPos, now = new Date() }) {
 
 /**
  * 開始画面を描画する。
- * props: { storage, current, presets, version, onResume(), onStart(game), onDiscard(), onOpenLog(gameId) }
+ * props: { storage, current, presets, version, onResume(), onStart(game), onDiscard(),
+ *          onOpenResult(gameId), onStats(), onExport(), onImport(file) }
  */
 export function renderStart(props) {
   const { storage, current, presets, version } = props;
@@ -209,14 +210,50 @@ export function renderStart(props) {
         list.append(
           h(
             "button",
-            { type: "button", class: "menu-item", onclick: () => props.onOpenLog(g.id) },
+            { type: "button", class: "menu-item", onclick: () => props.onOpenResult(g.id) },
             h("span", null, date),
             h("span", { class: "menu-sub" }, order.map((i) => `${nameOf(g.seats[i])} ${fmtPoints(st.points[i])}`).join(" / ")),
           ),
         );
       }
-      root.append(h("section", { class: "card" }, h("h2", null, `終了した対局（${games.length}）`), list, h("div", { class: "hint" }, "タップでログを開いて修正できます")));
+      root.append(
+        h(
+          "section",
+          { class: "card" },
+          h("h2", null, `終了した対局（${games.length}）`),
+          h("div", { class: "sheet-actions" }, h("button", { type: "button", class: "btn-secondary", onclick: props.onStats }, "成績を見る")),
+          list,
+          h("div", { class: "hint" }, "タップで結果を開きます。結果画面のログから修正できます"),
+        ),
+      );
     }
+
+    // バックアップ
+    const fileInput = h("input", {
+      type: "file",
+      accept: "application/json,.json",
+      class: "file-input",
+      onchange: (e) => {
+        const f = e.target.files && e.target.files[0];
+        e.target.value = "";
+        if (f) props.onImport(f);
+      },
+    });
+    root.append(
+      h(
+        "section",
+        { class: "card" },
+        h("h2", null, "バックアップ"),
+        h("div", { class: "hint" }, "データは端末内だけにあります。ホーム画面から削除すると消えるので、JSON を書き出して残してください。"),
+        h(
+          "div",
+          { class: "sheet-actions two" },
+          h("button", { type: "button", class: "btn-secondary", onclick: props.onExport }, "エクスポート"),
+          h("button", { type: "button", class: "btn-secondary", onclick: () => fileInput.click() }, "インポート"),
+        ),
+        fileInput,
+      ),
+    );
   }
 
   render();

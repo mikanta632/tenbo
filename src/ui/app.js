@@ -1,14 +1,17 @@
-// アプリ本体。画面の切替、イベントの発行と保存、終局処理、ログの編集。
+// アプリ本体。画面の切替、イベントの発行と保存、終局処理、ログの編集、精算、成績、エクスポート。
 // 状態は Game（イベント列）だけを持ち、表示はすべて reduce で導出する（§4.1）。
 
-import { createStorage } from "../storage.js";
+import { createStorage, SCHEMA_VERSION } from "../storage.js";
 import { PRESETS, validateRule } from "../rules.js";
 import { reduce, isEndOfKyoku, agariYameAvailableAfter, dealerOf, kyokuGroups } from "../reduce.js";
 import { appendEvent, undoLast, removeEvent, replaceEvent, insertEvent, deleteKyoku, withEvents } from "../edit.js";
+import { computeSettlement } from "../settlement.js";
 import { clear } from "./dom.js";
 import { renderStart } from "./start.js";
 import { renderTable } from "./table.js";
 import { renderLog } from "./log.js";
+import { renderResult } from "./result.js";
+import { renderStats } from "./stats.js";
 import {
   openAgariSheet,
   openMultiRonSheet,
@@ -27,7 +30,7 @@ import {
 } from "./sheets.js";
 import { fmtElapsed, kyokuName } from "./format.js";
 
-export const APP_VERSION = "0.3.0";
+export const APP_VERSION = "0.4.0";
 
 const storage = createStorage();
 storage.init();
@@ -36,6 +39,7 @@ const root = document.getElementById("app");
 let game = storage.loadCurrent();
 let screen = game ? "table" : "start";
 let logTarget = null; // { kind: "current" } | { kind: "finished", id }
+let resultId = null; // 結果画面で見ている終了済み対局の id
 let openSheetHandle = null;
 let elapsedTimer = null;
 let diffSeat = null; // 点差を表示中の席
@@ -47,8 +51,11 @@ function show(next) {
   if (next) screen = next;
   closeSheet();
   clear(root);
+  window.scrollTo(0, 0);
   if (screen === "table" && game) renderTableScreen();
   else if (screen === "log" && logTarget) renderLogScreen();
+  else if (screen === "result" && resultId) renderResultScreen();
+  else if (screen === "stats") renderStatsScreen();
   else renderStartScreen();
 }
 
@@ -107,10 +114,13 @@ function renderStartScreen() {
         storage.saveCurrent(game);
         show("table");
       },
-      onOpenLog: (id) => {
-        logTarget = { kind: "finished", id };
-        show("log");
+      onOpenResult: (id) => {
+        resultId = id;
+        show("result");
       },
+      onStats: () => show("stats"),
+      onExport: () => exportJson(),
+      onImport: (file) => importJson(file),
     }),
   );
 }
@@ -173,7 +183,6 @@ function renderTableScreen() {
       emit({ t: "riichi", who: seat });
     },
     onMeld: (seat, value) => emit({ t: "meld", who: seat, value }),
-    onKita: (seat, delta) => emit({ t: "kita", who: seat, delta }),
     // +/−: 押した人と他の人との点差を表示する。点数は動かさない。一定時間で戻る
     onDiff: (seat) => {
       if (diffTimer) clearTimeout(diffTimer);
@@ -279,11 +288,14 @@ function showOver(state, names) {
     names,
     reason,
     onSave: () => {
+      // 精算を確定して焼き込み、終了した対局に移す（§7, §9.2）
       const finished = { ...game, endedAt: new Date().toISOString() };
+      finished.settlement = { ...computeSettlement(finished), computedAt: finished.endedAt };
       storage.appendGame(finished);
       storage.clearCurrent();
       game = null;
-      show("start");
+      resultId = finished.id;
+      show("result");
     },
     onUndo: () => {
       game = withEvents(game, undoLast(game.events, rule));
@@ -293,6 +305,46 @@ function showOver(state, names) {
   });
 }
 
+// ---- 結果画面（§7） ------------------------------------------------------
+
+/** 終了した対局の精算。編集で null に戻っていれば再計算して保存する。 */
+function settlementOf(g) {
+  if (g.settlement) return g.settlement;
+  const s = { ...computeSettlement(g), computedAt: new Date().toISOString() };
+  storage.updateGame({ ...g, settlement: s });
+  return s;
+}
+
+function renderResultScreen() {
+  stopElapsed();
+  const g = storage.findGame(resultId);
+  if (!g) {
+    show("start");
+    return;
+  }
+  root.append(
+    renderResult({
+      game: g,
+      names: playerNames(g),
+      settlement: settlementOf(g),
+      title: `結果 ${(g.endedAt || g.startedAt || "").slice(0, 16).replace("T", " ")}`,
+      onBack: () => show("start"),
+      onLog: () => {
+        logTarget = { kind: "finished", id: g.id };
+        show("log");
+      },
+      onExport: () => exportJson(),
+    }),
+  );
+}
+
+// ---- 成績画面（§8.5） ----------------------------------------------------
+
+function renderStatsScreen() {
+  stopElapsed();
+  root.append(renderStats({ games: storage.loadGames(), roster: storage.loadRoster(), onBack: () => show("start") }));
+}
+
 // ---- ログ画面（§8.4） ---------------------------------------------------
 
 function logGame() {
@@ -300,7 +352,7 @@ function logGame() {
   return storage.findGame(logTarget.id);
 }
 
-/** 編集結果を保存する。進行中なら mj.current、終了済みなら mj.games を更新する。 */
+/** 編集結果を保存する。進行中なら mj.current、終了済みなら mj.games を更新する（settlement は null に戻る）。 */
 function saveLogGame(events) {
   if (logTarget.kind === "current") {
     game = withEvents(game, events);
@@ -334,7 +386,13 @@ function renderLogScreen() {
       game: g,
       names,
       title,
-      onBack: () => show(logTarget.kind === "current" ? "table" : "start"),
+      onBack: () => {
+        if (logTarget.kind === "current") show("table");
+        else {
+          resultId = logTarget.id;
+          show("result");
+        }
+      },
       onEdit: (gi) => {
         const group = kyokuGroups(g.events)[gi];
         const idx = group.endIndex;
@@ -402,6 +460,74 @@ function renderLogScreen() {
       },
     }),
   );
+}
+
+// ---- エクスポート／インポート（§9.4） ------------------------------------
+
+function exportFilename() {
+  const d = new Date();
+  const p = (x) => String(x).padStart(2, "0");
+  return `mj-export-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.json`;
+}
+
+/** 全データを JSON で書き出す。共有シートが使えればそれを、なければダウンロードリンクを使う。 */
+async function exportJson() {
+  const data = storage.exportAll();
+  const json = JSON.stringify(data, null, 1);
+  const name = exportFilename();
+  const file = new File([json], name, { type: "application/json" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: name });
+      return;
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+    }
+  }
+  const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+/** JSON を読み込んで全データを置き換える。確認してから反映する。 */
+function importJson(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let data;
+    try {
+      data = JSON.parse(String(reader.result));
+    } catch {
+      alert("JSON として読めませんでした");
+      return;
+    }
+    if (!data || typeof data !== "object" || !Array.isArray(data.games) || !Array.isArray(data.roster)) {
+      alert("形式が違います（roster と games が必要です）");
+      return;
+    }
+    const ver = (data.meta && data.meta.schemaVersion) || 0;
+    if (ver > SCHEMA_VERSION) {
+      alert(`このアプリより新しい形式です（schemaVersion ${ver}）`);
+      return;
+    }
+    closeSheet();
+    openSheetHandle = openConfirm({
+      title: "インポート",
+      message: `対局 ${data.games.length}件、プレイヤー ${data.roster.length}人を読み込み、今のデータをすべて置き換えます。`,
+      okLabel: "置き換える",
+      onOk: () => {
+        storage.importAll(data);
+        game = storage.loadCurrent();
+        show(game ? "table" : "start");
+      },
+    });
+  };
+  reader.readAsText(file);
 }
 
 // ---- 経過時間 -----------------------------------------------------------
