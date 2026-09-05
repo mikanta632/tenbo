@@ -29,6 +29,7 @@ import {
   openActionSheet,
 } from "./sheets.js";
 import { fmtElapsed, kyokuName } from "./format.js";
+import { soundEnabled, setSoundEnabled, playRiichi, playRiichiCancel, playMeld, playTest } from "./sound.js";
 
 // 版番号は version.js（index.html の classic script で読み込む）が唯一の定義。sw.js も同じファイルを読む
 export const APP_VERSION = globalThis.APP_VERSION || "dev";
@@ -176,14 +177,20 @@ function renderTableScreen() {
       if (state.round.riichi[seat]) {
         const idx = findCurrentRiichiIndex(game.events, seat);
         if (idx < 0) return;
+        playRiichiCancel();
         game = withEvents(game, removeEvent(game.events, idx, rule));
         storage.saveCurrent(game);
         show();
         return;
       }
+      // 音はタップの同期処理の中で鳴らす（iOS はユーザー操作外の再生を許さない）
+      playRiichi();
       emit({ t: "riichi", who: seat });
     },
-    onMeld: (seat, value) => emit({ t: "meld", who: seat, value }),
+    onMeld: (seat, value) => {
+      playMeld(value);
+      emit({ t: "meld", who: seat, value });
+    },
     // +/−: 押した人と他の人との点差を表示する。点数は動かさない。一定時間で戻る
     onDiff: (seat) => {
       if (diffTimer) clearTimeout(diffTimer);
@@ -218,6 +225,12 @@ function renderTableScreen() {
       closeSheet();
       openSheetHandle = openMenu({
         version: APP_VERSION,
+        soundOn: soundEnabled(),
+        onToggleSound: () => {
+          setSoundEnabled(!soundEnabled());
+          actions.onMenu(); // 開き直して表示を更新
+        },
+        onTestSound: () => playTest(),
         onAdjust: () => {
           closeSheet();
           openSheetHandle = openAdjustSheet({ state, rule, names, onAdjust: adjustAndEmit });

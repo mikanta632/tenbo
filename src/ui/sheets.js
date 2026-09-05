@@ -712,12 +712,19 @@ export function openAdjustSheet({ state, rule, names, onAdjust }) {
 
 // ---- メニュー ------------------------------------------------------------
 
-export function openMenu({ version, onAdjust, onEndGame, onBackToStart }) {
+export function openMenu({ version, soundOn, onToggleSound, onTestSound, onAdjust, onEndGame, onBackToStart }) {
   const body = h("div", { class: "sheet-body" });
   append(body,
     h(
       "div",
       { class: "menu-list" },
+      h(
+        "button",
+        { type: "button", class: "menu-item", onclick: onToggleSound },
+        `効果音: ${soundOn ? "オン" : "オフ"}`,
+        h("span", { class: "menu-sub" }, "リーチは音声、副露は電子音。タップで切替"),
+      ),
+      soundOn ? h("button", { type: "button", class: "menu-item", onclick: onTestSound }, "効果音を試す") : null,
       h("button", { type: "button", class: "menu-item", onclick: onAdjust }, "手動修正（点棒とのズレを直す）"),
       h("button", { type: "button", class: "menu-item", onclick: onEndGame }, "対局を終了する（手動終局）"),
       h("button", { type: "button", class: "menu-item", onclick: onBackToStart }, "開始画面へ戻る（対局は保持）"),
