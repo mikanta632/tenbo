@@ -109,7 +109,8 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions, diff
   const isDealer = seat === dealer;
   const riichiOn = state.round.riichi[seat];
   const melded = state.round.melded[seat];
-  const riichiDisabled = riichiOn || state.over || !canRiichi(state, seat, rule);
+  // リーチ中は再タップで解除できるので有効のまま。未リーチで 1000点未満なら不可
+  const riichiDisabled = state.over || (!riichiOn && !canRiichi(state, seat, rule));
 
   const riichiBtn = h(
     "button",

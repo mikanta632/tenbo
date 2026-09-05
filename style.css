@@ -205,6 +205,23 @@ button:disabled { opacity: 0.4; }
 .summary { min-height: 24px; }
 .summary-gain.dim { color: var(--muted); font-weight: normal; font-size: 14px; }
 
+/* 背の低い端末（iPhone SE 系）では和了入力を詰めて、スクロールなしで確定に届かせる */
+@media (max-height: 700px) {
+  .sheet.fixed { height: calc(100vh - 12px); height: calc(100dvh - 12px); }
+  .sheet.fixed .sheet-head { padding: 6px 16px 0; }
+  .agari-body .who-line { font-size: 16px; margin: 0; }
+  .agari-body .chip { min-height: 34px; font-size: 15px; }
+  .agari-body .choice.big .chip { min-height: 42px; font-size: 17px; }
+  .agari-body .label { margin: 4px 0 2px; font-size: 12px; }
+  .slot-detail { min-height: 138px; }
+  .agari-body .row-inline { margin: 3px 0; }
+  .agari-body .summary { margin: 6px 0 2px; font-size: 15px; min-height: 20px; }
+  .agari-body .preview { padding: 2px 10px; }
+  .agari-body .preview .prow-line { padding: 0; font-size: 14px; }
+  .agari-body .sheet-actions { margin-top: 6px; }
+  .agari-body .btn-primary { min-height: 44px; font-size: 17px; }
+}
+
 /* 点差表示（+/−） */
 .adj.on { background: var(--accent); color: #111; border-color: var(--accent); }
 .diffs { display: flex; gap: 10px; flex: 1; min-width: 0; align-items: baseline; }

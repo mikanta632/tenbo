@@ -4,7 +4,7 @@
 import { createStorage } from "../storage.js";
 import { PRESETS, validateRule } from "../rules.js";
 import { reduce, isEndOfKyoku, agariYameAvailableAfter, dealerOf } from "../reduce.js";
-import { appendEvent, undoLast, withEvents } from "../edit.js";
+import { appendEvent, undoLast, removeEvent, withEvents } from "../edit.js";
 import { clear } from "./dom.js";
 import { renderStart } from "./start.js";
 import { renderTable } from "./table.js";
@@ -47,6 +47,16 @@ function closeSheet() {
     openSheetHandle.close();
     openSheetHandle = null;
   }
+}
+
+/** 現在局（最後の局末イベントより後）にある seat の riichi イベントの添字。無ければ -1。 */
+function findCurrentRiichiIndex(events, seat) {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i];
+    if (isEndOfKyoku(e)) return -1;
+    if (e.t === "riichi" && e.who === seat) return i;
+  }
+  return -1;
 }
 
 function playerNames(g) {
@@ -113,7 +123,18 @@ function renderTableScreen() {
         },
       });
     },
-    onRiichi: (seat) => emit({ t: "riichi", who: seat }),
+    // リーチ。再タップでその局の riichi イベントを削除して解除する
+    onRiichi: (seat) => {
+      if (state.round.riichi[seat]) {
+        const idx = findCurrentRiichiIndex(game.events, seat);
+        if (idx < 0) return;
+        game = withEvents(game, removeEvent(game.events, idx, rule));
+        storage.saveCurrent(game);
+        show();
+        return;
+      }
+      emit({ t: "riichi", who: seat });
+    },
     onMeld: (seat, value) => emit({ t: "meld", who: seat, value }),
     // +/−: 押した人と他の人との点差を表示する。点数は動かさない。一定時間で戻る
     onDiff: (seat) => {
