@@ -13,9 +13,9 @@ import { fmtPoints, fmtDelta, hanName, windName } from "./format.js";
 /**
  * 画面下からのシート。body に追加する。戻り値の close() で閉じる。
  */
-export function openSheet({ title, body, onClose, kind = "sheet" }) {
+export function openSheet({ title, body, onClose, kind = "sheet", fixed = false }) {
   const overlay = h("div", { class: `overlay overlay-${kind}` });
-  const box = h("div", { class: kind, role: "dialog", "aria-label": title });
+  const box = h("div", { class: `${kind}${fixed ? " fixed" : ""}`, role: "dialog", "aria-label": title });
   const closeBtn = h("button", { class: "sheet-close", type: "button", onclick: () => close() }, "閉じる");
   const head = h("div", { class: "sheet-head" }, h("div", { class: "sheet-title" }, title), closeBtn);
   box.append(head, body);
@@ -73,9 +73,27 @@ function previewTable({ state, event, rule, names }) {
 }
 
 // ---- 和了入力（§8.3） -----------------------------------------------------
+//
+// 画面ががたつかないよう、行はすべて常に描画し（使わない行は無効化）、
+// 符と役満の詳細は同じ高さのスロットに入れる。シートの高さは固定。
 
-const HAN_ITEMS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map((v) => ({ value: v, label: String(v) }));
+const HAN_ITEMS = [
+  { value: 1, label: "1" },
+  { value: 2, label: "2" },
+  { value: 3, label: "3" },
+  { value: 4, label: "4" },
+  { value: 5, label: "満貫" },
+  { value: 6, label: "跳満" },
+  { value: 8, label: "倍満" },
+  { value: 11, label: "三倍満" },
+  { value: 13, label: "数え役満" },
+  { value: "yakuman", label: "役満" },
+];
 const FU_ITEMS = [20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110].map((v) => ({ value: v, label: String(v) }));
+
+function seatLabel(i, state, names) {
+  return `${windName(i, state.kyoku, state.points.length)} ${names[i]}`;
+}
 
 /**
  * 和了入力シート。seat の和了を入力する。
@@ -95,8 +113,10 @@ export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = 
     sekininCount: 1,
     ...(initial || {}),
   };
-  const body = h("div", { class: "sheet-body" });
+  const body = h("div", { class: "sheet-body agari-body" });
   const isDealer = seat === dealer;
+  const others = [];
+  for (let i = 0; i < n; i++) if (i !== seat) others.push(i);
 
   function buildEvent() {
     const winner = {
@@ -114,14 +134,17 @@ export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = 
   }
 
   function valid() {
-    if (!s.tsumo && s.from === null) return false;
-    return true;
+    return s.tsumo || s.from !== null;
+  }
+
+  function summaryText() {
+    if (s.yakuman) return ["役満", "ダブル役満", "トリプル役満"][s.yakumanCount - 1];
+    if (s.han >= 5) return hanName(s.han);
+    return `${s.fu}符${s.han}翻`;
   }
 
   function render() {
     clear(body);
-    const others = [];
-    for (let i = 0; i < n; i++) if (i !== seat) others.push(i);
 
     append(body,
       h(
@@ -135,6 +158,7 @@ export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = 
       ),
     );
 
+    // 和了の形
     append(body,
       h("div", { class: "label" }, "和了の形"),
       choice(
@@ -151,24 +175,25 @@ export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = 
       ),
     );
 
-    if (!s.tsumo) {
-      append(body,
-        h("div", { class: "label" }, "放銃者"),
-        choice(
-          others.map((i) => ({ value: i, label: `${windName(i, state.kyoku, n)} ${names[i]}` })),
-          s.from,
-          (v) => {
-            s.from = v;
-            render();
-          },
-        ),
-      );
-    }
+    // 放銃者（ツモのときは無効化して残す）
+    append(body,
+      h("div", { class: "label" }, s.tsumo ? "放銃者（ツモのため不要）" : "放銃者"),
+      choice(
+        others.map((i) => ({ value: i, label: seatLabel(i, state, names), disabled: s.tsumo })),
+        s.tsumo ? undefined : s.from,
+        (v) => {
+          s.from = v;
+          render();
+        },
+        { class: "grid3" },
+      ),
+    );
 
+    // 翻
     append(body,
       h("div", { class: "label" }, "翻"),
       choice(
-        [...HAN_ITEMS, { value: "yakuman", label: "役満" }],
+        HAN_ITEMS,
         s.yakuman ? "yakuman" : s.han,
         (v) => {
           if (v === "yakuman") s.yakuman = true;
@@ -178,93 +203,110 @@ export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = 
           }
           render();
         },
-        { class: "grid7" },
+        { class: "grid5" },
       ),
     );
 
+    // 符 または 役満の詳細（同じ高さのスロット）
+    const slot = h("div", { class: "slot-detail" });
     if (!s.yakuman) {
       const fuDim = s.han >= 5;
-      append(body,
+      append(slot,
         h("div", { class: "label" }, fuDim ? `符（${hanName(s.han)}のため不要）` : "符"),
         choice(
           FU_ITEMS.map((it) => ({ ...it, disabled: fuDim })),
-          s.fu,
+          fuDim ? undefined : s.fu,
           (v) => {
             s.fu = v;
             render();
           },
-          { class: "grid6" },
+          { class: "grid4" },
         ),
       );
     } else {
-      append(body,
-        h("div", { class: "label" }, "役満の個数"),
-        choice(
-          [1, 2, 3].map((v) => ({ value: v, label: v === 1 ? "役満" : v === 2 ? "ダブル" : "トリプル" })),
-          s.yakumanCount,
-          (v) => {
-            s.yakumanCount = v;
-            if (s.sekininCount > v) s.sekininCount = v;
-            render();
-          },
+      const sekininOn = rule.sekinin;
+      append(slot,
+        h("div", { class: "label" }, "役満"),
+        h(
+          "div",
+          { class: "row-inline" },
+          h("span", { class: "inline-label" }, "個数"),
+          choice(
+            [1, 2, 3].map((v) => ({ value: v, label: ["役満", "ダブル", "トリプル"][v - 1] })),
+            s.yakumanCount,
+            (v) => {
+              s.yakumanCount = v;
+              if (s.sekininCount > v) s.sekininCount = v;
+              render();
+            },
+          ),
         ),
-      );
-      if (rule.sekinin) {
-        append(body,
-          h("div", { class: "label" }, "責任払い（包）"),
+        h(
+          "div",
+          { class: "row-inline" },
+          h("span", { class: "inline-label" }, "包"),
           choice(
             [
-              { value: null, label: "なし" },
-              ...others.map((i) => ({ value: i, label: `${windName(i, state.kyoku, n)} ${names[i]}` })),
+              { value: null, label: "なし", disabled: !sekininOn },
+              ...others.map((i) => ({ value: i, label: names[i], disabled: !sekininOn })),
             ],
-            s.sekininWho,
+            sekininOn ? s.sekininWho : undefined,
             (v) => {
               s.sekininWho = v;
               render();
             },
           ),
-        );
-        if (s.sekininWho !== null && s.yakumanCount > 1) {
-          append(body,
-            h("div", { class: "label" }, "責任分の個数"),
-            choice(
-              Array.from({ length: s.yakumanCount }, (_, k) => ({ value: k + 1, label: String(k + 1) })),
-              s.sekininCount,
-              (v) => {
-                s.sekininCount = v;
-                render();
-              },
-            ),
-          );
-        }
-      }
+        ),
+        h(
+          "div",
+          { class: "row-inline" },
+          h("span", { class: "inline-label" }, "責任分"),
+          choice(
+            [1, 2, 3].map((v) => ({
+              value: v,
+              label: String(v),
+              disabled: !sekininOn || s.sekininWho === null || v > s.yakumanCount,
+            })),
+            sekininOn && s.sekininWho !== null ? s.sekininCount : undefined,
+            (v) => {
+              s.sekininCount = v;
+              render();
+            },
+          ),
+        ),
+      );
     }
+    append(body, slot);
 
-    // プレビュー
+    // 要約とプレビュー（常に同じ行数）
     let confirmBtn;
     if (valid()) {
       const ev = buildEvent();
       const pv = previewTable({ state, event: ev, rule, names });
       const gain = pv.next.points[seat] - state.points[seat];
       append(body,
-        h(
-          "div",
-          { class: "summary" },
-          s.yakuman ? (s.yakumanCount === 1 ? "役満" : s.yakumanCount === 2 ? "ダブル役満" : "トリプル役満") : s.han >= 5 ? `${s.han}翻 ${hanName(s.han)}` : `${s.fu}符${s.han}翻`,
-          h("span", { class: "summary-gain" }, ` ${fmtDelta(gain)}`),
-        ),
+        h("div", { class: "summary" }, summaryText(), h("span", { class: "summary-gain" }, ` ${fmtDelta(gain)}`)),
         pv.el,
       );
       confirmBtn = h("button", { type: "button", class: "btn-primary", onclick: () => onConfirm(ev) }, "確定");
     } else {
-      append(body, h("div", { class: "hint" }, "放銃者を選んでください"));
+      append(body,
+        h("div", { class: "summary" }, summaryText(), h("span", { class: "summary-gain dim" }, " 放銃者を選んでください")),
+        h(
+          "div",
+          { class: "preview" },
+          names.map((name, i) =>
+            h("div", { class: "prow-line" }, h("span", { class: "pv-name" }, name), h("span", { class: "pv-delta" }, "—"), h("span", { class: "pv-after" }, fmtPoints(state.points[i]))),
+          ),
+        ),
+      );
       confirmBtn = h("button", { type: "button", class: "btn-primary", disabled: true }, "確定");
     }
     append(body, h("div", { class: "sheet-actions" }, confirmBtn));
   }
 
   render();
-  return openSheet({ title: "和了入力", body });
+  return openSheet({ title: "和了入力", body, fixed: true });
 }
 
 // ---- 流局（段階2は通常の流局のみ） -----------------------------------------
@@ -326,41 +368,56 @@ export function openRyuukyokuSheet({ state, rule, names, onConfirm }) {
   return openSheet({ title: "流局", body });
 }
 
-// ---- 手動修正（+/−） -------------------------------------------------------
+// ---- 手動修正 -------------------------------------------------------------
 
 /**
- * パネルの +/− から開く。1タップで adjust イベントを発行する。
+ * メニューから開く。対象者を選び、1タップで adjust イベントを発行する。
+ * onAdjust(seat, delta)
  */
-export function openAdjustSheet({ state, rule, names, seat, onAdjust }) {
+export function openAdjustSheet({ state, rule, names, onAdjust }) {
+  const n = rule.playerCount;
+  let seat = null;
   const body = h("div", { class: "sheet-body" });
   const steps = [-1000, -100, 100, 1000];
-  append(body,
-    h("div", { class: "who-line" }, h("span", { class: "who-name" }, names[seat]), h("span", { class: "tag" }, fmtPoints(state.points[seat]))),
-    h("div", { class: "label" }, "物理点棒に合わせて修正（相手方は指定しない）"),
-    h(
-      "div",
-      { class: "choice big" },
-      steps.map((d) =>
-        h(
-          "button",
-          { type: "button", class: "chip", onclick: () => onAdjust(d) },
-          fmtDelta(d),
+
+  function render() {
+    clear(body);
+    append(body,
+      h("div", { class: "label" }, "対象者"),
+      choice(
+        Array.from({ length: n }, (_, i) => ({ value: i, label: `${seatLabel(i, state, names)} ${fmtPoints(state.points[i])}` })),
+        seat,
+        (v) => {
+          seat = v;
+          render();
+        },
+        { class: "grid2" },
+      ),
+      h("div", { class: "label" }, "物理点棒に合わせて修正（相手方は指定しない）"),
+      h(
+        "div",
+        { class: "choice big" },
+        steps.map((d) =>
+          h("button", { type: "button", class: "chip", disabled: seat === null, onclick: () => onAdjust(seat, d) }, fmtDelta(d)),
         ),
       ),
-    ),
-    h("div", { class: "hint" }, "精算時に卓外差額として表示されます"),
-  );
+      h("div", { class: "hint" }, "精算時に卓外差額として表示されます"),
+    );
+  }
+
+  render();
   return openSheet({ title: "手動修正", body });
 }
 
 // ---- メニュー ------------------------------------------------------------
 
-export function openMenu({ version, onEndGame, onBackToStart }) {
+export function openMenu({ version, onAdjust, onEndGame, onBackToStart }) {
   const body = h("div", { class: "sheet-body" });
   append(body,
     h(
       "div",
       { class: "menu-list" },
+      h("button", { type: "button", class: "menu-item", onclick: onAdjust }, "手動修正（点棒とのズレを直す）"),
       h("button", { type: "button", class: "menu-item", onclick: onEndGame }, "対局を終了する（手動終局）"),
       h("button", { type: "button", class: "menu-item", onclick: onBackToStart }, "開始画面へ戻る（対局は保持）"),
     ),

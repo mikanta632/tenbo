@@ -185,6 +185,34 @@ button:disabled { opacity: 0.4; }
   min-height: 52px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.3);
   background: transparent; font-size: 16px; padding: 0 16px;
 }
+/* 和了入力: 高さ固定でがたつかせない */
+.sheet.fixed { height: calc(100vh - 20px); height: calc(100dvh - 20px); }
+.slot-detail { min-height: 168px; }
+.agari-body .chip { min-height: 40px; }
+.agari-body .label { margin: 8px 0 4px; }
+.agari-body .summary { margin: 8px 0 4px; }
+.agari-body .preview .prow-line { padding: 2px 0; }
+.agari-body .sheet-actions { margin-top: 8px; }
+.row-inline { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.inline-label { flex: 0 0 3.5em; font-size: 13px; color: var(--muted); }
+.row-inline .choice { flex: 1; flex-wrap: nowrap; }
+.row-inline .chip { flex: 1; min-width: 0; padding: 6px 4px; font-size: 15px; }
+.choice.grid2 { display: grid; grid-template-columns: repeat(2, 1fr); }
+.choice.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); }
+.choice.grid4 { display: grid; grid-template-columns: repeat(4, 1fr); }
+.choice.grid5 { display: grid; grid-template-columns: repeat(5, 1fr); }
+.choice.grid5 .chip { padding: 6px 2px; font-size: 15px; }
+.summary { min-height: 24px; }
+.summary-gain.dim { color: var(--muted); font-weight: normal; font-size: 14px; }
+
+/* 点差表示（+/−） */
+.adj.on { background: var(--accent); color: #111; border-color: var(--accent); }
+.diffs { display: flex; gap: 10px; flex: 1; min-width: 0; align-items: baseline; }
+.diff { display: flex; flex-direction: column; min-width: 0; line-height: 1.1; }
+.diff-name { font-size: 11px; color: #bbb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diff-val { font-size: 20px; font-weight: 700; color: var(--digit); font-variant-numeric: tabular-nums; }
+.diff.down .diff-val { color: #ff6b57; }
+
 .menu-list { display: flex; flex-direction: column; gap: 8px; }
 .menu-item {
   text-align: left; min-height: 52px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2);

@@ -39,9 +39,10 @@ function sticks(count) {
 
 /**
  * 対局画面を描画して要素を返す。
- * actions: { onPanel(seat), onRiichi(seat), onMeld(seat, value), onAdjust(seat), onUndo(), onSpecial(), onMenu(), onLog() }
+ * actions: { onPanel(seat), onRiichi(seat), onMeld(seat, value), onDiff(seat), onUndo(), onSpecial(), onMenu(), onLog() }
+ * diffSeat: 点差を表示中の席（null なら通常表示）
  */
-export function renderTable({ game, state, names, actions }) {
+export function renderTable({ game, state, names, actions, diffSeat = null }) {
   const rule = game.rule;
   const n = rule.playerCount;
   const dealer = dealerOf(state.kyoku, n);
@@ -64,7 +65,7 @@ export function renderTable({ game, state, names, actions }) {
 
   const felt = h("div", { class: "felt" });
   for (const [position, seat] of Object.entries(pos)) {
-    felt.append(renderPanel({ position, seat, state, rule, dealer, names, actions }));
+    felt.append(renderPanel({ position, seat, state, rule, dealer, names, actions, diff: diffSeat === seat }));
   }
   felt.append(
     h(
@@ -85,7 +86,25 @@ export function renderTable({ game, state, names, actions }) {
   return h("div", { class: "table-screen" }, header, bar, felt, footer);
 }
 
-function renderPanel({ position, seat, state, rule, dealer, names, actions }) {
+/** 押した人と他の人との点差（自分 − 相手）。正なら自分が上。 */
+function renderDiffs(seat, state, names) {
+  const items = [];
+  for (let i = 0; i < state.points.length; i++) {
+    if (i === seat) continue;
+    const d = state.points[seat] - state.points[i];
+    items.push(
+      h(
+        "span",
+        { class: `diff${d > 0 ? " up" : d < 0 ? " down" : ""}` },
+        h("span", { class: "diff-name" }, names[i]),
+        h("span", { class: "diff-val" }, d > 0 ? `+${fmtPoints(d)}` : d < 0 ? fmtPoints(d) : "±0"),
+      ),
+    );
+  }
+  return h("div", { class: "diffs" }, items);
+}
+
+function renderPanel({ position, seat, state, rule, dealer, names, actions, diff = false }) {
   const n = rule.playerCount;
   const isDealer = seat === dealer;
   const riichiOn = state.round.riichi[seat];
@@ -120,11 +139,12 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions }) {
   const panel = h(
     "div",
     {
-      class: `panel${isDealer ? " dealer" : ""}`,
+      class: `panel${isDealer ? " dealer" : ""}${diff ? " diff-mode" : ""}`,
       role: "button",
       tabindex: "0",
-      "aria-label": `${names[seat]} の和了入力`,
-      onclick: () => actions.onPanel(seat),
+      "aria-label": diff ? `${names[seat]} の点差` : `${names[seat]} の和了入力`,
+      // 点差表示中は本体タップで通常表示に戻す（誤って和了入力を開かない）
+      onclick: () => (diff ? actions.onDiff(seat) : actions.onPanel(seat)),
     },
     h(
       "div",
@@ -138,16 +158,19 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions }) {
     h(
       "div",
       { class: "prow" },
-      h("span", { class: `pts${state.points[seat] < 0 ? " neg" : ""}` }, fmtPoints(state.points[seat])),
+      diff
+        ? renderDiffs(seat, state, names)
+        : h("span", { class: `pts${state.points[seat] < 0 ? " neg" : ""}` }, fmtPoints(state.points[seat])),
       h(
         "button",
         {
           type: "button",
-          class: "adj",
-          "aria-label": "手動修正",
+          class: `adj${diff ? " on" : ""}`,
+          "aria-label": "点差表示",
+          "aria-pressed": diff ? "true" : "false",
           onclick: (e) => {
             e.stopPropagation();
-            actions.onAdjust(seat);
+            actions.onDiff(seat);
           },
         },
         "+/−",

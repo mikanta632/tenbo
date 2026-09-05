@@ -29,6 +29,8 @@ let game = storage.loadCurrent();
 let screen = game ? "table" : "start";
 let openSheetHandle = null;
 let elapsedTimer = null;
+let diffSeat = null; // 点差を表示中の席
+let diffTimer = null;
 
 // ---- 画面の切替 ---------------------------------------------------------
 
@@ -113,20 +115,19 @@ function renderTableScreen() {
     },
     onRiichi: (seat) => emit({ t: "riichi", who: seat }),
     onMeld: (seat, value) => emit({ t: "meld", who: seat, value }),
-    onAdjust: (seat) => {
-      closeSheet();
-      openSheetHandle = openAdjustSheet({
-        state,
-        rule,
-        names,
-        seat,
-        onAdjust: (delta) => {
-          const deltas = new Array(rule.playerCount).fill(0);
-          deltas[seat] = delta;
-          closeSheet();
-          emit({ t: "adjust", note: "手動修正", deltas });
-        },
-      });
+    // +/−: 押した人と他の人との点差を表示する。点数は動かさない。一定時間で戻る
+    onDiff: (seat) => {
+      if (diffTimer) clearTimeout(diffTimer);
+      diffTimer = null;
+      diffSeat = diffSeat === seat ? null : seat;
+      if (diffSeat !== null) {
+        diffTimer = setTimeout(() => {
+          diffSeat = null;
+          diffTimer = null;
+          if (screen === "table") show();
+        }, 8000);
+      }
+      show();
     },
     onUndo: () => {
       game = withEvents(game, undoLast(game.events, rule));
@@ -150,6 +151,20 @@ function renderTableScreen() {
       closeSheet();
       openSheetHandle = openMenu({
         version: APP_VERSION,
+        onAdjust: () => {
+          closeSheet();
+          openSheetHandle = openAdjustSheet({
+            state,
+            rule,
+            names,
+            onAdjust: (seat, delta) => {
+              const deltas = new Array(rule.playerCount).fill(0);
+              deltas[seat] = delta;
+              closeSheet();
+              emit({ t: "adjust", note: "手動修正", deltas });
+            },
+          });
+        },
         onEndGame: () => {
           closeSheet();
           openSheetHandle = openConfirm({
@@ -165,7 +180,7 @@ function renderTableScreen() {
     onLog: null, // 段階3
   };
 
-  root.append(renderTable({ game, state, names, actions }));
+  root.append(renderTable({ game, state, names, actions, diffSeat }));
   startElapsed();
   requestWakeLock();
 
