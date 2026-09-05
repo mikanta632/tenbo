@@ -47,19 +47,20 @@ export function gameId(date) {
 export const POSITION_ORDER = ["bottom", "right", "top", "left"];
 
 /**
- * 使う画面位置。3人麻雀は空席を常に画面の左（長辺）に置き、下・右・上を使う。
+ * 使う画面位置を、下から反時計回りの順で返す。
+ * 3人麻雀は emptyPosition（既定 left）を飛ばす。空席が下なら 右→上→左 の順になる。
  */
-export function positionsFor(playerCount) {
-  if (playerCount === 3) return ["bottom", "right", "top"];
+export function positionsFor(playerCount, emptyPosition = "left") {
+  if (playerCount === 3) return POSITION_ORDER.filter((p) => p !== emptyPosition);
   return POSITION_ORDER.slice();
 }
 
 /**
- * 席 → 画面位置。bottomSeat を下に置き、反時計回りに席順を割り当てる。
- * 戻り値は { bottom: seatIndex, right: ..., ... }（3人麻雀は left を含まない）。
+ * 席 → 画面位置。bottomSeat を「使う位置の先頭（通常は下）」に置き、反時計回りに席順を割り当てる。
+ * 戻り値は { bottom: seatIndex, right: ..., ... }（3人麻雀は空席の位置を含まない）。
  */
-export function seatPositions(bottomSeat, playerCount) {
-  const order = positionsFor(playerCount);
+export function seatPositions(bottomSeat, playerCount, emptyPosition = "left") {
+  const order = positionsFor(playerCount, emptyPosition);
   const pos = {};
   order.forEach((p, k) => (pos[p] = (bottomSeat + k) % playerCount));
   return pos;

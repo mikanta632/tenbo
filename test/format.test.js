@@ -10,10 +10,23 @@ describe("seatPositions", () => {
     assert.deepEqual(seatPositions(0, 4), { bottom: 0, right: 1, top: 2, left: 3 });
     assert.deepEqual(seatPositions(2, 4), { bottom: 2, right: 3, top: 0, left: 1 });
   });
-  test("3人: 空席は常に左。下・右・上を反時計回りに使う", () => {
+  test("3人: 空席の位置を飛ばし、下から反時計回りに使う", () => {
     assert.deepEqual(positionsFor(3), ["bottom", "right", "top"]);
+    assert.deepEqual(positionsFor(3, "top"), ["bottom", "right", "left"]);
+    assert.deepEqual(positionsFor(3, "bottom"), ["right", "top", "left"]);
     assert.deepEqual(seatPositions(0, 3), { bottom: 0, right: 1, top: 2 });
     assert.deepEqual(seatPositions(2, 3), { bottom: 2, right: 0, top: 1 });
+    assert.deepEqual(seatPositions(0, 3, "top"), { bottom: 0, right: 1, left: 2 });
+    // 空席が下: 使う位置の先頭は右
+    assert.deepEqual(seatPositions(1, 3, "bottom"), { right: 1, top: 2, left: 0 });
+  });
+  test("3人: 空席が上のとき、配置図の選択と往復が一致する", () => {
+    // 使う位置の順は 下→右→左。下 a、右 b、左 c。起家は左（添字 2）→ seats c,a,b、先頭（下）は seats[1]
+    const r = seatsFromPositions({ posPlayers: ["a", "b", "c"], chiichaPos: 2 });
+    assert.deepEqual(r, { seats: ["c", "a", "b"], bottomSeat: 1 });
+    const pos = seatPositions(r.bottomSeat, 3, "top");
+    assert.deepEqual(["bottom", "right", "left"].map((k) => r.seats[pos[k]]), ["a", "b", "c"]);
+    assert.equal(pos.top, undefined);
   });
   test("配置図の選択（下→右→上→左の順）と起家の位置から seats / bottomSeat を出し、往復が一致する", () => {
     // 4人: 下 a、右 b、上 c、左 d。起家は上（添字 2）→ seats は c,d,a,b、下は seats[2]

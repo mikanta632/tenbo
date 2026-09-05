@@ -38,7 +38,7 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
   const rule = game.rule;
   const n = rule.playerCount;
   const dealer = dealerOf(state.kyoku, n);
-  const pos = seatPositions(game.bottomSeat ?? 0, n);
+  const pos = seatPositions(game.bottomSeat ?? 0, n, game.emptyPosition || "left");
 
   const header = h(
     "header",
