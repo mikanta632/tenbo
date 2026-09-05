@@ -27,7 +27,9 @@ body.rotated {
   position: fixed; left: 50%; top: 50%; transform-origin: center center; overflow: auto;
   -webkit-overflow-scrolling: touch;
 }
+/* 縦向きの高さは CSS に任せる（dvh が使えれば iOS のツールバー分も追従する）。横向き時だけ JS が上書きする */
 :root { --app-h: 100vh; --app-w: 100vw; }
+@supports (height: 100dvh) { :root { --app-h: 100dvh; --app-w: 100dvw; } }
 body {
   font-family: -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", system-ui, sans-serif;
   background: var(--felt);
@@ -57,14 +59,39 @@ button:disabled { opacity: 0.4; }
 .bar-right { display: flex; gap: 6px; }
 
 /* ---- 初期画面のタブ ---- */
-.tab-shell { display: flex; flex-direction: column; min-height: var(--app-h); }
-.tab-content { flex: 1; padding-bottom: calc(64px + var(--sab)); }
+/* タブバーは fixed にせず、画面の高さいっぱいのフレックス列の末尾に置く（起動直後に浮く問題を避ける） */
+.tab-shell { display: flex; flex-direction: column; height: var(--app-h); overflow: hidden; }
+.tab-content { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .tabbar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
-  display: flex; background: #0b2a1b; border-top: 1px solid rgba(255,255,255,0.15);
+  flex: none; display: flex; background: #0b2a1b; border-top: 1px solid rgba(255,255,255,0.15);
   padding-bottom: var(--sab);
 }
-body.rotated .tabbar { position: absolute; }
+
+/* 対局タブの配置図 */
+.seat-grid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: auto auto auto; gap: 8px;
+  grid-template-areas: ". top ." "left center right" ". bottom .";
+  margin: 4px 0 8px;
+}
+.seat-cell.top { grid-area: top; }
+.seat-cell.left { grid-area: left; }
+.seat-cell.center { grid-area: center; display: flex; align-items: center; justify-content: center; }
+.seat-cell.right { grid-area: right; }
+.seat-cell.bottom { grid-area: bottom; }
+.seat-center { width: 56px; height: 56px; border-radius: 10px; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; }
+.seat-slot { display: flex; flex-direction: column; gap: 4px; background: rgba(0,0,0,0.25); border-radius: 10px; padding: 6px; border: 2px solid transparent; }
+.seat-slot.chiicha { border-color: var(--accent); }
+.seat-slot.empty { align-items: center; justify-content: center; opacity: 0.6; min-height: 64px; }
+.seat-slot .seat-pos { font-size: 12px; color: var(--muted); }
+.seat-slot .seat-empty { font-size: 14px; }
+.seat-slot select, .seat-slot input[type=text] {
+  width: 100%; min-width: 0; font: inherit; font-size: 15px; padding: 8px 6px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.25); background: #0b2a1b; color: var(--ink);
+}
+.btn-secondary.small { min-height: 36px; font-size: 14px; padding: 0 10px; }
+/* タブの中身は自分でスクロールするので、画面いっぱいの最小高さは要らない */
+.tab-content .plain-screen { min-height: 0; padding-bottom: 24px; }
+.tab-content .start-screen { padding-bottom: 24px; }
 .tab {
   flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 8px 0 6px; background: none; border: none; color: var(--muted); font-size: 11px;

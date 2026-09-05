@@ -1,7 +1,7 @@
-// 効果音（docs/design.md §8.2）。
+// 効果音（docs/design.md §8.2）。Web Audio だけを使い、音声ファイルも音声合成も持たない。
 //
-// 端末内の音声合成（speechSynthesis）と Web Audio だけを使い、音声ファイルは持たない。
-// どちらもユーザー操作（タップ）の中から呼ぶ必要があるため、ボタンのハンドラから同期的に呼ぶ。
+// iOS では AudioContext がユーザー操作の外では動かず、画面ロックや他アプリの音で
+// "interrupted" / "suspended" になる。鳴らすたびに resume し、画面復帰やタッチでも resume する。
 // 設定はこの端末だけの好みなので localStorage の mj.prefs に置く（対局データとは別）。
 
 import { loadPrefs, savePrefs } from "./prefs.js";
@@ -12,26 +12,38 @@ export function soundEnabled() {
 export function setSoundEnabled(on) {
   savePrefs({ ...loadPrefs(), sound: on ? "on" : "off" });
 }
-export function voiceName() {
-  return loadPrefs().voice || "";
-}
-export function setVoiceName(name) {
-  savePrefs({ ...loadPrefs(), voice: name });
-}
 
 // ---- Web Audio ----------------------------------------------------------
 
 let ctx = null;
+
 function audio() {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return null;
-  if (!ctx) ctx = new AC();
-  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+  if (!ctx || ctx.state === "closed") {
+    try {
+      ctx = new AC();
+    } catch {
+      ctx = null;
+      return null;
+    }
+  }
+  if (ctx.state !== "running") ctx.resume().catch(() => {});
   return ctx;
 }
 
+/** 画面に戻ったときやタッチで、止まっていた音声を起こす */
+function wake() {
+  if (ctx && ctx.state !== "running") ctx.resume().catch(() => {});
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") wake();
+});
+window.addEventListener("pageshow", wake);
+document.addEventListener("touchend", wake, { passive: true });
+
 /** 短い音。when は現在からの遅れ（秒）。type は波形。 */
-function tone(freq, dur, when = 0, { gain = 0.25, type = "sine", decay = true } = {}) {
+function tone(freq, dur, when = 0, { gain = 0.25, type = "sine" } = {}) {
   const c = audio();
   if (!c) return;
   const t0 = c.currentTime + when;
@@ -41,82 +53,19 @@ function tone(freq, dur, when = 0, { gain = 0.25, type = "sine", decay = true } 
   osc.frequency.value = freq;
   g.gain.setValueAtTime(0, t0);
   g.gain.linearRampToValueAtTime(gain, t0 + 0.008);
-  if (decay) g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
-  else g.gain.setValueAtTime(gain, t0 + dur - 0.02), g.gain.linearRampToValueAtTime(0, t0 + dur);
+  g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
   osc.connect(g).connect(c.destination);
   osc.start(t0);
   osc.stop(t0 + dur + 0.03);
 }
 
-/** 自動卓風のチャイム（ピンポーン） */
-function chime(when = 0) {
-  tone(1319, 0.35, when, { gain: 0.3, type: "triangle" });
-  tone(1047, 0.55, when + 0.18, { gain: 0.3, type: "triangle" });
-}
-
-// ---- 音声合成 -----------------------------------------------------------
-
-const PREFERRED = ["Hattori", "Otoya", "O-ren", "O-Ren", "Kyoko"];
-let voices = [];
-function refreshVoices() {
-  if (!("speechSynthesis" in window)) return;
-  voices = speechSynthesis.getVoices().filter((v) => v.lang && v.lang.toLowerCase().startsWith("ja"));
-}
-if ("speechSynthesis" in window) {
-  refreshVoices();
-  speechSynthesis.addEventListener("voiceschanged", refreshVoices);
-}
-
-/** 使える日本語の声の一覧 */
-export function jaVoices() {
-  refreshVoices();
-  return voices.map((v) => ({ name: v.name, lang: v.lang }));
-}
-
-function pickVoice() {
-  refreshVoices();
-  const want = voiceName();
-  if (want) {
-    const v = voices.find((x) => x.name === want);
-    if (v) return v;
-  }
-  for (const p of PREFERRED) {
-    const v = voices.find((x) => x.name.includes(p));
-    if (v) return v;
-  }
-  return voices[0] || null;
-}
-
-/**
- * 日本語で発声する。自動卓の発声に寄せて、やや速く・低く・張った調子にする。
- * 使えなければ false。
- */
-function speak(text, { rate = 1.15, pitch = 0.9, delay = 0 } = {}) {
-  if (!("speechSynthesis" in window)) return false;
-  try {
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "ja-JP";
-    const v = pickVoice();
-    if (v) u.voice = v;
-    u.rate = rate;
-    u.pitch = pitch;
-    u.volume = 1.0;
-    if (delay > 0) setTimeout(() => speechSynthesis.speak(u), delay);
-    else speechSynthesis.speak(u);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 // ---- 公開 -----------------------------------------------------------------
 
-/** リーチ宣言: チャイムのあと「リーチ！」。音声合成が無ければチャイムだけ */
+/** リーチ宣言: 自動卓風のチャイム（ピンポーン） */
 export function playRiichi() {
   if (!soundEnabled()) return;
-  chime();
-  speak("リーチ！", { rate: 1.15, pitch: 0.9, delay: 380 });
+  tone(1319, 0.35, 0, { gain: 0.3, type: "triangle" });
+  tone(1047, 0.6, 0.18, { gain: 0.3, type: "triangle" });
 }
 
 /** リーチ取り消し: 下降音 */
@@ -137,7 +86,7 @@ export function playMeld(on) {
   }
 }
 
-/** 操作音（シートを開く・確定など） */
+/** 操作音（すべてのボタン） */
 export function playTap() {
   if (!soundEnabled()) return;
   tone(1500, 0.04, 0, { gain: 0.12, type: "square" });

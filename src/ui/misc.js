@@ -3,17 +3,10 @@
 import { h } from "./dom.js";
 
 /**
- * props: { sound: { enabled, voice, voices }, version, gamesCount,
- *          onSound({enabled, voice}), onTestSound, onExport, onImport(file) }
+ * props: { sound: { enabled }, version, gamesCount, onSound({enabled}), onTestSound, onExport, onImport(file) }
  */
 export function renderMisc(props) {
   const s = props.sound;
-  const voiceSel = h(
-    "select",
-    { onchange: (e) => props.onSound({ enabled: s.enabled, voice: e.target.value }) },
-    h("option", { value: "", selected: !s.voice }, "自動（端末の既定）"),
-    s.voices.map((v) => h("option", { value: v.name, selected: v.name === s.voice }, `${v.name} (${v.lang})`)),
-  );
   const fileInput = h("input", {
     type: "file",
     accept: "application/json,.json",
@@ -33,9 +26,8 @@ export function renderMisc(props) {
       "section",
       { class: "card" },
       h("h2", null, "効果音"),
-      h("label", { class: "row" }, h("span", null, "効果音"), h("input", { type: "checkbox", checked: s.enabled, onchange: (e) => props.onSound({ enabled: e.target.checked, voice: s.voice }) })),
-      h("label", { class: "row" }, h("span", null, "リーチの声"), voiceSel),
-      h("div", { class: "hint" }, s.voices.length ? "声は端末に入っている日本語音声から選びます。消音スイッチが入っていると鳴りません。" : "この端末では日本語の音声合成が見つかりません。チャイムだけ鳴ります。"),
+      h("label", { class: "row" }, h("span", null, "効果音"), h("input", { type: "checkbox", checked: s.enabled, onchange: (e) => props.onSound({ enabled: e.target.checked }) })),
+      h("div", { class: "hint" }, "本体の消音スイッチが入っていると鳴りません。"),
       h("div", { class: "sheet-actions" }, h("button", { type: "button", class: "btn-secondary", disabled: !s.enabled, onclick: props.onTestSound }, "試しに鳴らす")),
     ),
     h(

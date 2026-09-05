@@ -65,14 +65,6 @@ export function seatPositions(bottomSeat, playerCount) {
   return pos;
 }
 
-/**
- * 対局画面の「回転」。画面下に来る席を反時計回りに 1つ進める（bottomSeat + 1）。
- * 3人麻雀では空席が常に画面の左にあるので、これで「起家から見た空席の方向」が
- * 上家側（bottomSeat 0）→ 下家側（1）→ 対面（2）と切り替わる。
- */
-export function rotateBottomSeat(bottomSeat, playerCount) {
-  return (bottomSeat + 1) % playerCount;
-}
 
 /** 途中流局の種別名 */
 export const ABORTIVE_KIND_NAMES = Object.freeze({

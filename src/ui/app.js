@@ -34,14 +34,11 @@ import {
   openConfirm,
   openActionSheet,
 } from "./sheets.js";
-import { fmtElapsed, kyokuName, rotateBottomSeat } from "./format.js";
+import { fmtElapsed, kyokuName } from "./format.js";
 import { customRules, saveCustomRule } from "./prefs.js";
 import {
   soundEnabled,
   setSoundEnabled,
-  voiceName,
-  setVoiceName,
-  jaVoices,
   playRiichi,
   playRiichiCancel,
   playMeld,
@@ -239,12 +236,11 @@ function renderPlayerScreen() {
 
 function miscContent() {
   return renderMisc({
-    sound: { enabled: soundEnabled(), voice: voiceName(), voices: jaVoices() },
+    sound: { enabled: soundEnabled() },
     version: APP_VERSION,
     gamesCount: storage.loadGames().length,
-    onSound: ({ enabled, voice }) => {
+    onSound: ({ enabled }) => {
       setSoundEnabled(enabled);
-      setVoiceName(voice || "");
       show("misc");
     },
     onTestSound: () => playTest(),
@@ -329,12 +325,6 @@ function renderTableScreen() {
           if (screen === "table") show();
         }, 8000);
       }
-      show();
-    },
-    // 座席の回転: 画面下に来る席を反時計回りに 1つ進める（表示だけ。イベント列は変わらない）
-    onRotate: () => {
-      game = { ...game, bottomSeat: rotateBottomSeat(game.bottomSeat ?? 0, rule.playerCount) };
-      storage.saveCurrent(game);
       show();
     },
     onUndo: () => {
@@ -726,19 +716,23 @@ function applyOrientation() {
     rootEl.style.setProperty("--app-w", `${h}px`);
     rootEl.style.setProperty("--app-h", `${w}px`);
   } else {
+    // 縦向きでは CSS の 100dvh に任せる。起動直後の innerHeight はホーム画面起動時に
+    // 実際より小さいことがあり、JS で固定すると下部のタブバーが浮く
     body.classList.remove("rotated");
     body.style.width = "";
     body.style.height = "";
     body.style.transform = "";
-    rootEl.style.setProperty("--app-w", `${w}px`);
-    rootEl.style.setProperty("--app-h", `${h}px`);
+    rootEl.style.removeProperty("--app-w");
+    rootEl.style.removeProperty("--app-h");
   }
 }
 window.addEventListener("resize", applyOrientation);
 window.addEventListener("orientationchange", () => setTimeout(applyOrientation, 50));
 window.addEventListener("load", applyOrientation);
+window.addEventListener("pageshow", () => setTimeout(applyOrientation, 100));
 if (window.visualViewport) window.visualViewport.addEventListener("resize", applyOrientation);
 applyOrientation();
+setTimeout(applyOrientation, 300);
 
 // ---- Screen Wake Lock（§10） --------------------------------------------
 

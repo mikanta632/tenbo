@@ -2,7 +2,8 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { seatPositions, positionsFor, rotateBottomSeat, kyokuName, windName, fmtPoints, fmtDelta, hanName } from "../src/ui/format.js";
+import { seatPositions, positionsFor, kyokuName, windName, fmtPoints, fmtDelta, hanName } from "../src/ui/format.js";
+import { seatsFromPositions } from "../src/ui/start.js";
 
 describe("seatPositions", () => {
   test("4人: 下から反時計回りに 右・上・左", () => {
@@ -14,17 +15,17 @@ describe("seatPositions", () => {
     assert.deepEqual(seatPositions(0, 3), { bottom: 0, right: 1, top: 2 });
     assert.deepEqual(seatPositions(2, 3), { bottom: 2, right: 0, top: 1 });
   });
-  test("回転: 画面下の席が反時計回りに進み、3人では空席の方向が 上家側→下家側→対面 と巡る", () => {
-    // bottomSeat 0: 起家が下、南家が右、西家が上（左の空席は起家の上家側）
-    assert.deepEqual(seatPositions(0, 3), { bottom: 0, right: 1, top: 2 });
-    // 1回転: 南家が下、西家が右、起家が上（起家の下家側が空席）
-    assert.equal(rotateBottomSeat(0, 3), 1);
-    assert.deepEqual(seatPositions(1, 3), { bottom: 1, right: 2, top: 0 });
-    // 2回転: 西家が下、起家が右、南家が上（起家の対面が空席）
-    assert.equal(rotateBottomSeat(1, 3), 2);
-    assert.deepEqual(seatPositions(2, 3), { bottom: 2, right: 0, top: 1 });
-    assert.equal(rotateBottomSeat(2, 3), 0);
-    assert.equal(rotateBottomSeat(3, 4), 0);
+  test("配置図の選択（下→右→上→左の順）と起家の位置から seats / bottomSeat を出し、往復が一致する", () => {
+    // 4人: 下 a、右 b、上 c、左 d。起家は上（添字 2）→ seats は c,d,a,b、下は seats[2]
+    const r4 = seatsFromPositions({ posPlayers: ["a", "b", "c", "d"], chiichaPos: 2 });
+    assert.deepEqual(r4, { seats: ["c", "d", "a", "b"], bottomSeat: 2 });
+    const pos4 = seatPositions(r4.bottomSeat, 4);
+    assert.deepEqual(["bottom", "right", "top", "left"].map((k) => r4.seats[pos4[k]]), ["a", "b", "c", "d"]);
+    // 3人: 下 a、右 b、上 c（左は空席）。起家は右（添字 1）→ seats は b,c,a、下は seats[2]
+    const r3 = seatsFromPositions({ posPlayers: ["a", "b", "c"], chiichaPos: 1 });
+    assert.deepEqual(r3, { seats: ["b", "c", "a"], bottomSeat: 2 });
+    const pos3 = seatPositions(r3.bottomSeat, 3);
+    assert.deepEqual(["bottom", "right", "top"].map((k) => r3.seats[pos3[k]]), ["a", "b", "c"]);
   });
 });
 

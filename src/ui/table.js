@@ -52,13 +52,7 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
     "div",
     { class: "bar" },
     h("div", { class: "bar-left" }, h("button", { type: "button", class: "btn-flat", onclick: actions.onLog, disabled: !actions.onLog }, "ログ"), elapsed),
-    h(
-      "div",
-      { class: "bar-right" },
-      // 座席の回転: 画面下に来る席を反時計回りに 1つ進める。3人麻雀では空席（左）の方向を合わせるのに使う
-      h("button", { type: "button", class: "btn-flat", "aria-label": "座席を回転", onclick: actions.onRotate }, "↻ 回転"),
-      h("button", { type: "button", class: "btn-flat", onclick: actions.onUndo, disabled: game.events.length === 0 }, "戻す"),
-    ),
+    h("button", { type: "button", class: "btn-flat", onclick: actions.onUndo, disabled: game.events.length === 0 }, "戻す"),
   );
 
   const felt = h("div", { class: "felt" });
