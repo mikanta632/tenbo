@@ -1,0 +1,9 @@
+# エクスポートした対局データは入れない
+exports/
+mj-*.json
+*.export.json
+
+# 引き継ぎ用の元プロンプト（仕様は docs/design.md に集約済み）
+prompt/
+
+.DS_Store
