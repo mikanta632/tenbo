@@ -7,3 +7,6 @@ mj-*.json
 prompt/
 
 .DS_Store
+
+# ローカルのブラウザ確認用設定
+.claude/
