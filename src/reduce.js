@@ -91,12 +91,44 @@ function addDeltas(points, deltas) {
   for (let i = 0; i < points.length; i++) points[i] += deltas[i];
 }
 
-/** 終局判定（§5.6）。局末イベントの適用後に呼ぶ。 */
-function judgeOver(next, rule, { agariYameHit = false } = {}) {
+/** 終局判定（§5.6）。局末イベントの適用後に呼ぶ。アガリやめは自動では終局させない。 */
+function judgeOver(next, rule) {
   if (next.kyoku >= rule.length) return true;
   if (rule.tobi && next.points.some((p) => p < rule.tobiLine)) return true;
-  if (agariYameHit) return true;
   return false;
+}
+
+/**
+ * リーチを宣言できるか（§5.1）。rule.riichiUnderThousand が偽なら 1000点未満は不可。
+ */
+export function canRiichi(state, who, rule) {
+  if (rule.riichiUnderThousand) return true;
+  return state.points[who] >= 1000;
+}
+
+/**
+ * アガリやめを選べる状態か（§5.6）。局末イベントの適用前後の State で判定する。
+ * オーラスで親が連荘し（kyoku が length-1 のまま）、親がトップのとき真。
+ */
+export function agariYameAvailable(prev, next, rule) {
+  if (!rule.agariYame) return false;
+  const last = rule.length - 1;
+  if (prev.kyoku !== last || next.kyoku !== last) return false;
+  if (next.over) return false;
+  const dealer = dealerOf(next.kyoku, rule.playerCount);
+  return ranksOf(next.points)[dealer] === 0;
+}
+
+/**
+ * イベント列の末尾の時点でアガリやめを選べるか。末尾が局末イベントでなければ偽。
+ */
+export function agariYameAvailableAfter(events, rule) {
+  if (events.length === 0) return false;
+  const lastEvent = events[events.length - 1];
+  if (!isEndOfKyoku(lastEvent)) return false;
+  const prev = reduce(events.slice(0, -1), rule);
+  const next = applyEvent(prev, lastEvent, rule);
+  return agariYameAvailable(prev, next, rule);
 }
 
 /**
@@ -166,10 +198,8 @@ export function applyEvent(state, event, rule) {
       }
       // 4. round リセット
       next.round = emptyRound(n);
-      // 5. 終局判定（アガリやめ: オーラスで親が和了し、親がトップ）
-      const isLast = state.kyoku === rule.length - 1;
-      const agariYameHit = isLast && dealerWon && rule.agariYame && ranksOf(next.points)[dealer] === 0;
-      next.over = judgeOver(next, rule, { agariYameHit });
+      // 5. 終局判定（アガリやめは agariYameAvailable で別途判定し、end イベントで終局する）
+      next.over = judgeOver(next, rule);
       return next;
     }
 

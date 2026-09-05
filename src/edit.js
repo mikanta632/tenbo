@@ -6,7 +6,7 @@
 // adjust の deltas は意味情報を持たないため、そのまま保持する。
 
 import { agariDeltas, tenpaiDeltas, nagashiDeltas, chomboDeltas } from "./score.js";
-import { initialState, applyEvent, reduce, dealerOf, kyokuGroups, isEndOfKyoku } from "./reduce.js";
+import { initialState, applyEvent, reduce, dealerOf, kyokuGroups, isEndOfKyoku, canRiichi } from "./reduce.js";
 
 /**
  * イベントの意味情報と適用前の State から deltas を計算する。
@@ -61,9 +61,15 @@ export function recalc(events, rule, from = 0) {
   return result;
 }
 
-/** 末尾にイベントを追加する。deltas は現在の状態から計算する。 */
+/**
+ * 末尾にイベントを追加する。deltas は現在の状態から計算する。
+ * 1000点未満のリーチ（§5.1）は発行時に拒否する。
+ */
 export function appendEvent(events, event, rule) {
   const state = reduce(events, rule);
+  if (event.t === "riichi" && !canRiichi(state, event.who, rule)) {
+    throw new Error(`1000点未満はリーチできない: seat ${event.who} (${state.points[event.who]})`);
+  }
   return [...events, withDeltas(event, state, rule)];
 }
 

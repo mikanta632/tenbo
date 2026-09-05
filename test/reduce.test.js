@@ -14,6 +14,9 @@ import {
   roundWind,
   kyokuNumber,
   ranksOf,
+  canRiichi,
+  agariYameAvailable,
+  agariYameAvailableAfter,
 } from "../src/reduce.js";
 import {
   computeDeltas,
@@ -121,6 +124,22 @@ describe("1. リーチの即時反映", () => {
     assert.equal(s0.points[0], 25000);
     assert.equal(s0.kyotaku, 0);
     assert.equal(s1.points[0], 24000);
+  });
+  test("1000点未満はリーチできない（発行時に拒否）", () => {
+    const events = build(R4, adjust([0, -24100, 24100, 0]));
+    const s = reduce(events, R4);
+    assert.equal(s.points[1], 900);
+    assert.equal(canRiichi(s, 1, R4), false);
+    assert.equal(canRiichi(s, 0, R4), true);
+    assert.throws(() => appendEvent(events, riichi(1), R4), /1000点未満/);
+    // ちょうど 1000 は可
+    const s2 = reduce(build(R4, adjust([0, -24000, 24000, 0])), R4);
+    assert.equal(canRiichi(s2, 1, R4), true);
+    // riichiUnderThousand が真なら可
+    const rule = makeRule({ riichiUnderThousand: true });
+    assert.equal(canRiichi(s, 1, rule), true);
+    const after = appendEvent(events, riichi(1), rule);
+    assert.equal(reduce(after, rule).points[1], -100);
   });
   test("副露と北抜きは持ち点を動かさない", () => {
     const s = run(R3, meld(1), kita(2), kita(2), kita(2, -1));
@@ -348,24 +367,58 @@ describe("終局判定", () => {
     assert.equal(s2.over, false);
   });
   test("リーチによる減点では終局しない（局末イベントでのみ判定）", () => {
-    const s = run(R4, adjust([0, -24500, 24500, 0]), riichi(1));
+    const rule = makeRule({ riichiUnderThousand: true });
+    const s = run(rule, adjust([0, -24500, 24500, 0]), riichi(1));
     assert.equal(s.points[1], -500);
     assert.equal(s.over, false);
   });
-  test("アガリやめ: オーラスで親が和了しトップなら終局", () => {
+  test("アガリやめ: 自動では終局せず、親が選べる状態を導出する", () => {
     const events = [];
     for (let i = 0; i < 7; i++) events.push(ron((i + 1) % 4, (i + 2) % 4, 1, 30));
     // 南4局 親 3。3 がトップになる和了
-    const s = run(R4, ...events, ron(3, 0, 5, 30));
+    const built = build(R4, ...events, ron(3, 0, 5, 30));
+    const s = reduce(built, R4);
     assert.equal(s.kyoku, 7);
-    assert.equal(s.over, true);
-    // agariYame が偽なら続行
+    assert.equal(s.honba, 1);
+    assert.equal(s.over, false);
+    assert.equal(agariYameAvailableAfter(built, R4), true);
+    // やめるなら end イベントで終局
+    const ended = appendEvent(built, end(), R4);
+    assert.equal(reduce(ended, R4).over, true);
+    assert.equal(agariYameAvailableAfter(ended, R4), false);
+    // 続けるなら次の局末までは選べない
+    const cont = appendEvent(built, riichi(0), R4);
+    assert.equal(agariYameAvailableAfter(cont, R4), false);
+  });
+  test("アガリやめ: テンパイ連荘でも親がトップなら選べる", () => {
+    const events = [];
+    for (let i = 0; i < 7; i++) events.push(ron((i + 1) % 4, (i + 2) % 4, 1, 30));
+    const built = build(R4, ...events, adjust([0, 0, 0, 20000]), exhaustive([3]));
+    const s = reduce(built, R4);
+    assert.equal(s.kyoku, 7);
+    assert.equal(agariYameAvailableAfter(built, R4), true);
+  });
+  test("アガリやめ: 選べない場合", () => {
+    const events = [];
+    for (let i = 0; i < 7; i++) events.push(ron((i + 1) % 4, (i + 2) % 4, 1, 30));
+    // agariYame が偽
     const rule = makeRule({ agariYame: false });
-    const s2 = run(rule, ...events, ron(3, 0, 5, 30));
-    assert.equal(s2.over, false);
-    // 親がトップでなければ続行
-    const s3 = run(R4, ...events, adjust([30000, 0, 0, 0]), ron(3, 0, 1, 30));
-    assert.equal(s3.over, false);
+    assert.equal(agariYameAvailableAfter(build(rule, ...events, ron(3, 0, 5, 30)), rule), false);
+    // 親がトップでない
+    assert.equal(agariYameAvailableAfter(build(R4, ...events, adjust([30000, 0, 0, 0]), ron(3, 0, 1, 30)), R4), false);
+    // 親が流れた（オーラスに入っただけ）
+    const six = events.slice(0, 6);
+    const s6 = build(R4, ...six, ron(3, 0, 1, 30));
+    assert.equal(reduce(s6, R4).kyoku, 7);
+    assert.equal(agariYameAvailableAfter(s6, R4), false);
+    // オーラス以外
+    assert.equal(agariYameAvailableAfter(build(R4, tsumo(0, 5, 30)), R4), false);
+    // 局末以外
+    assert.equal(agariYameAvailableAfter(build(R4, ...events, ron(3, 0, 5, 30), riichi(1)), R4), false);
+    // prev/next を直接渡す形
+    const prev = reduce(build(R4, ...events), R4);
+    const next = applyEvent(prev, build(R4, ...events, ron(3, 0, 5, 30))[7], R4);
+    assert.equal(agariYameAvailable(prev, next, R4), true);
   });
   test("end イベント", () => {
     const s = run(R4, ron(1, 2, 1, 30), end());
