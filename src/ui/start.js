@@ -1,37 +1,42 @@
-// 開始画面（docs/design.md §8.1）。プレイヤー選択、ルールプリセット選択、対局開始／再開、履歴、成績、バックアップ。
+// 開始画面（docs/design.md §8.1）。プレイヤー選択、ルール選択、対局開始／再開、履歴、成績、設定、バックアップ。
 
 import { h, clear } from "./dom.js";
 import { validateRule } from "../rules.js";
 import { reduce, ranksOf } from "../reduce.js";
-import { kyokuName, gameId, positionsFor, fmtPoints } from "./format.js";
+import { kyokuName, gameId, fmtPoints, bottomSeatFor, EMPTY_SEAT_NAMES } from "./format.js";
 
 const POSITION_LABELS = { bottom: "下（自分）", right: "右（下家）", top: "上（対面）", left: "左（上家）" };
-const EMPTY_LABELS = { left: "左", top: "上", right: "右" };
+const POSITIONS4 = ["bottom", "right", "top", "left"];
+const SEAT_NAMES3 = ["起家（東）", "南家", "西家"];
 
 /**
- * 画面位置ごとの playerId（下から反時計回りの順）と起家の位置から Game を作る。
- * seats は起家順。bottomSeat は自家（画面下）の seatIndex。
+ * Game を作る。seats は起家順、bottomSeat は画面下に置く席。
  */
-export function buildGame({ rule, posPlayers, chiichaPos, now = new Date() }) {
-  const n = rule.playerCount;
-  const seats = [];
-  for (let i = 0; i < n; i++) seats.push(posPlayers[(chiichaPos + i) % n]);
+export function buildGame({ rule, seats, bottomSeat, now = new Date() }) {
   return {
     id: gameId(now),
     startedAt: now.toISOString(),
     endedAt: null,
     rule: JSON.parse(JSON.stringify(rule)),
     seats,
-    bottomSeat: (n - chiichaPos) % n,
+    bottomSeat,
     events: [],
     settlement: null,
   };
 }
 
+/** 4人: 画面位置ごとの playerId（下から反時計回り）と起家の位置から seats / bottomSeat を出す */
+export function seatsFrom4({ posPlayers, chiichaPos }) {
+  const n = 4;
+  const seats = [];
+  for (let i = 0; i < n; i++) seats.push(posPlayers[(chiichaPos + i) % n]);
+  return { seats, bottomSeat: (n - chiichaPos) % n };
+}
+
 /**
  * 開始画面を描画する。
  * props: { storage, current, presets, version, onResume(), onStart(game), onDiscard(),
- *          onOpenResult(gameId), onStats(), onExport(), onImport(file) }
+ *          onOpenResult(gameId), onStats(), onSettings(), onExport(), onImport(file) }
  */
 export function renderStart(props) {
   const { storage, current, presets, version } = props;
@@ -39,20 +44,27 @@ export function renderStart(props) {
 
   const presetNames = Object.keys(presets);
   let presetName = presetNames[0];
-  let emptySeat = presets[presetName].emptySeat || "left";
+
+  // 4人: 画面位置ごとのプレイヤー。3人: 起家順のプレイヤーと空席の方向
+  const posPlayers = [null, null, null, null];
+  let chiichaPos = 0;
+  const seatPlayers3 = [null, null, null];
+  let emptySeat = "kamicha";
 
   // 前回の席順を初期値にする
   const last = current || storage.loadGames()[0] || null;
-  const posPlayers = [null, null, null, null];
-  let chiichaPos = 0;
   if (last && last.seats) {
     const n = last.seats.length;
-    const b = last.bottomSeat ?? 0;
-    for (let k = 0; k < n; k++) posPlayers[k] = last.seats[(b + k) % n];
-    chiichaPos = (n - b) % n;
     const found = presetNames.find((k) => presets[k].playerCount === n);
     if (found) presetName = found;
-    if (last.rule && last.rule.emptySeat) emptySeat = last.rule.emptySeat;
+    if (n === 4) {
+      const b = last.bottomSeat ?? 0;
+      for (let k = 0; k < 4; k++) posPlayers[k] = last.seats[(b + k) % 4];
+      chiichaPos = (4 - b) % 4;
+    } else {
+      for (let k = 0; k < 3; k++) seatPlayers3[k] = last.seats[k];
+      if (last.rule && EMPTY_SEAT_NAMES[last.rule.emptySeat]) emptySeat = last.rule.emptySeat;
+    }
   }
 
   const message = h("div", { class: "hint error", hidden: true });
@@ -68,9 +80,20 @@ export function renderStart(props) {
     const nameOf = (id) => (roster.find((p) => p.id === id) || { name: "?" }).name;
     const rule = currentRule();
     const n = rule.playerCount;
-    const positions = positionsFor(n, emptySeat);
 
-    root.append(h("h1", null, "麻雀 点数表示器", h("span", { class: "ver" }, ` v${version}`)));
+    root.append(
+      h(
+        "header",
+        { class: "start-top" },
+        h("h1", null, "麻雀 点数表示器", h("span", { class: "ver" }, ` v${version}`)),
+        h(
+          "div",
+          { class: "start-nav" },
+          h("button", { type: "button", class: "btn-flat", onclick: props.onStats }, "成績・分析"),
+          h("button", { type: "button", class: "btn-flat", onclick: props.onSettings }, "設定"),
+        ),
+      ),
+    );
 
     if (current) {
       const st = reduce(current.events, current.rule);
@@ -92,33 +115,18 @@ export function renderStart(props) {
 
     const sec = h("section", { class: "card" }, h("h2", null, "新しい対局"));
 
-    // プリセット
+    // ルール
     const presetSel = h(
       "select",
       {
         onchange: (e) => {
           presetName = e.target.value;
-          emptySeat = presets[presetName].emptySeat || emptySeat;
           render();
         },
       },
       presetNames.map((k) => h("option", { value: k, selected: k === presetName }, k)),
     );
     sec.append(h("label", { class: "row" }, h("span", null, "ルール"), presetSel));
-
-    if (n === 3) {
-      const emptySel = h(
-        "select",
-        {
-          onchange: (e) => {
-            emptySeat = e.target.value;
-            render();
-          },
-        },
-        Object.keys(EMPTY_LABELS).map((k) => h("option", { value: k, selected: k === emptySeat }, EMPTY_LABELS[k])),
-      );
-      sec.append(h("label", { class: "row" }, h("span", null, "空席"), emptySel));
-    }
 
     // プレイヤー追加
     const nameInput = h("input", { type: "text", placeholder: "名前", autocomplete: "off", enterkeyhint: "done" });
@@ -131,8 +139,9 @@ export function renderStart(props) {
           const name = nameInput.value.trim();
           if (!name) return;
           const p = storage.addPlayer(name);
-          const empty = posPlayers.slice(0, n).indexOf(null);
-          if (empty >= 0) posPlayers[empty] = p.id;
+          const list = n === 4 ? posPlayers : seatPlayers3;
+          const empty = list.slice(0, n).indexOf(null);
+          if (empty >= 0) list[empty] = p.id;
           render();
         },
       },
@@ -140,29 +149,46 @@ export function renderStart(props) {
     );
     sec.append(h("div", { class: "row" }, h("span", null, "プレイヤー"), nameInput, addBtn));
 
-    // 席
-    for (let k = 0; k < n; k++) {
-      const sel = h(
+    const playerSelect = (value, onChange) =>
+      h(
         "select",
-        { onchange: (e) => (posPlayers[k] = e.target.value || null) },
-        h("option", { value: "", selected: posPlayers[k] === null }, "—"),
-        roster.map((p) => h("option", { value: p.id, selected: posPlayers[k] === p.id }, p.name)),
+        { onchange: (e) => onChange(e.target.value || null) },
+        h("option", { value: "", selected: value === null }, "—"),
+        roster.map((p) => h("option", { value: p.id, selected: value === p.id }, p.name)),
       );
-      const radio = h("input", {
-        type: "radio",
-        name: "chiicha",
-        value: String(k),
-        checked: chiichaPos === k,
-        onchange: () => (chiichaPos = k),
-      });
+
+    if (n === 4) {
+      // 画面位置ごとに選ぶ
+      for (let k = 0; k < 4; k++) {
+        const radio = h("input", { type: "radio", name: "chiicha", value: String(k), checked: chiichaPos === k, onchange: () => (chiichaPos = k) });
+        sec.append(
+          h(
+            "div",
+            { class: "row seat-row" },
+            h("span", { class: "pos-label" }, POSITION_LABELS[POSITIONS4[k]]),
+            playerSelect(posPlayers[k], (v) => (posPlayers[k] = v)),
+            h("label", { class: "chiicha-label" }, radio, "起家"),
+          ),
+        );
+      }
+    } else {
+      // 起家順に選び、空席の方向を起家から見て選ぶ
+      for (let k = 0; k < 3; k++) {
+        sec.append(h("div", { class: "row seat-row" }, h("span", { class: "pos-label" }, SEAT_NAMES3[k]), playerSelect(seatPlayers3[k], (v) => (seatPlayers3[k] = v))));
+      }
+      const emptySel = h(
+        "select",
+        {
+          onchange: (e) => {
+            emptySeat = e.target.value;
+            render();
+          },
+        },
+        Object.keys(EMPTY_SEAT_NAMES).map((k) => h("option", { value: k, selected: k === emptySeat }, EMPTY_SEAT_NAMES[k])),
+      );
       sec.append(
-        h(
-          "div",
-          { class: "row seat-row" },
-          h("span", { class: "pos-label" }, POSITION_LABELS[positions[k]]),
-          sel,
-          h("label", { class: "chiicha-label" }, radio, "起家"),
-        ),
+        h("label", { class: "row" }, h("span", null, "空席"), emptySel),
+        h("div", { class: "hint" }, "空席が画面の左側（長辺）に来る向きで置きます。画面上の配置はこの選択から決まります。"),
       );
     }
 
@@ -179,17 +205,21 @@ export function renderStart(props) {
             onclick: () => {
               const rule = currentRule();
               const n = rule.playerCount;
-              const chosen = posPlayers.slice(0, n);
               const errors = validateRule(rule);
-              if (chosen.some((p) => p === null)) errors.push(`${n}人全員を選んでください`);
-              if (new Set(chosen).size !== chosen.length) errors.push("同じプレイヤーが重複しています");
-              if (chiichaPos >= n) chiichaPos = 0;
+              let seatsInfo;
+              if (n === 4) {
+                seatsInfo = seatsFrom4({ posPlayers, chiichaPos });
+              } else {
+                seatsInfo = { seats: seatPlayers3.slice(), bottomSeat: bottomSeatFor(emptySeat) };
+              }
+              if (seatsInfo.seats.some((p) => p === null)) errors.push(`${n}人全員を選んでください`);
+              if (new Set(seatsInfo.seats).size !== seatsInfo.seats.length) errors.push("同じプレイヤーが重複しています");
               if (errors.length) {
                 message.textContent = errors.join(" / ");
                 message.hidden = false;
                 return;
               }
-              props.onStart(buildGame({ rule, posPlayers: chosen, chiichaPos }));
+              props.onStart(buildGame({ rule, ...seatsInfo }));
             },
           },
           current ? "進行中を破棄して開始" : "対局開始",
@@ -216,16 +246,7 @@ export function renderStart(props) {
           ),
         );
       }
-      root.append(
-        h(
-          "section",
-          { class: "card" },
-          h("h2", null, `終了した対局（${games.length}）`),
-          h("div", { class: "sheet-actions" }, h("button", { type: "button", class: "btn-secondary", onclick: props.onStats }, "成績を見る")),
-          list,
-          h("div", { class: "hint" }, "タップで結果を開きます。結果画面のログから修正できます"),
-        ),
-      );
+      root.append(h("section", { class: "card" }, h("h2", null, `終了した対局（${games.length}）`), list, h("div", { class: "hint" }, "タップで結果を開きます。結果画面のログから修正できます")));
     }
 
     // バックアップ

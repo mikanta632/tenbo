@@ -120,13 +120,13 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions, diff
     "button",
     {
       type: "button",
-      class: `ibtn meld${melded ? " on" : ""}`,
+      class: `ibtn meld text${melded ? " on" : ""}`,
       "aria-label": "副露",
       "aria-pressed": melded ? "true" : "false",
       disabled: state.over,
       onclick: () => actions.onMeld(seat, !melded),
     },
-    svg(ICON_MELD),
+    "副露",
   );
 
   const panel = h(

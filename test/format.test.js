@@ -2,20 +2,28 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { seatPositions, positionsFor, kyokuName, windName, fmtPoints, fmtDelta, hanName } from "../src/ui/format.js";
+import { seatPositions, positionsFor, bottomSeatFor, kyokuName, windName, fmtPoints, fmtDelta, hanName } from "../src/ui/format.js";
 
 describe("seatPositions", () => {
   test("4人: 下から反時計回りに 右・上・左", () => {
     assert.deepEqual(seatPositions(0, 4), { bottom: 0, right: 1, top: 2, left: 3 });
     assert.deepEqual(seatPositions(2, 4), { bottom: 2, right: 3, top: 0, left: 1 });
   });
-  test("3人: 空席の位置を飛ばして反時計回り", () => {
-    assert.deepEqual(positionsFor(3, "left"), ["bottom", "right", "top"]);
-    assert.deepEqual(positionsFor(3, "top"), ["bottom", "right", "left"]);
-    assert.deepEqual(positionsFor(3, "right"), ["bottom", "top", "left"]);
-    assert.deepEqual(seatPositions(0, 3, "left"), { bottom: 0, right: 1, top: 2 });
-    assert.deepEqual(seatPositions(1, 3, "top"), { bottom: 1, right: 2, left: 0 });
-    assert.deepEqual(seatPositions(2, 3, "right"), { bottom: 2, top: 0, left: 1 });
+  test("3人: 空席は常に左。下・右・上を反時計回りに使う", () => {
+    assert.deepEqual(positionsFor(3), ["bottom", "right", "top"]);
+    assert.deepEqual(seatPositions(0, 3), { bottom: 0, right: 1, top: 2 });
+    assert.deepEqual(seatPositions(2, 3), { bottom: 2, right: 0, top: 1 });
+  });
+  test("3人: 起家から見た空席の方向 → 画面下の席", () => {
+    // 上家側が空席: 起家が下、南家が右、西家が上（左が空席 = 起家の上家）
+    assert.equal(bottomSeatFor("kamicha"), 0);
+    assert.deepEqual(seatPositions(bottomSeatFor("kamicha"), 3), { bottom: 0, right: 1, top: 2 });
+    // 対面が空席: 起家は右、南家が上、西家が下。起家の対面は左 = 空席
+    assert.equal(bottomSeatFor("toimen"), 2);
+    assert.deepEqual(seatPositions(bottomSeatFor("toimen"), 3), { bottom: 2, right: 0, top: 1 });
+    // 下家側が空席: 起家は上、南家が下、西家が右。起家の下家（反時計回りの次）は左 = 空席
+    assert.equal(bottomSeatFor("shimocha"), 1);
+    assert.deepEqual(seatPositions(bottomSeatFor("shimocha"), 3), { bottom: 1, right: 2, top: 0 });
   });
 });
 

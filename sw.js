@@ -31,6 +31,8 @@ const PRECACHE = [
   "./src/ui/result.js",
   "./src/ui/stats.js",
   "./src/ui/sound.js",
+  "./src/ui/prefs.js",
+  "./src/ui/settings.js",
   "./icons/apple-touch-icon.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",

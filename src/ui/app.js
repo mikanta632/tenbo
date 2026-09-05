@@ -1,4 +1,4 @@
-// アプリ本体。画面の切替、イベントの発行と保存、終局処理、ログの編集、精算、成績、エクスポート。
+// アプリ本体。画面の切替、イベントの発行と保存、終局処理、ログの編集、精算、成績、設定、エクスポート。
 // 状態は Game（イベント列）だけを持ち、表示はすべて reduce で導出する（§4.1）。
 
 import { createStorage, SCHEMA_VERSION } from "../storage.js";
@@ -12,6 +12,7 @@ import { renderTable } from "./table.js";
 import { renderLog } from "./log.js";
 import { renderResult } from "./result.js";
 import { renderStats } from "./stats.js";
+import { renderSettings } from "./settings.js";
 import {
   openAgariSheet,
   openMultiRonSheet,
@@ -29,7 +30,21 @@ import {
   openActionSheet,
 } from "./sheets.js";
 import { fmtElapsed, kyokuName } from "./format.js";
-import { soundEnabled, setSoundEnabled, playRiichi, playRiichiCancel, playMeld, playTest } from "./sound.js";
+import { customRules, saveCustomRule } from "./prefs.js";
+import {
+  soundEnabled,
+  setSoundEnabled,
+  voiceName,
+  setVoiceName,
+  jaVoices,
+  playRiichi,
+  playRiichiCancel,
+  playMeld,
+  playTap,
+  playNextKyoku,
+  playGameOver,
+  playTest,
+} from "./sound.js";
 
 // 版番号は version.js（index.html の classic script で読み込む）が唯一の定義。sw.js も同じファイルを読む
 export const APP_VERSION = globalThis.APP_VERSION || "dev";
@@ -47,6 +62,14 @@ let elapsedTimer = null;
 let diffSeat = null; // 点差を表示中の席
 let diffTimer = null;
 
+/** 組み込みプリセットに、設定画面で作ったカスタムルールを足す */
+function allPresets() {
+  const out = { ...PRESETS };
+  const custom = customRules();
+  for (const pc of ["4", "3"]) if (custom[pc]) out[`${pc}人カスタム`] = custom[pc];
+  return out;
+}
+
 // ---- 画面の切替 ---------------------------------------------------------
 
 function show(next) {
@@ -58,6 +81,7 @@ function show(next) {
   else if (screen === "log" && logTarget) renderLogScreen();
   else if (screen === "result" && resultId) renderResultScreen();
   else if (screen === "stats") renderStatsScreen();
+  else if (screen === "settings") renderSettingsScreen();
   else renderStartScreen();
 }
 
@@ -91,7 +115,7 @@ function renderStartScreen() {
     renderStart({
       storage,
       current: game,
-      presets: PRESETS,
+      presets: allPresets(),
       version: APP_VERSION,
       onResume: () => show("table"),
       onDiscard: () => {
@@ -112,6 +136,7 @@ function renderStartScreen() {
           alert("ルールが不正: " + errors.join("; "));
           return;
         }
+        playTap();
         game = g;
         storage.saveCurrent(game);
         show("table");
@@ -121,8 +146,31 @@ function renderStartScreen() {
         show("result");
       },
       onStats: () => show("stats"),
+      onSettings: () => show("settings"),
       onExport: () => exportJson(),
       onImport: (file) => importJson(file),
+    }),
+  );
+}
+
+// ---- 設定画面 -----------------------------------------------------------
+
+function renderSettingsScreen() {
+  stopElapsed();
+  root.append(
+    renderSettings({
+      presets: PRESETS,
+      customRules: customRules(),
+      sound: { enabled: soundEnabled(), voice: voiceName(), voices: jaVoices() },
+      version: APP_VERSION,
+      onBack: () => show("start"),
+      onSound: ({ enabled, voice }) => {
+        setSoundEnabled(enabled);
+        setVoiceName(voice || "");
+        show("settings");
+      },
+      onTestSound: () => playTest(),
+      onSaveRule: (pc, rule) => saveCustomRule(pc, rule),
     }),
   );
 }
@@ -169,6 +217,7 @@ function renderTableScreen() {
   const actions = {
     onPanel: (seat) => {
       if (state.over) return;
+      playTap();
       closeSheet();
       openSheetHandle = openAgariSheet({ state, rule, names, seat, onConfirm: confirmAndEmit });
     },
@@ -193,6 +242,7 @@ function renderTableScreen() {
     },
     // +/−: 押した人と他の人との点差を表示する。点数は動かさない。一定時間で戻る
     onDiff: (seat) => {
+      playTap();
       if (diffTimer) clearTimeout(diffTimer);
       diffTimer = null;
       diffSeat = diffSeat === seat ? null : seat;
@@ -206,12 +256,14 @@ function renderTableScreen() {
       show();
     },
     onUndo: () => {
+      playTap();
       game = withEvents(game, undoLast(game.events, rule));
       storage.saveCurrent(game);
       show();
     },
     onSpecial: () => {
       if (state.over) return;
+      playTap();
       closeSheet();
       openSheetHandle = openSpecialMenu({
         rule,
@@ -222,6 +274,7 @@ function renderTableScreen() {
       });
     },
     onMenu: () => {
+      playTap();
       closeSheet();
       openSheetHandle = openMenu({
         version: APP_VERSION,
@@ -248,6 +301,7 @@ function renderTableScreen() {
       });
     },
     onLog: () => {
+      playTap();
       logTarget = { kind: "current" };
       show("log");
     },
@@ -271,8 +325,11 @@ function emit(event) {
   }
   game = withEvents(game, events);
   storage.saveCurrent(game);
-  show();
   const state = reduce(game.events, game.rule);
+  if (state.over) playGameOver();
+  else if (isEndOfKyoku(event)) playNextKyoku();
+  else if (event.t === "adjust") playTap();
+  show();
   if (state.over) return; // show() 内で終局ダイアログを出している
   if (isEndOfKyoku(event) && agariYameAvailableAfter(game.events, game.rule)) {
     const names = playerNames(game);
@@ -315,6 +372,19 @@ function showOver(state, names) {
       game = withEvents(game, undoLast(game.events, rule));
       storage.saveCurrent(game);
       show();
+    },
+    onDiscard: () => {
+      closeSheet();
+      openSheetHandle = openConfirm({
+        title: "保存せずに終了",
+        message: "この対局を保存せずに破棄します。成績にも残りません。",
+        okLabel: "破棄する",
+        onOk: () => {
+          game = null;
+          storage.clearCurrent();
+          show("start");
+        },
+      });
     },
   });
 }
@@ -557,6 +627,47 @@ function stopElapsed() {
   if (elapsedTimer) clearInterval(elapsedTimer);
   elapsedTimer = null;
 }
+
+// ---- 画面の向き（§10） --------------------------------------------------
+// iOS では向きを固定できないため、横向きになったら中身を逆に回して縦向きのまま見せる。
+// 本体（body）を回すので、body の中に fixed で置くシートも一緒に回る。
+// CSS の 100vh は実際の viewport を指すため、回転後の高さは --app-h / --app-w で渡す。
+
+function applyOrientation() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  if (!w || !h) return; // 読み込み直後などで寸法が取れないときは触らない（CSS の既定 100vh のまま）
+  const landscape = w > h;
+  let angle = 0;
+  // 注意: このファイルの screen は画面状態の変数。端末の向きは window.screen から取る
+  const so = window.screen && window.screen.orientation;
+  if (so && typeof so.angle === "number") angle = so.angle;
+  else if (typeof window.orientation === "number") angle = window.orientation;
+  const body = document.body;
+  const rootEl = document.documentElement;
+  if (landscape && (angle === 90 || angle === -90 || angle === 270)) {
+    // 端末を左に倒した（angle 90）なら中身を右に回す
+    const deg = angle === 90 ? -90 : 90;
+    body.classList.add("rotated");
+    body.style.width = `${h}px`;
+    body.style.height = `${w}px`;
+    body.style.transform = `translate(-50%, -50%) rotate(${deg}deg)`;
+    rootEl.style.setProperty("--app-w", `${h}px`);
+    rootEl.style.setProperty("--app-h", `${w}px`);
+  } else {
+    body.classList.remove("rotated");
+    body.style.width = "";
+    body.style.height = "";
+    body.style.transform = "";
+    rootEl.style.setProperty("--app-w", `${w}px`);
+    rootEl.style.setProperty("--app-h", `${h}px`);
+  }
+}
+window.addEventListener("resize", applyOrientation);
+window.addEventListener("orientationchange", () => setTimeout(applyOrientation, 50));
+window.addEventListener("load", applyOrientation);
+if (window.visualViewport) window.visualViewport.addEventListener("resize", applyOrientation);
+applyOrientation();
 
 // ---- Screen Wake Lock（§10） --------------------------------------------
 

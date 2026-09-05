@@ -636,7 +636,7 @@ export function openSpecialMenu({ rule, onPick, title = "特殊終局", withAdju
     withAgari ? ["agari", "和了（1人）", "ツモ・ロン"] : null,
     ["ryuukyoku", "流局", "テンパイ料と連荘"],
     ["abortive", "途中流局", "九種九牌・四風連打など"],
-    rule.nagashiMangan ? ["nagashi", "流し満貫", "成立者に満貫"] : null,
+    ["nagashi", "流し満貫", "成立者に満貫"],
     ["multiRon", "複数和了", "ダブロン・トリロン"],
     ["chombo", "チョンボ", "罰符を払って局をやり直す"],
     withAdjust ? ["adjust", "手動修正", "点棒とのズレを直す"] : null,
@@ -675,34 +675,61 @@ export function openEventEditor({ event, state, rule, names, onConfirm }) {
 // ---- 手動修正 -------------------------------------------------------------
 
 /**
- * 対象者を選び、1タップで adjust イベントを発行する。onAdjust(seat, delta)
+ * 対象者を選び、実際の持ち点を直接入力する。差分を adjust イベントとして発行する。onAdjust(seat, delta)
  */
 export function openAdjustSheet({ state, rule, names, onAdjust }) {
   const n = rule.playerCount;
   let seat = null;
+  let text = "";
   const body = h("div", { class: "sheet-body" });
-  const steps = [-1000, -100, 100, 1000];
+
+  function parsed() {
+    const v = Number(String(text).replace(/[,，\s]/g, ""));
+    return Number.isInteger(v) ? v : null;
+  }
 
   function render() {
     clear(body);
+    const v = parsed();
+    const delta = seat !== null && v !== null ? v - state.points[seat] : null;
+    const input = h("input", {
+      type: "text",
+      inputmode: "numeric",
+      class: "points-input",
+      placeholder: seat === null ? "先に対象者を選ぶ" : "実際の点数",
+      value: text,
+      disabled: seat === null,
+      oninput: (e) => {
+        text = e.target.value;
+        // 再描画せずに差分表示だけ更新する（入力中のキーボードを閉じない）
+        const p = parsed();
+        deltaEl.textContent = p === null ? "—" : fmtDelta(p - state.points[seat]);
+        confirmBtn.disabled = p === null || p === state.points[seat];
+      },
+    });
+    const deltaEl = h("span", { class: "inline-value" }, delta === null ? "—" : fmtDelta(delta));
+    const confirmBtn = h(
+      "button",
+      { type: "button", class: "btn-primary", disabled: delta === null || delta === 0, onclick: () => onAdjust(seat, parsed() - state.points[seat]) },
+      "確定",
+    );
     append(body,
       h("div", { class: "label" }, "対象者"),
       choice(
         Array.from({ length: n }, (_, i) => ({ value: i, label: `${seatLabel(i, state, names)} ${fmtPoints(state.points[i])}` })),
         seat,
-        (v) => {
-          seat = v;
+        (s) => {
+          seat = s;
+          text = String(state.points[s]);
           render();
+          body.querySelector(".points-input")?.select();
         },
         { class: "grid2" },
       ),
-      h("div", { class: "label" }, "物理点棒に合わせて修正（相手方は指定しない）"),
-      h(
-        "div",
-        { class: "choice big" },
-        steps.map((d) => h("button", { type: "button", class: "chip", disabled: seat === null, onclick: () => onAdjust(seat, d) }, fmtDelta(d))),
-      ),
-      h("div", { class: "hint" }, "精算時に卓外差額として表示されます"),
+      h("div", { class: "label" }, "実際の点数（物理点棒の額をそのまま入力）"),
+      h("div", { class: "row-inline" }, input, h("span", { class: "inline-label" }, "差分"), deltaEl),
+      h("div", { class: "hint" }, "相手方は指定しません。差分は精算時に卓外差額として表示されます"),
+      h("div", { class: "sheet-actions" }, confirmBtn),
     );
   }
 
@@ -739,7 +766,7 @@ export function openMenu({ version, soundOn, onToggleSound, onTestSound, onAdjus
 /**
  * 終局ダイアログ。順位と持ち点を表示し、保存して終了するか、戻すかを選ぶ。
  */
-export function openOverDialog({ state, rule, names, reason, onSave, onUndo }) {
+export function openOverDialog({ state, rule, names, reason, onSave, onUndo, onDiscard }) {
   const n = rule.playerCount;
   const ranks = ranksOf(state.points);
   const order = [...Array(n).keys()].sort((a, b) => ranks[a] - ranks[b]);
@@ -753,13 +780,16 @@ export function openOverDialog({ state, rule, names, reason, onSave, onUndo }) {
         h("div", { class: "prow-line" }, h("span", { class: "pv-name" }, `${ranks[i] + 1}位 ${names[i]}`), h("span", { class: "pv-after" }, fmtPoints(state.points[i]))),
       ),
     ),
-    state.kyotaku > 0 ? h("div", { class: "hint" }, `供託 ${state.kyotaku}本が残っています（精算は段階4で扱います）`) : null,
+    state.kyotaku > 0 ? h("div", { class: "hint" }, `供託 ${state.kyotaku}本が残っています（${rule.finalKyotaku === "remain" ? "場に残します" : "トップに加算します"}）`) : null,
     h(
       "div",
       { class: "sheet-actions two" },
       h("button", { type: "button", class: "btn-secondary", onclick: onUndo }, "戻す"),
       h("button", { type: "button", class: "btn-primary", onclick: onSave }, "保存して終了"),
     ),
+    onDiscard
+      ? h("div", { class: "sheet-actions" }, h("button", { type: "button", class: "btn-secondary danger", onclick: onDiscard }, "保存せずに終了（この対局を破棄）"))
+      : null,
   );
   return openSheet({ title: "終局", body, kind: "dialog" });
 }

@@ -11,13 +11,20 @@
   --danger: #e0533c;
   --ph: 116px;                                  /* パネル群の高さ（ボタン列 + パネル） */
   --pw: min(340px, calc(100vw - 16px));         /* 上下パネル群の幅 */
-  --pw-side: min(300px, calc(100vh - 2 * var(--ph) - 210px)); /* 左右パネル群の長さ */
+  --pw-side: min(300px, calc(var(--app-h) - 2 * var(--ph) - 210px)); /* 左右パネル群の長さ */
   --sat: env(safe-area-inset-top, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
 }
 
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* touch-action: manipulation でダブルタップ拡大を止める（iOS は user-scalable=no を無視する） */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 html, body { margin: 0; height: 100%; }
+/* 横向きにされたときは body ごと逆回転して縦向きのまま見せる（app.js の applyOrientation） */
+body.rotated {
+  position: fixed; left: 50%; top: 50%; transform-origin: center center; overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+:root { --app-h: 100vh; --app-w: 100vw; }
 body {
   font-family: -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", system-ui, sans-serif;
   background: var(--felt);
@@ -31,19 +38,19 @@ button { font: inherit; color: inherit; }
 button:disabled { opacity: 0.4; }
 #app { min-height: 100%; }
 
-/* ---- 向きの案内（§10） ---- */
-.landscape-notice { display: none; }
-@media (orientation: landscape) and (max-height: 500px) {
-  .landscape-notice {
-    display: flex; position: fixed; inset: 0; z-index: 100;
-    align-items: center; justify-content: center;
-    background: var(--felt-dark); font-size: 22px;
-  }
-}
 
 /* ---- 開始画面 ---- */
 .start-screen { padding: calc(12px + var(--sat)) 14px calc(20px + var(--sab)); max-width: 480px; margin: 0 auto; }
 .start-screen h1 { font-size: 20px; margin: 8px 0 14px; }
+.start-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.start-nav { display: flex; gap: 6px; }
+.uma-row { display: flex; gap: 6px; flex: 1; }
+.uma-row input { width: 0; flex: 1; min-width: 0; }
+.settings-screen .row input[type=number] { flex: 1; min-width: 0; font: inherit; font-size: 16px; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); background: #0b2a1b; color: var(--ink); }
+.settings-screen .row input[type=checkbox] { width: 24px; height: 24px; }
+.settings-screen textarea { width: 100%; font: 12px ui-monospace, Menlo, monospace; padding: 8px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); background: #0b2a1b; color: var(--ink); }
+.points-input { flex: 1; min-width: 0; font: inherit; font-size: 22px; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); background: #0b2a1b; color: var(--digit); font-variant-numeric: tabular-nums; text-align: right; }
+.btn-secondary.danger { color: #ff9d8c; border-color: rgba(255,157,140,0.5); }
 .start-screen h2 { font-size: 16px; margin: 0 0 10px; }
 .ver { font-size: 12px; color: var(--muted); font-weight: normal; }
 .card { background: rgba(0,0,0,0.35); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
@@ -59,7 +66,7 @@ button:disabled { opacity: 0.4; }
 
 /* ---- 対局画面 ---- */
 .table-screen {
-  display: flex; flex-direction: column; height: 100vh; height: 100dvh;
+  display: flex; flex-direction: column; height: var(--app-h);
   padding-top: var(--sat); padding-bottom: var(--sab);
 }
 .top {
@@ -97,6 +104,8 @@ button:disabled { opacity: 0.4; }
   background: rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center;
 }
 .ibtn.on { background: var(--accent); border-color: var(--accent); }
+.ibtn.text { font-size: 18px; font-weight: 700; letter-spacing: 2px; }
+.ibtn.text.on { color: #111; }
 .ibtn:active { transform: scale(0.96); }
 
 .panel {
@@ -136,7 +145,7 @@ button:disabled { opacity: 0.4; }
 .overlay-dialog { align-items: center; padding: 20px; }
 .sheet, .dialog {
   background: #15221b; color: var(--ink); width: 100%; max-width: 520px;
-  border-radius: 18px 18px 0 0; max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px);
+  border-radius: 18px 18px 0 0; max-height: calc(var(--app-h) - 40px);
   display: flex; flex-direction: column; padding-bottom: var(--sab);
 }
 .dialog { border-radius: 18px; }
@@ -186,7 +195,7 @@ button:disabled { opacity: 0.4; }
   background: transparent; font-size: 16px; padding: 0 16px;
 }
 /* 和了入力: 高さ固定でがたつかせない */
-.sheet.fixed { height: calc(100vh - 20px); height: calc(100dvh - 20px); }
+.sheet.fixed { height: calc(var(--app-h) - 20px); }
 .slot-detail { min-height: 168px; }
 .agari-body .chip { min-height: 40px; }
 .agari-body .label { margin: 8px 0 4px; }
@@ -207,7 +216,7 @@ button:disabled { opacity: 0.4; }
 
 /* 背の低い端末（iPhone SE 系）では和了入力を詰めて、スクロールなしで確定に届かせる */
 @media (max-height: 700px) {
-  .sheet.fixed { height: calc(100vh - 12px); height: calc(100dvh - 12px); }
+  .sheet.fixed { height: calc(var(--app-h) - 12px); }
   .sheet.fixed .sheet-head { padding: 6px 16px 0; }
   .agari-body .who-line { font-size: 16px; margin: 0; }
   .agari-body .chip { min-height: 34px; font-size: 15px; }
@@ -239,7 +248,7 @@ button:disabled { opacity: 0.4; }
 .menu-item.danger { color: #ff9d8c; }
 
 /* ログ画面 */
-.log-screen { min-height: 100vh; min-height: 100dvh; padding-top: var(--sat); padding-bottom: calc(16px + var(--sab)); }
+.log-screen { min-height: var(--app-h); padding-top: var(--sat); padding-bottom: calc(16px + var(--sab)); }
 .log-top { display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
 .log-title { flex: 1; font-size: 17px; font-weight: 600; }
 .log-count { font-size: 13px; color: var(--muted); }
@@ -263,7 +272,7 @@ button:disabled { opacity: 0.4; }
 .log-hint { padding: 0 12px; }
 
 /* 結果画面・成績画面 */
-.plain-screen { min-height: 100vh; min-height: 100dvh; padding: var(--sat) 12px calc(20px + var(--sab)); max-width: 520px; margin: 0 auto; }
+.plain-screen { min-height: var(--app-h); padding: var(--sat) 12px calc(20px + var(--sab)); max-width: 520px; margin: 0 auto; }
 .plain-top { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
 .plain-title { flex: 1; font-size: 17px; font-weight: 600; }
 .rtable { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }

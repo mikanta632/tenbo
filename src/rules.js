@@ -15,7 +15,7 @@ export const DEFAULT_RULE = Object.freeze({
   tobi: true,
   tobiLine: 0,
   abortiveRyuukyoku: ["kyuushu", "suufon", "suucha_riichi", "suukaikan", "sanchaho"],
-  nagashiMangan: false,
+  nagashiMangan: true,
   riichiUnderThousand: false,
 
   // 点数
@@ -32,8 +32,8 @@ export const DEFAULT_RULE = Object.freeze({
   ryuukyokuTenpaiTotal: 3000,
   chomboRule: "mangan",
 
-  // 3人麻雀のみ
-  emptySeat: "left",
+  // 3人麻雀のみ。起家から見て空席がどの方向か: kamicha（上家側）| toimen（対面）| shimocha（下家側）
+  emptySeat: "kamicha",
 
   // 終局
   finalKyotaku: "top",

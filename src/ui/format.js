@@ -47,22 +47,38 @@ export function gameId(date) {
 export const POSITION_ORDER = ["bottom", "right", "top", "left"];
 
 /**
- * 3人麻雀で使う画面位置。rule.emptySeat の位置を除き、下から反時計回り。
+ * 使う画面位置。3人麻雀は空席を常に画面の左（長辺）に置き、下・右・上を使う。
  */
-export function positionsFor(playerCount, emptySeat = "left") {
-  if (playerCount === 3) return POSITION_ORDER.filter((p) => p !== emptySeat);
+export function positionsFor(playerCount) {
+  if (playerCount === 3) return ["bottom", "right", "top"];
   return POSITION_ORDER.slice();
 }
 
 /**
  * 席 → 画面位置。bottomSeat を下に置き、反時計回りに席順を割り当てる。
- * 戻り値は { bottom: seatIndex, right: ..., ... }（3人麻雀は空席の位置を含まない）。
+ * 戻り値は { bottom: seatIndex, right: ..., ... }（3人麻雀は left を含まない）。
  */
-export function seatPositions(bottomSeat, playerCount, emptySeat = "left") {
-  const order = positionsFor(playerCount, emptySeat);
+export function seatPositions(bottomSeat, playerCount) {
+  const order = positionsFor(playerCount);
   const pos = {};
   order.forEach((p, k) => (pos[p] = (bottomSeat + k) % playerCount));
   return pos;
+}
+
+/** 空席の方向（起家から見て）の表示名 */
+export const EMPTY_SEAT_NAMES = Object.freeze({ kamicha: "起家の上家側", toimen: "起家の対面", shimocha: "起家の下家側" });
+
+/**
+ * 3人麻雀で、空席を画面の左に置いたときに画面下に来る席（seatIndex、起家 = 0）。
+ * 反時計回りの並び 下 → 右 → 上 → 左(空席) → 下 に、起家・南家・西家を当てはめる。
+ *   上家側が空席: 起家が下（左の空席が起家の上家）
+ *   対面が空席:   起家が右、西家が下
+ *   下家側が空席: 起家が上、南家が下
+ */
+export function bottomSeatFor(emptySeat) {
+  if (emptySeat === "toimen") return 2;
+  if (emptySeat === "shimocha") return 1;
+  return 0;
 }
 
 /** 途中流局の種別名 */

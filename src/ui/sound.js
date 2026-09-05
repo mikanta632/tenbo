@@ -1,31 +1,22 @@
-// 効果音（docs/design.md §8.2）。リーチは音声合成で「リーチ」、副露は短い電子音。
+// 効果音（docs/design.md §8.2）。
 //
 // 端末内の音声合成（speechSynthesis）と Web Audio だけを使い、音声ファイルは持たない。
 // どちらもユーザー操作（タップ）の中から呼ぶ必要があるため、ボタンのハンドラから同期的に呼ぶ。
 // 設定はこの端末だけの好みなので localStorage の mj.prefs に置く（対局データとは別）。
 
-const PREFS_KEY = "mj.prefs";
-
-function loadPrefs() {
-  try {
-    return JSON.parse(localStorage.getItem(PREFS_KEY)) || {};
-  } catch {
-    return {};
-  }
-}
-function savePrefs(p) {
-  try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(p));
-  } catch {
-    /* 保存できなくても動作には影響しない */
-  }
-}
+import { loadPrefs, savePrefs } from "./prefs.js";
 
 export function soundEnabled() {
   return loadPrefs().sound !== "off";
 }
 export function setSoundEnabled(on) {
   savePrefs({ ...loadPrefs(), sound: on ? "on" : "off" });
+}
+export function voiceName() {
+  return loadPrefs().voice || "";
+}
+export function setVoiceName(name) {
+  savePrefs({ ...loadPrefs(), voice: name });
 }
 
 // ---- Web Audio ----------------------------------------------------------
@@ -39,52 +30,80 @@ function audio() {
   return ctx;
 }
 
-/** 短い正弦波。when は現在からの遅れ（秒）。 */
-function beep(freq, dur, when = 0, gain = 0.25) {
+/** 短い音。when は現在からの遅れ（秒）。type は波形。 */
+function tone(freq, dur, when = 0, { gain = 0.25, type = "sine", decay = true } = {}) {
   const c = audio();
   if (!c) return;
   const t0 = c.currentTime + when;
   const osc = c.createOscillator();
   const g = c.createGain();
-  osc.type = "sine";
+  osc.type = type;
   osc.frequency.value = freq;
   g.gain.setValueAtTime(0, t0);
-  g.gain.linearRampToValueAtTime(gain, t0 + 0.01);
-  g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  g.gain.linearRampToValueAtTime(gain, t0 + 0.008);
+  if (decay) g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  else g.gain.setValueAtTime(gain, t0 + dur - 0.02), g.gain.linearRampToValueAtTime(0, t0 + dur);
   osc.connect(g).connect(c.destination);
   osc.start(t0);
-  osc.stop(t0 + dur + 0.02);
+  osc.stop(t0 + dur + 0.03);
+}
+
+/** 自動卓風のチャイム（ピンポーン） */
+function chime(when = 0) {
+  tone(1319, 0.35, when, { gain: 0.3, type: "triangle" });
+  tone(1047, 0.55, when + 0.18, { gain: 0.3, type: "triangle" });
 }
 
 // ---- 音声合成 -----------------------------------------------------------
 
-let jaVoice = null;
-function pickVoice() {
-  if (!("speechSynthesis" in window)) return null;
-  const voices = speechSynthesis.getVoices();
-  if (!voices.length) return null;
-  jaVoice = voices.find((v) => v.lang === "ja-JP") || voices.find((v) => v.lang && v.lang.startsWith("ja")) || null;
-  return jaVoice;
+const PREFERRED = ["Hattori", "Otoya", "O-ren", "O-Ren", "Kyoko"];
+let voices = [];
+function refreshVoices() {
+  if (!("speechSynthesis" in window)) return;
+  voices = speechSynthesis.getVoices().filter((v) => v.lang && v.lang.toLowerCase().startsWith("ja"));
 }
 if ("speechSynthesis" in window) {
-  // 声の一覧は非同期に揃うので、先に読んでおく
-  pickVoice();
-  speechSynthesis.addEventListener("voiceschanged", pickVoice);
+  refreshVoices();
+  speechSynthesis.addEventListener("voiceschanged", refreshVoices);
 }
 
-/** 日本語で発声する。使えなければ false。 */
-function speak(text) {
+/** 使える日本語の声の一覧 */
+export function jaVoices() {
+  refreshVoices();
+  return voices.map((v) => ({ name: v.name, lang: v.lang }));
+}
+
+function pickVoice() {
+  refreshVoices();
+  const want = voiceName();
+  if (want) {
+    const v = voices.find((x) => x.name === want);
+    if (v) return v;
+  }
+  for (const p of PREFERRED) {
+    const v = voices.find((x) => x.name.includes(p));
+    if (v) return v;
+  }
+  return voices[0] || null;
+}
+
+/**
+ * 日本語で発声する。自動卓の発声に寄せて、やや速く・低く・張った調子にする。
+ * 使えなければ false。
+ */
+function speak(text, { rate = 1.15, pitch = 0.9, delay = 0 } = {}) {
   if (!("speechSynthesis" in window)) return false;
   try {
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "ja-JP";
-    const v = jaVoice || pickVoice();
+    const v = pickVoice();
     if (v) u.voice = v;
-    u.rate = 1.0;
-    u.pitch = 1.0;
+    u.rate = rate;
+    u.pitch = pitch;
     u.volume = 1.0;
-    speechSynthesis.speak(u);
+    if (delay > 0) setTimeout(() => speechSynthesis.speak(u), delay);
+    else speechSynthesis.speak(u);
     return true;
   } catch {
     return false;
@@ -93,35 +112,54 @@ function speak(text) {
 
 // ---- 公開 -----------------------------------------------------------------
 
-/** リーチ宣言: 「リーチ」と発声。音声合成が無ければ上昇音 */
+/** リーチ宣言: チャイムのあと「リーチ！」。音声合成が無ければチャイムだけ */
 export function playRiichi() {
   if (!soundEnabled()) return;
-  if (!speak("リーチ")) {
-    beep(660, 0.12);
-    beep(990, 0.18, 0.12);
-  }
+  chime();
+  speak("リーチ！", { rate: 1.15, pitch: 0.9, delay: 380 });
 }
 
 /** リーチ取り消し: 下降音 */
 export function playRiichiCancel() {
   if (!soundEnabled()) return;
-  beep(520, 0.1);
-  beep(390, 0.16, 0.1);
+  tone(520, 0.1);
+  tone(390, 0.16, 0.1);
 }
 
 /** 副露: オンで二連の短い音、オフで低い音1つ */
 export function playMeld(on) {
   if (!soundEnabled()) return;
   if (on) {
-    beep(880, 0.07);
-    beep(1175, 0.09, 0.08);
+    tone(880, 0.07);
+    tone(1175, 0.09, 0.08);
   } else {
-    beep(440, 0.12);
+    tone(440, 0.12);
   }
+}
+
+/** 操作音（シートを開く・確定など） */
+export function playTap() {
+  if (!soundEnabled()) return;
+  tone(1500, 0.04, 0, { gain: 0.12, type: "square" });
+}
+
+/** 局が終わり次の局へ: 上昇する3音 */
+export function playNextKyoku() {
+  if (!soundEnabled()) return;
+  tone(784, 0.12, 0, { type: "triangle" });
+  tone(988, 0.12, 0.13, { type: "triangle" });
+  tone(1319, 0.3, 0.26, { type: "triangle" });
+}
+
+/** 終局: 長めの2音 */
+export function playGameOver() {
+  if (!soundEnabled()) return;
+  tone(659, 0.3, 0, { type: "triangle" });
+  tone(523, 0.7, 0.3, { type: "triangle" });
 }
 
 /** 設定画面の試聴 */
 export function playTest() {
-  playMeld(true);
-  setTimeout(() => speak("リーチ"), 250);
+  playNextKyoku();
+  setTimeout(() => playRiichi(), 700);
 }
