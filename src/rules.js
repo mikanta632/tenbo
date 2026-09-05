@@ -32,8 +32,7 @@ export const DEFAULT_RULE = Object.freeze({
   ryuukyokuTenpaiTotal: 3000,
   chomboRule: "mangan",
 
-  // 3人麻雀のみ。起家から見て空席がどの方向か: kamicha（上家側）| toimen（対面）| shimocha（下家側）
-  emptySeat: "kamicha",
+  // 3人麻雀のツモ損ありは固定。設定項目を持たない。空席の位置は Game.bottomSeat で表す（対局画面の「回転」）
 
   // 終局
   finalKyotaku: "top",

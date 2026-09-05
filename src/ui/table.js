@@ -38,7 +38,7 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
   const rule = game.rule;
   const n = rule.playerCount;
   const dealer = dealerOf(state.kyoku, n);
-  const pos = seatPositions(game.bottomSeat ?? 0, n, rule.emptySeat);
+  const pos = seatPositions(game.bottomSeat ?? 0, n);
 
   const header = h(
     "header",
@@ -52,7 +52,13 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
     "div",
     { class: "bar" },
     h("div", { class: "bar-left" }, h("button", { type: "button", class: "btn-flat", onclick: actions.onLog, disabled: !actions.onLog }, "ログ"), elapsed),
-    h("button", { type: "button", class: "btn-flat", onclick: actions.onUndo, disabled: game.events.length === 0 }, "戻す"),
+    h(
+      "div",
+      { class: "bar-right" },
+      // 座席の回転: 画面下に来る席を反時計回りに 1つ進める。3人麻雀では空席（左）の方向を合わせるのに使う
+      h("button", { type: "button", class: "btn-flat", "aria-label": "座席を回転", onclick: actions.onRotate }, "↻ 回転"),
+      h("button", { type: "button", class: "btn-flat", onclick: actions.onUndo, disabled: game.events.length === 0 }, "戻す"),
+    ),
   );
 
   const felt = h("div", { class: "felt" });
@@ -109,6 +115,7 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions, diff
     {
       type: "button",
       class: `ibtn riichi${riichiOn ? " on" : ""}`,
+      "data-no-sound": true, // 共通のクリック音ではなく専用の音を鳴らす
       "aria-label": "リーチ",
       "aria-pressed": riichiOn ? "true" : "false",
       disabled: riichiDisabled,
@@ -121,6 +128,7 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions, diff
     {
       type: "button",
       class: `ibtn meld text${melded ? " on" : ""}`,
+      "data-no-sound": true,
       "aria-label": "副露",
       "aria-pressed": melded ? "true" : "false",
       disabled: state.over,

@@ -12,6 +12,7 @@ import { renderTable } from "./table.js";
 import { renderLog } from "./log.js";
 import { renderResult } from "./result.js";
 import { renderStats } from "./stats.js";
+import { renderPlayer } from "./player.js";
 import { renderSettings } from "./settings.js";
 import {
   openAgariSheet,
@@ -29,7 +30,7 @@ import {
   openConfirm,
   openActionSheet,
 } from "./sheets.js";
-import { fmtElapsed, kyokuName } from "./format.js";
+import { fmtElapsed, kyokuName, rotateBottomSeat } from "./format.js";
 import { customRules, saveCustomRule } from "./prefs.js";
 import {
   soundEnabled,
@@ -57,6 +58,8 @@ let game = storage.loadCurrent();
 let screen = game ? "table" : "start";
 let logTarget = null; // { kind: "current" } | { kind: "finished", id }
 let resultId = null; // 結果画面で見ている終了済み対局の id
+let resultBack = "start"; // 結果画面の「戻る」先
+let playerId = null; // 個人ページで見ているプレイヤー
 let openSheetHandle = null;
 let elapsedTimer = null;
 let diffSeat = null; // 点差を表示中の席
@@ -70,6 +73,21 @@ function allPresets() {
   return out;
 }
 
+// ---- 効果音: すべてのボタン操作 ---------------------------------------------
+// 有効なボタン（と role=button のパネル）のクリックで共通の操作音を鳴らす。
+// 専用の音を持つボタン（リーチ・副露）は data-no-sound で除く。capture で拾うので、
+// ハンドラ内で要素が作り直されても取りこぼさない。
+
+document.addEventListener(
+  "click",
+  (e) => {
+    const b = e.target.closest("button, [role=button]");
+    if (!b || b.disabled || b.dataset.noSound !== undefined) return;
+    playTap();
+  },
+  true,
+);
+
 // ---- 画面の切替 ---------------------------------------------------------
 
 function show(next) {
@@ -81,6 +99,7 @@ function show(next) {
   else if (screen === "log" && logTarget) renderLogScreen();
   else if (screen === "result" && resultId) renderResultScreen();
   else if (screen === "stats") renderStatsScreen();
+  else if (screen === "player" && playerId) renderPlayerScreen();
   else if (screen === "settings") renderSettingsScreen();
   else renderStartScreen();
 }
@@ -136,13 +155,13 @@ function renderStartScreen() {
           alert("ルールが不正: " + errors.join("; "));
           return;
         }
-        playTap();
         game = g;
         storage.saveCurrent(game);
         show("table");
       },
       onOpenResult: (id) => {
         resultId = id;
+        resultBack = "start";
         show("result");
       },
       onStats: () => show("stats"),
@@ -217,7 +236,6 @@ function renderTableScreen() {
   const actions = {
     onPanel: (seat) => {
       if (state.over) return;
-      playTap();
       closeSheet();
       openSheetHandle = openAgariSheet({ state, rule, names, seat, onConfirm: confirmAndEmit });
     },
@@ -242,7 +260,6 @@ function renderTableScreen() {
     },
     // +/−: 押した人と他の人との点差を表示する。点数は動かさない。一定時間で戻る
     onDiff: (seat) => {
-      playTap();
       if (diffTimer) clearTimeout(diffTimer);
       diffTimer = null;
       diffSeat = diffSeat === seat ? null : seat;
@@ -255,15 +272,19 @@ function renderTableScreen() {
       }
       show();
     },
+    // 座席の回転: 画面下に来る席を反時計回りに 1つ進める（表示だけ。イベント列は変わらない）
+    onRotate: () => {
+      game = { ...game, bottomSeat: rotateBottomSeat(game.bottomSeat ?? 0, rule.playerCount) };
+      storage.saveCurrent(game);
+      show();
+    },
     onUndo: () => {
-      playTap();
       game = withEvents(game, undoLast(game.events, rule));
       storage.saveCurrent(game);
       show();
     },
     onSpecial: () => {
       if (state.over) return;
-      playTap();
       closeSheet();
       openSheetHandle = openSpecialMenu({
         rule,
@@ -274,7 +295,6 @@ function renderTableScreen() {
       });
     },
     onMenu: () => {
-      playTap();
       closeSheet();
       openSheetHandle = openMenu({
         version: APP_VERSION,
@@ -301,7 +321,6 @@ function renderTableScreen() {
       });
     },
     onLog: () => {
-      playTap();
       logTarget = { kind: "current" };
       show("log");
     },
@@ -328,7 +347,6 @@ function emit(event) {
   const state = reduce(game.events, game.rule);
   if (state.over) playGameOver();
   else if (isEndOfKyoku(event)) playNextKyoku();
-  else if (event.t === "adjust") playTap();
   show();
   if (state.over) return; // show() 内で終局ダイアログを出している
   if (isEndOfKyoku(event) && agariYameAvailableAfter(game.events, game.rule)) {
@@ -366,6 +384,7 @@ function showOver(state, names) {
       storage.clearCurrent();
       game = null;
       resultId = finished.id;
+      resultBack = "start";
       show("result");
     },
     onUndo: () => {
@@ -412,7 +431,7 @@ function renderResultScreen() {
       names: playerNames(g),
       settlement: settlementOf(g),
       title: `結果 ${(g.endedAt || g.startedAt || "").slice(0, 16).replace("T", " ")}`,
-      onBack: () => show("start"),
+      onBack: () => show(resultBack),
       onLog: () => {
         logTarget = { kind: "finished", id: g.id };
         show("log");
@@ -422,11 +441,42 @@ function renderResultScreen() {
   );
 }
 
-// ---- 成績画面（§8.5） ----------------------------------------------------
+// ---- 成績画面・個人ページ（§8.5） ----------------------------------------
 
 function renderStatsScreen() {
   stopElapsed();
-  root.append(renderStats({ games: storage.loadGames(), roster: storage.loadRoster(), onBack: () => show("start") }));
+  root.append(
+    renderStats({
+      games: storage.loadGames(),
+      roster: storage.loadRoster(),
+      onBack: () => show("start"),
+      onPlayer: (id) => {
+        playerId = id;
+        show("player");
+      },
+    }),
+  );
+}
+
+function renderPlayerScreen() {
+  stopElapsed();
+  root.append(
+    renderPlayer({
+      playerId,
+      roster: storage.loadRoster(),
+      games: storage.loadGames(),
+      onBack: () => show("stats"),
+      onOpenResult: (id) => {
+        resultId = id;
+        resultBack = "player";
+        show("result");
+      },
+      onRename: (id, name) => {
+        storage.renamePlayer(id, name);
+        show("player");
+      },
+    }),
+  );
 }
 
 // ---- ログ画面（§8.4） ---------------------------------------------------

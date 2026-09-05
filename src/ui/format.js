@@ -65,20 +65,13 @@ export function seatPositions(bottomSeat, playerCount) {
   return pos;
 }
 
-/** 空席の方向（起家から見て）の表示名 */
-export const EMPTY_SEAT_NAMES = Object.freeze({ kamicha: "起家の上家側", toimen: "起家の対面", shimocha: "起家の下家側" });
-
 /**
- * 3人麻雀で、空席を画面の左に置いたときに画面下に来る席（seatIndex、起家 = 0）。
- * 反時計回りの並び 下 → 右 → 上 → 左(空席) → 下 に、起家・南家・西家を当てはめる。
- *   上家側が空席: 起家が下（左の空席が起家の上家）
- *   対面が空席:   起家が右、西家が下
- *   下家側が空席: 起家が上、南家が下
+ * 対局画面の「回転」。画面下に来る席を反時計回りに 1つ進める（bottomSeat + 1）。
+ * 3人麻雀では空席が常に画面の左にあるので、これで「起家から見た空席の方向」が
+ * 上家側（bottomSeat 0）→ 下家側（1）→ 対面（2）と切り替わる。
  */
-export function bottomSeatFor(emptySeat) {
-  if (emptySeat === "toimen") return 2;
-  if (emptySeat === "shimocha") return 1;
-  return 0;
+export function rotateBottomSeat(bottomSeat, playerCount) {
+  return (bottomSeat + 1) % playerCount;
 }
 
 /** 途中流局の種別名 */

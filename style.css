@@ -51,6 +51,17 @@ button:disabled { opacity: 0.4; }
 .settings-screen textarea { width: 100%; font: 12px ui-monospace, Menlo, monospace; padding: 8px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); background: #0b2a1b; color: var(--ink); }
 .points-input { flex: 1; min-width: 0; font: inherit; font-size: 22px; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); background: #0b2a1b; color: var(--digit); font-variant-numeric: tabular-nums; text-align: right; }
 .btn-secondary.danger { color: #ff9d8c; border-color: rgba(255,157,140,0.5); }
+.bar-right { display: flex; gap: 6px; }
+.choice.segmented { margin-bottom: 8px; }
+.link-btn { background: none; border: none; padding: 0; font: inherit; font-weight: 600; color: var(--digit); text-align: left; }
+.kv-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; }
+.player-name { font-size: 20px; font-weight: 700; flex: 1; }
+.game-row-main { display: flex; gap: 10px; align-items: center; font-variant-numeric: tabular-nums; }
+.game-row-main .plus { color: #7fe3a1; }
+.game-row-main .minus { color: #ff9d8c; }
+.rank-badge { display: inline-block; min-width: 3em; text-align: center; border-radius: 6px; padding: 1px 6px; font-size: 13px; background: rgba(255,255,255,0.15); }
+.rank-badge.r1 { background: var(--accent); color: #111; font-weight: 700; }
+.rank-badge.r4 { background: rgba(224,83,60,0.6); }
 .start-screen h2 { font-size: 16px; margin: 0 0 10px; }
 .ver { font-size: 12px; color: var(--muted); font-weight: normal; }
 .card { background: rgba(0,0,0,0.35); border-radius: 14px; padding: 14px; margin-bottom: 14px; }

@@ -3,14 +3,14 @@
 import { h, clear } from "./dom.js";
 import { validateRule } from "../rules.js";
 import { reduce, ranksOf } from "../reduce.js";
-import { kyokuName, gameId, fmtPoints, bottomSeatFor, EMPTY_SEAT_NAMES } from "./format.js";
+import { kyokuName, gameId, fmtPoints } from "./format.js";
 
 const POSITION_LABELS = { bottom: "下（自分）", right: "右（下家）", top: "上（対面）", left: "左（上家）" };
 const POSITIONS4 = ["bottom", "right", "top", "left"];
 const SEAT_NAMES3 = ["起家（東）", "南家", "西家"];
 
 /**
- * Game を作る。seats は起家順、bottomSeat は画面下に置く席。
+ * Game を作る。seats は起家順、bottomSeat は画面下に置く席（対局画面の「回転」で変えられる）。
  */
 export function buildGame({ rule, seats, bottomSeat, now = new Date() }) {
   return {
@@ -45,11 +45,11 @@ export function renderStart(props) {
   const presetNames = Object.keys(presets);
   let presetName = presetNames[0];
 
-  // 4人: 画面位置ごとのプレイヤー。3人: 起家順のプレイヤーと空席の方向
+  // 4人: 画面位置ごとのプレイヤー。3人: 起家順のプレイヤー
   const posPlayers = [null, null, null, null];
   let chiichaPos = 0;
   const seatPlayers3 = [null, null, null];
-  let emptySeat = "kamicha";
+  let bottomSeat3 = 0;
 
   // 前回の席順を初期値にする
   const last = current || storage.loadGames()[0] || null;
@@ -63,22 +63,17 @@ export function renderStart(props) {
       chiichaPos = (4 - b) % 4;
     } else {
       for (let k = 0; k < 3; k++) seatPlayers3[k] = last.seats[k];
-      if (last.rule && EMPTY_SEAT_NAMES[last.rule.emptySeat]) emptySeat = last.rule.emptySeat;
+      bottomSeat3 = last.bottomSeat ?? 0;
     }
   }
 
   const message = h("div", { class: "hint error", hidden: true });
 
-  function currentRule() {
-    const base = presets[presetName];
-    return base.playerCount === 3 ? { ...base, emptySeat } : { ...base };
-  }
-
   function render() {
     clear(root);
     const roster = storage.loadRoster();
     const nameOf = (id) => (roster.find((p) => p.id === id) || { name: "?" }).name;
-    const rule = currentRule();
+    const rule = presets[presetName];
     const n = rule.playerCount;
 
     root.append(
@@ -172,24 +167,11 @@ export function renderStart(props) {
         );
       }
     } else {
-      // 起家順に選び、空席の方向を起家から見て選ぶ
+      // 起家順に選ぶ。画面上の配置は対局画面の「回転」で合わせる
       for (let k = 0; k < 3; k++) {
         sec.append(h("div", { class: "row seat-row" }, h("span", { class: "pos-label" }, SEAT_NAMES3[k]), playerSelect(seatPlayers3[k], (v) => (seatPlayers3[k] = v))));
       }
-      const emptySel = h(
-        "select",
-        {
-          onchange: (e) => {
-            emptySeat = e.target.value;
-            render();
-          },
-        },
-        Object.keys(EMPTY_SEAT_NAMES).map((k) => h("option", { value: k, selected: k === emptySeat }, EMPTY_SEAT_NAMES[k])),
-      );
-      sec.append(
-        h("label", { class: "row" }, h("span", null, "空席"), emptySel),
-        h("div", { class: "hint" }, "空席が画面の左側（長辺）に来る向きで置きます。画面上の配置はこの選択から決まります。"),
-      );
+      sec.append(h("div", { class: "hint" }, "空席が画面の左側（長辺）に来る向きで置きます。誰が下に来るかは対局画面の「回転」で合わせます。"));
     }
 
     sec.append(
@@ -203,15 +185,10 @@ export function renderStart(props) {
             type: "button",
             class: "btn-primary",
             onclick: () => {
-              const rule = currentRule();
+              const rule = presets[presetName];
               const n = rule.playerCount;
               const errors = validateRule(rule);
-              let seatsInfo;
-              if (n === 4) {
-                seatsInfo = seatsFrom4({ posPlayers, chiichaPos });
-              } else {
-                seatsInfo = { seats: seatPlayers3.slice(), bottomSeat: bottomSeatFor(emptySeat) };
-              }
+              const seatsInfo = n === 4 ? seatsFrom4({ posPlayers, chiichaPos }) : { seats: seatPlayers3.slice(), bottomSeat: bottomSeat3 % 3 };
               if (seatsInfo.seats.some((p) => p === null)) errors.push(`${n}人全員を選んでください`);
               if (new Set(seatsInfo.seats).size !== seatsInfo.seats.length) errors.push("同じプレイヤーが重複しています");
               if (errors.length) {

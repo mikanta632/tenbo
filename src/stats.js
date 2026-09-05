@@ -110,6 +110,22 @@ export function aggregate(games) {
   return map;
 }
 
+/**
+ * あるプレイヤーの対局一覧（新しい順のまま）。各要素は
+ * { game, seat, rank, points, pt, yen, agari, houju, effective }
+ */
+export function playerGames(games, playerId) {
+  const out = [];
+  for (const game of games) {
+    const seat = game.seats.indexOf(playerId);
+    if (seat < 0) continue;
+    const { seats } = gameStats(game);
+    const s = seats[seat];
+    out.push({ game, seat, rank: s.rank, points: s.points, pt: s.pt, yen: s.yen, agari: s.agari, houju: s.houju, effective: s.effective });
+  }
+  return out;
+}
+
 /** 合算値から率と平均を出す。分母が 0 のときは null。 */
 export function derive(a) {
   const div = (x, y) => (y > 0 ? x / y : null);

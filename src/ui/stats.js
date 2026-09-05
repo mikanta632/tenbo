@@ -9,12 +9,14 @@ const num = (x, d = 1) => (x === null ? "—" : x.toFixed(d));
 const signed = (x) => (x > 0 ? `+${x}` : String(x));
 
 /**
- * props: { games, roster, onBack }
+ * props: { games, roster, onBack, onPlayer(playerId) }
  */
-export function renderStats({ games, roster, onBack }) {
+export function renderStats({ games, roster, onBack, onPlayer }) {
   const nameOf = (id) => (roster.find((p) => p.id === id) || { name: "?" }).name;
   const map = aggregate(games);
   const rows = [...map.entries()].map(([id, a]) => ({ id, name: nameOf(id), d: derive(a) })).sort((x, y) => y.d.ptSum - x.d.ptSum);
+  // 名前のセルをタップで個人ページへ
+  const nameCell = (r) => h("td", { class: "name" }, h("button", { type: "button", class: "link-btn", onclick: () => onPlayer(r.id) }, r.name, " ›"));
 
   const gameTable = h(
     "table",
@@ -31,7 +33,7 @@ export function renderStats({ games, roster, onBack }) {
         h(
           "tr",
           null,
-          h("td", { class: "name" }, r.name),
+          nameCell(r),
           h("td", null, String(r.d.games)),
           h("td", null, num(r.d.avgRank, 2)),
           h("td", null, r.d.rankDist.join("/")),
@@ -58,7 +60,7 @@ export function renderStats({ games, roster, onBack }) {
         h(
           "tr",
           null,
-          h("td", { class: "name" }, r.name),
+          nameCell(r),
           h("td", null, String(r.d.effective)),
           h("td", null, pct(r.d.agariRate)),
           h("td", null, pct(r.d.houjuRate)),

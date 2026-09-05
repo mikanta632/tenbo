@@ -1,4 +1,4 @@
-// 設定画面（docs/design.md §7, §8.9）。効果音と、カスタムルールの編集。
+// 設定画面（docs/design.md §7, §8.9）。効果音と、4人／3人それぞれのカスタムルールの編集。
 //
 // ルールはプリセットを土台に、頻繁に変える項目だけを入力欄で編集し、残りは JSON を直接編集する。
 // 保存先は端末設定 mj.prefs.rules（プレイヤー数ごとに 1つ）。対局開始時に「4人カスタム」などとして選べる。
@@ -29,9 +29,15 @@ const ROUNDING = [
  */
 export function renderSettings(props) {
   const root = h("div", { class: "plain-screen settings-screen" });
-  const presetNames = Object.keys(props.presets);
-  let baseName = presetNames[0];
-  let rule = JSON.parse(JSON.stringify(props.customRules[String(props.presets[baseName].playerCount)] || props.presets[baseName]));
+  const presetFor = (pc) => Object.values(props.presets).find((r) => r.playerCount === pc);
+  const copy = (r) => JSON.parse(JSON.stringify(r));
+
+  // 4人・3人それぞれの編集中ルール。保存済みカスタムがあればそれ、なければプリセット
+  const editing = {
+    4: copy(props.customRules["4"] || presetFor(4)),
+    3: copy(props.customRules["3"] || presetFor(3)),
+  };
+  let pc = 4;
   const msg = h("div", { class: "hint error", hidden: true });
 
   function setMsg(text, error = true) {
@@ -40,47 +46,45 @@ export function renderSettings(props) {
     msg.hidden = !text;
   }
 
-  function numInput(key, { step = 1000, min = null } = {}) {
-    return h("input", {
-      type: "number",
-      inputmode: "numeric",
-      step: String(step),
-      min: min === null ? false : String(min),
-      value: String(rule[key]),
-      onchange: (e) => {
-        const v = Number(e.target.value);
-        if (Number.isFinite(v)) rule[key] = v;
-        render();
-      },
-    });
-  }
-  function boolInput(key) {
-    return h("input", {
-      type: "checkbox",
-      checked: !!rule[key],
-      onchange: (e) => {
-        rule[key] = e.target.checked;
-        render();
-      },
-    });
-  }
-  function selectInput(key, options) {
-    return h(
-      "select",
-      {
-        onchange: (e) => {
-          rule[key] = e.target.value;
-          render();
-        },
-      },
-      options.map(([v, label]) => h("option", { value: v, selected: rule[key] === v }, label)),
-    );
-  }
-  const row = (label, control) => h("label", { class: "row" }, h("span", null, label), control);
-
   function render() {
     clear(root);
-    const n = rule.playerCount;
+    const rule = editing[pc];
+    const isCustom = !!props.customRules[String(pc)];
+
+    const numInput = (key, { step = 1000, min = null } = {}) =>
+      h("input", {
+        type: "number",
+        inputmode: "numeric",
+        step: String(step),
+        min: min === null ? false : String(min),
+        value: String(rule[key]),
+        onchange: (e) => {
+          const v = Number(e.target.value);
+          if (Number.isFinite(v)) rule[key] = v;
+          render();
+        },
+      });
+    const boolInput = (key) =>
+      h("input", {
+        type: "checkbox",
+        checked: !!rule[key],
+        onchange: (e) => {
+          rule[key] = e.target.checked;
+          render();
+        },
+      });
+    const selectInput = (key, options) =>
+      h(
+        "select",
+        {
+          onchange: (e) => {
+            rule[key] = e.target.value;
+            render();
+          },
+        },
+        options.map(([v, label]) => h("option", { value: v, selected: rule[key] === v }, label)),
+      );
+    const row = (label, control) => h("label", { class: "row" }, h("span", null, label), control);
 
     root.append(
       h("header", { class: "plain-top" }, h("button", { type: "button", class: "btn-flat", onclick: props.onBack }, "戻る"), h("div", { class: "plain-title" }, "設定")),
@@ -107,19 +111,6 @@ export function renderSettings(props) {
     );
 
     // ---- ルール ----
-    const baseSel = h(
-      "select",
-      {
-        onchange: (e) => {
-          baseName = e.target.value;
-          const pc = props.presets[baseName].playerCount;
-          rule = JSON.parse(JSON.stringify(props.customRules[String(pc)] || props.presets[baseName]));
-          setMsg("");
-          render();
-        },
-      },
-      presetNames.map((k) => h("option", { value: k, selected: k === baseName }, k)),
-    );
     const umaInputs = h(
       "div",
       { class: "uma-row" },
@@ -143,9 +134,32 @@ export function renderSettings(props) {
       h(
         "section",
         { class: "card" },
-        h("h2", null, `ルール（${n}人カスタム）`),
-        row("土台", baseSel),
-        h("div", { class: "hint" }, props.customRules[String(n)] ? `保存済みの ${n}人カスタムを編集しています。` : `${baseName} を土台に編集します。保存すると「${n}人カスタム」として選べます。`),
+        h("h2", null, "ルール"),
+        h(
+          "div",
+          { class: "choice big segmented" },
+          [4, 3].map((n) =>
+            h(
+              "button",
+              {
+                type: "button",
+                class: `chip${pc === n ? " on" : ""}`,
+                onclick: () => {
+                  pc = n;
+                  setMsg("");
+                  render();
+                },
+              },
+              `${n}人麻雀`,
+            ),
+          ),
+        ),
+        h(
+          "div",
+          { class: "hint" },
+          isCustom ? `保存済みの ${pc}人カスタムを編集しています。` : `${pc}人標準を土台に編集します。保存すると対局開始のルールに「${pc}人カスタム」が現れます。`,
+        ),
+        row("局数", selectInput("length", [[pc, "東風（東場のみ）"], [pc * 2, "東南（半荘）"]].map(([v, l]) => [v, l]))),
         row("持ち点", numInput("startPoints")),
         row("返し", numInput("returnPoints")),
         row("ウマ", umaInputs),
@@ -160,7 +174,6 @@ export function renderSettings(props) {
         row("ダブル役満", boolInput("doubleYakuman")),
         row("複数和了", boolInput("multiRon")),
         row("責任払い", boolInput("sekinin")),
-        row("流し満貫", boolInput("nagashiMangan")),
         row("残り供託", selectInput("finalKyotaku", FINAL_KYOTAKU)),
         row("ノーテン罰符 合計", numInput("ryuukyokuTenpaiTotal", { step: 1000, min: 0 })),
         h("div", { class: "label" }, "JSON（全項目。直接編集して「JSON を反映」）"),
@@ -181,7 +194,11 @@ export function renderSettings(props) {
                     setMsg("不正: " + errs.join(" / "));
                     return;
                   }
-                  rule = parsed;
+                  if (parsed.playerCount !== pc) {
+                    setMsg(`playerCount は ${pc} にしてください`);
+                    return;
+                  }
+                  editing[pc] = parsed;
                   setMsg("JSON を反映しました。保存を押すと残ります。", false);
                   render();
                 } catch (e) {
@@ -198,8 +215,9 @@ export function renderSettings(props) {
               class: "btn-primary",
               disabled: errors.length > 0,
               onclick: () => {
-                props.onSaveRule(n, rule);
-                setMsg(`${n}人カスタムとして保存しました。対局開始のルールで選べます。`, false);
+                props.onSaveRule(pc, rule);
+                props.customRules[String(pc)] = copy(rule); // 表示用に手元も更新
+                setMsg(`${pc}人カスタムとして保存しました。対局開始のルールで選べます。`, false);
                 render();
               },
             },
@@ -208,7 +226,7 @@ export function renderSettings(props) {
         ),
         errors.length ? h("div", { class: "hint error" }, errors.join(" / ")) : null,
         msg,
-        props.customRules[String(n)]
+        isCustom
           ? h(
               "div",
               { class: "sheet-actions" },
@@ -218,13 +236,14 @@ export function renderSettings(props) {
                   type: "button",
                   class: "btn-secondary",
                   onclick: () => {
-                    props.onSaveRule(n, null);
-                    rule = JSON.parse(JSON.stringify(props.presets[baseName]));
-                    setMsg(`${n}人カスタムを削除しました。`, false);
+                    props.onSaveRule(pc, null);
+                    delete props.customRules[String(pc)];
+                    editing[pc] = copy(presetFor(pc));
+                    setMsg(`${pc}人カスタムを削除しました。`, false);
                     render();
                   },
                 },
-                `${n}人カスタムを削除`,
+                `${pc}人カスタムを削除`,
               ),
             )
           : null,
@@ -234,6 +253,7 @@ export function renderSettings(props) {
     root.append(h("div", { class: "hint" }, `版 ${props.version}`));
   }
 
+  // ルール変更後に「保存済み」の判定が変わるので、保存・削除時は呼び出し側で customRules を更新して再描画してもらう
   render();
   return root;
 }

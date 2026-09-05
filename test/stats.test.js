@@ -2,7 +2,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { gameStats, aggregate, derive } from "../src/stats.js";
+import { gameStats, aggregate, derive, playerGames } from "../src/stats.js";
 import { makeRule } from "../src/rules.js";
 import { appendEvent } from "../src/edit.js";
 
@@ -73,5 +73,21 @@ describe("aggregate / derive", () => {
   });
   test("対局が無ければ空", () => {
     assert.equal(aggregate([]).size, 0);
+  });
+});
+
+describe("playerGames", () => {
+  test("そのプレイヤーが出た対局だけを、席・順位・pt 付きで返す", () => {
+    const g1 = game("g1", ["a", "b", "c", "d"], ron(0, 1, 5, 30));
+    const g2 = game("g2", ["b", "a", "c", "d"], tsumo(1, 5, 30));
+    const g3 = game("g3", ["b", "e", "c", "d"], tsumo(0, 1, 30));
+    const list = playerGames([g3, g2, g1], "a");
+    assert.deepEqual(list.map((x) => x.game.id), ["g2", "g1"]);
+    assert.deepEqual(list.map((x) => x.seat), [1, 0]);
+    assert.deepEqual(list.map((x) => x.rank), [0, 0]);
+    assert.equal(list[1].points, 25000 + 12000);
+    assert.equal(list[0].agari, 1);
+    assert.equal(list[0].effective, 1);
+    assert.deepEqual(playerGames([g1], "zzz"), []);
   });
 });
