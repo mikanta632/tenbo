@@ -1,8 +1,10 @@
 # 麻雀 卓上点数表示器 設計書
 
-版: 0.11 / 2026-09-05
+版: 0.12 / 2026-09-05
 
 v0.4 からの変更は §4.4（局中操作のイベント化）、§5（遷移の分離）、§6.1（役満ルート）、§6.5〜6.7、§7（精算の閉じ方）、§8.4、§12。外部レビューの指摘を反映した。
+
+v0.11 からの変更は §10（PWA の構成: 版番号の一元化、Service Worker の方針、配置）。
 
 v0.10 からの変更は §4.4（`kita` と `chips` の扱い）、§7（3人のウマ、五捨六入の定義、チップ廃止）、§8.2（北抜きボタン廃止）、§8.6〜8.8（結果・成績・バックアップ）、§11（未決の解消）。
 
@@ -721,6 +723,12 @@ iOS Safari の ITP は、そのサイトへの操作が7日間ないと IndexedD
 GitHub Pages。静的ファイルのみで動作するため、ブランチ直接配信で足りる。HTTPS が自動で付くため Service Worker が使える。
 
 Service Worker のキャッシュ名にはバージョンを埋める。`skipWaiting` は使わず、更新は次回起動時に適用する（対局中の入れ替わりを防ぐ）。アプリ内に版番号を表示する。
+
+**版番号は `version.js` が唯一の定義。** ES Modules ではなく `self.APP_VERSION = "..."` を置く classic script とし、ページは `index.html` の `<script src="version.js">` で、Service Worker は `importScripts("./version.js")` で同じファイルを読む。更新時はこの1箇所だけ上げる。
+
+Service Worker（`sw.js`）は起動に必要なファイルを install 時にすべて事前キャッシュし、同一オリジンの GET はキャッシュ優先で返す。activate で古い版のキャッシュを消す。登録は `src/ui/app.js` の末尾で行い、失敗しても動作には影響しない（オフラインで開けないだけ）。
+
+manifest（`manifest.webmanifest`）は `start_url` と `scope` を `./` にし、リポジトリ名に依存しない。アイコンは `icons/` に PNG（180 / 192 / 512、maskable）を置く。iOS は `apple-touch-icon` を使う。
 
 公開範囲について: GitHub Free は public リポジトリからのみ配信可能。Pro なら private リポジトリからも配信できるが、**サイト自体は誰でも開ける**。サイトへのアクセス制限は Enterprise Cloud のみの機能。本アプリはデータを端末内に閉じるため、公開されるのはコードのみで実害はないと判断する。エクスポートした JSON はリポジトリに入れない。
 

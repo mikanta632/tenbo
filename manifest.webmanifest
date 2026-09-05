@@ -1,0 +1,17 @@
+{
+  "name": "麻雀 点数表示器",
+  "short_name": "点数表示器",
+  "description": "実卓用の麻雀点数表示器。iPhone を卓の中央に置いて使う。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f3d27",
+  "theme_color": "#0f3d27",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

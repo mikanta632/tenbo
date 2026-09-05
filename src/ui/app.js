@@ -30,7 +30,8 @@ import {
 } from "./sheets.js";
 import { fmtElapsed, kyokuName } from "./format.js";
 
-export const APP_VERSION = "0.4.0";
+// 版番号は version.js（index.html の classic script で読み込む）が唯一の定義。sw.js も同じファイルを読む
+export const APP_VERSION = globalThis.APP_VERSION || "dev";
 
 const storage = createStorage();
 storage.init();
@@ -559,6 +560,17 @@ async function requestWakeLock() {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && screen === "table") requestWakeLock();
 });
+
+// ---- Service Worker（§10） ----------------------------------------------
+// 更新は次回起動時に適用する（skipWaiting は使わない）。localhost / https 以外では登録できない。
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {
+      /* 登録できなくても動作には影響しない（オフラインで開けないだけ） */
+    });
+  });
+}
 
 // ---- 起動 -----------------------------------------------------------------
 

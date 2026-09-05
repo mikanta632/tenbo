@@ -26,21 +26,29 @@
 
 ```
 index.html
+manifest.webmanifest
+sw.js           Service Worker（事前キャッシュ。版はキャッシュ名に埋める）
+version.js      版番号の唯一の定義（classic script。ページと SW の両方が読む）
+icons/          アプリアイコン（PNG）
 CLAUDE.md
+README.md       配置と使い方
 package.json
 docs/design.md
 src/
   score.js      点数計算（純関数）
   reduce.js     イベント列の畳み込み（純関数）
   edit.js       イベント列の編集と再計算
+  settlement.js 精算（純関数）
+  stats.js      成績集計（純関数）
   storage.js    localStorage
   rules.js      Rule の型・既定値・プリセット・検証
-  ui/           画面（段階2以降）
+  ui/           画面
 test/
-  score.test.js
-  reduce.test.js
+  *.test.js
 style.css
 ```
+
+更新を配信するときは `version.js` の `APP_VERSION` を上げる。
 
 `src/score.js` と `src/reduce.js` は副作用を持たない純関数として書く。DOM、localStorage、Date に触れない。
 
