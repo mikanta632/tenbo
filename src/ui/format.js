@@ -37,6 +37,37 @@ export function fmtElapsed(ms) {
   return `${hh}h${mm}m`;
 }
 
+/**
+ * 保存してある ISO 文字列（UTC）を、端末のタイムゾーンで "YYYY-MM-DD HH:MM" にする。
+ * timeZone を渡すとそのゾーンで出す（テスト用）。読めない値なら空文字。
+ */
+export function fmtDateTime(iso, timeZone) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("ja-JP", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(d);
+  const get = (type) => (parts.find((x) => x.type === type) || { value: "" }).value;
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}`;
+}
+
+/** 同じく日付だけ "YYYY-MM-DD" */
+export function fmtDate(iso, timeZone) {
+  return fmtDateTime(iso, timeZone).slice(0, 10);
+}
+
+/** 対局の日時。終局時刻、無ければ開始時刻 */
+export function gameDateTime(game, timeZone) {
+  return fmtDateTime(game.endedAt || game.startedAt, timeZone);
+}
+
 /** 対局 ID。同じ時刻に開始しても別対局になるよう一意な接尾辞を付ける。 */
 export function gameId(date) {
   const p = (x) => String(x).padStart(2, "0");

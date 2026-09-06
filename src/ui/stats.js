@@ -8,7 +8,7 @@
 
 import { h, clear } from "./dom.js";
 import { aggregate, derive, gameStats } from "../stats.js";
-import { fmtPoints } from "./format.js";
+import { fmtPoints, gameDateTime } from "./format.js";
 
 const num = (x, d = 1) => (x === null ? "—" : x.toFixed(d));
 const signed = (x) => (x > 0 ? `+${x}` : String(x));
@@ -151,7 +151,7 @@ export function renderStats(props) {
   function gameCard(g) {
     const n = g.rule.playerCount;
     const st = gameSeats(g);
-    const date = (g.endedAt || g.startedAt || "").slice(0, 16).replace("T", " ");
+    const date = gameDateTime(g);
     const check = h("input", {
       type: "checkbox",
       checked: selected.has(g.id),

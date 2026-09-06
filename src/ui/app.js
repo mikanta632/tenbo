@@ -36,7 +36,7 @@ import {
   openActionSheet,
   openCombinedSettlement,
 } from "./sheets.js";
-import { fmtElapsed, kyokuName } from "./format.js";
+import { fmtElapsed, kyokuName, gameDateTime } from "./format.js";
 import { customRules, saveCustomRule } from "./prefs.js";
 import {
   soundEnabled,
@@ -234,7 +234,7 @@ function statsContent() {
 function pickGame(id) {
   const g = storage.findGame(id);
   if (!g) return;
-  const date = (g.endedAt || g.startedAt || "").slice(0, 16).replace("T", " ");
+  const date = gameDateTime(g);
   resultBack = "stats";
   closeSheet();
   openSheetHandle = openActionSheet({
@@ -629,7 +629,7 @@ function renderResultScreen() {
       game: g,
       names: playerNames(g),
       settlement: settlementOf(g),
-      title: `結果 ${(g.endedAt || g.startedAt || "").slice(0, 16).replace("T", " ")}`,
+      title: `結果 ${gameDateTime(g)}`,
       onBack: () => show(resultBack),
       onLog: () => {
         logTarget = { kind: "finished", id: g.id };
@@ -667,7 +667,7 @@ function renderLogScreen() {
   }
   const rule = g.rule;
   const names = playerNames(g);
-  const title = logTarget.kind === "current" ? "ログ（進行中）" : `ログ ${(g.endedAt || g.startedAt || "").slice(0, 10)}`;
+  const title = logTarget.kind === "current" ? "ログ（進行中）" : `ログ ${gameDateTime(g).slice(0, 10)}`;
 
   /** 挿入位置。空の進行中グループなら末尾（end イベントの前）。 */
   const insertIndexOf = (group) => {

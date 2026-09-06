@@ -2,7 +2,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { seatPositions, positionsFor, kyokuName, windName, fmtPoints, fmtDelta, hanName } from "../src/ui/format.js";
+import { seatPositions, positionsFor, kyokuName, windName, fmtPoints, fmtDelta, hanName, fmtDateTime, fmtDate, gameDateTime } from "../src/ui/format.js";
 import { buildGame, seatsFromPositions } from "../src/ui/start.js";
 import { makeRule } from "../src/rules.js";
 import { createStorage, memoryStorage } from "../src/storage.js";
@@ -80,5 +80,26 @@ describe("表示名", () => {
     assert.equal(hanName(11), "三倍満");
     assert.equal(hanName(13), "数え役満");
     assert.equal(hanName(3), "3翻");
+  });
+});
+
+describe("fmtDateTime", () => {
+  const TZ = "Asia/Tokyo";
+  test("UTC で保存した時刻を日本時間に直す", () => {
+    // 21:30Z は日本では翌日の 06:30
+    assert.equal(fmtDateTime("2026-09-01T21:30:00.000Z", TZ), "2026-09-02 06:30");
+    // 15:00Z は日本では翌日の 00:00（24:00 にしない）
+    assert.equal(fmtDateTime("2026-09-01T15:00:00.000Z", TZ), "2026-09-02 00:00");
+    assert.equal(fmtDateTime("2026-01-05T03:04:00.000Z", TZ), "2026-01-05 12:04");
+    assert.equal(fmtDate("2026-09-01T21:30:00.000Z", TZ), "2026-09-02");
+  });
+
+  test("値が無い・読めないときは空文字", () => {
+    for (const v of [null, undefined, "", "not a date"]) assert.equal(fmtDateTime(v, TZ), "");
+  });
+
+  test("gameDateTime は終局時刻、無ければ開始時刻を使う", () => {
+    assert.equal(gameDateTime({ startedAt: "2026-09-01T10:00:00.000Z", endedAt: "2026-09-01T12:00:00.000Z" }, TZ), "2026-09-01 21:00");
+    assert.equal(gameDateTime({ startedAt: "2026-09-01T10:00:00.000Z", endedAt: null }, TZ), "2026-09-01 19:00");
   });
 });

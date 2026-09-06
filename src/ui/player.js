@@ -2,7 +2,7 @@
 
 import { h, clear } from "./dom.js";
 import { aggregate, derive, playerGames } from "../stats.js";
-import { fmtPoints } from "./format.js";
+import { fmtPoints, gameDateTime } from "./format.js";
 
 const pct = (x) => (x === null ? "—" : `${(x * 100).toFixed(1)}%`);
 const num = (x, d = 1) => (x === null ? "—" : x.toFixed(d));
@@ -93,7 +93,7 @@ export function renderPlayer(props) {
 
     const rows = list.map((x) => {
       const g = x.game;
-      const date = (g.endedAt || g.startedAt || "").slice(0, 16).replace("T", " ");
+      const date = gameDateTime(g);
       const others = g.seats.filter((id) => id !== props.playerId).map(nameOf).join(" / ");
       return h(
         "button",

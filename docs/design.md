@@ -135,6 +135,8 @@ Game = {
 
 `id` の接尾辞は、同じ分に 2つの対局を始めたときに ID が衝突して履歴を上書きしないために付ける（`crypto.randomUUID`。使えなければ乱数）。
 
+`startedAt` / `endedAt` は ISO 文字列（UTC）で保存し、表示するときだけ端末のタイムゾーンに直す（`fmtDateTime`）。
+
 `bottomSeat` と `emptyPosition` は「誰がどこに座っているか」の記録であり、点数計算には関与しない。対局タブの配置図で画面位置ごとにプレイヤーを選び、起家の位置から `seats` と `bottomSeat` を導く（`seatsFromPositions`。使う位置の順は 下→右→上→左 から空席を除いたもの。空席が下なら 右→上→左 で、`bottomSeat` は右に置く席になる）。
 
 ### 4.4 Event
