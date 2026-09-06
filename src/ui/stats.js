@@ -2,13 +2,14 @@
 //
 // 対局一覧: 人数（4人／3人／すべて）で絞り込み、対局ごとに順位・素点・pt・収支を出す。
 //           複数選んで「まとめて精算」すると、その範囲の収支と支払いを見られる。
-// 個人成績: プレイヤーごとの対局レベル・局レベルの集計。
+// 個人成績: 4人麻雀と3人麻雀を分けて集計する（平均順位は人数が違うと比べられない）。
+//           表には名前・対局数・平均順位・通算pt・収支だけを出し、
+//           和了率などの細かい数字は名前をタップして個人ページで見る。
 
 import { h, clear } from "./dom.js";
 import { aggregate, derive, gameStats } from "../stats.js";
 import { fmtPoints } from "./format.js";
 
-const pct = (x) => (x === null ? "—" : `${(x * 100).toFixed(1)}%`);
 const num = (x, d = 1) => (x === null ? "—" : x.toFixed(d));
 const signed = (x) => (x > 0 ? `+${x}` : String(x));
 const yen = (x) => `${signed(x)}円`;
@@ -22,7 +23,7 @@ const FILTERS = [
 
 /**
  * props: {
- *   games, roster, onBack, initialTab, onTab(key),
+ *   games, roster, onBack, initialTab, onTab(key), initialPc, onPc(n),
  *   onPlayer(playerId), onPickGame(gameId), onSettle(gameIds)
  * }
  */
@@ -32,7 +33,8 @@ export function renderStats(props) {
   const nameOf = (id) => (roster.find((p) => p.id === id) || { name: "?" }).name;
 
   let tab = props.initialTab === "players" ? "players" : "games";
-  let filter = "all";
+  let filter = "all"; // 対局一覧の絞り込み
+  let pc = props.initialPc === 3 ? 3 : 4; // 個人成績の人数
   const selected = new Set(); // 選択中の対局 id
 
   function render() {
@@ -193,73 +195,63 @@ export function renderStats(props) {
   // ---- 個人成績 ----------------------------------------------------------
 
   function renderPlayerStats() {
-    const map = aggregate(games);
+    const target = games.filter((g) => g.rule.playerCount === pc);
+    root.append(
+      h(
+        "div",
+        { class: "choice grid2" },
+        [4, 3].map((k) =>
+          h(
+            "button",
+            {
+              type: "button",
+              class: `chip${pc === k ? " on" : ""}`,
+              onclick: () => {
+                pc = k;
+                if (props.onPc) props.onPc(k);
+                render();
+              },
+            },
+            `${k}人麻雀`,
+          ),
+        ),
+      ),
+    );
+
+    if (target.length === 0) {
+      root.append(h("section", { class: "card" }, h("div", { class: "hint" }, `${pc}人麻雀の対局がありません`)));
+      return;
+    }
+
+    const map = aggregate(target);
     const rows = [...map.entries()].map(([id, a]) => ({ id, name: nameOf(id), d: derive(a) })).sort((x, y) => y.d.ptSum - x.d.ptSum);
-    const nameCell = (r) => h("td", { class: "name" }, h("button", { type: "button", class: "link-btn", onclick: () => props.onPlayer(r.id) }, r.name, " ›"));
-
-    const gameTable = h(
-      "table",
-      { class: "rtable" },
-      h(
-        "thead",
-        null,
-        h("tr", null, h("th", null, "名前"), h("th", null, "対局"), h("th", null, "平均順位"), h("th", null, "1/2/3/4位"), h("th", null, "平均素点"), h("th", null, "通算pt"), h("th", null, "通算円")),
-      ),
-      h(
-        "tbody",
-        null,
-        rows.map((r) =>
-          h(
-            "tr",
-            null,
-            nameCell(r),
-            h("td", null, String(r.d.games)),
-            h("td", null, num(r.d.avgRank, 2)),
-            h("td", null, r.d.rankDist.join("/")),
-            h("td", null, r.d.avgPoints === null ? "—" : fmtPoints(Math.round(r.d.avgPoints))),
-            h("td", { class: "pt" }, signed(Math.round(r.d.ptSum * 10) / 10)),
-            h("td", { class: signClass(r.d.yenSum) }, signed(r.d.yenSum)),
-          ),
-        ),
-      ),
-    );
-
-    const kyokuTable = h(
-      "table",
-      { class: "rtable" },
-      h(
-        "thead",
-        null,
-        h("tr", null, h("th", null, "名前"), h("th", null, "有効局"), h("th", null, "和了率"), h("th", null, "放銃率"), h("th", null, "リーチ率"), h("th", null, "副露率"), h("th", null, "平均和了"), h("th", null, "平均放銃")),
-      ),
-      h(
-        "tbody",
-        null,
-        rows.map((r) =>
-          h(
-            "tr",
-            null,
-            nameCell(r),
-            h("td", null, String(r.d.effective)),
-            h("td", null, pct(r.d.agariRate)),
-            h("td", null, pct(r.d.houjuRate)),
-            h("td", null, pct(r.d.riichiRate)),
-            h("td", null, pct(r.d.meldRate)),
-            h("td", null, r.d.avgAgari === null ? "—" : fmtPoints(Math.round(r.d.avgAgari))),
-            h("td", null, r.d.avgHouju === null ? "—" : fmtPoints(Math.round(r.d.avgHouju))),
-          ),
-        ),
-      ),
-    );
 
     root.append(
-      h("section", { class: "card" }, h("h2", null, "対局ごとの成績"), h("div", { class: "stats-wrap" }, gameTable)),
       h(
         "section",
         { class: "card" },
-        h("h2", null, "局ごとの成績"),
-        h("div", { class: "hint" }, "チョンボで流れた局は、その局のリーチ・副露も含めて分母に入れません。"),
-        h("div", { class: "stats-wrap" }, kyokuTable),
+        h("h2", null, `${pc}人麻雀（${target.length}対局）`),
+        h(
+          "table",
+          { class: "rtable" },
+          h("thead", null, h("tr", null, h("th", null, "名前"), h("th", null, "対局"), h("th", null, "平均順位"), h("th", null, "通算pt"), h("th", null, "収支"))),
+          h(
+            "tbody",
+            null,
+            rows.map((r) =>
+              h(
+                "tr",
+                null,
+                h("td", { class: "name" }, h("button", { type: "button", class: "link-btn", onclick: () => props.onPlayer(r.id) }, r.name, " ›")),
+                h("td", null, String(r.d.games)),
+                h("td", null, num(r.d.avgRank, 2)),
+                h("td", { class: "pt" }, signed(Math.round(r.d.ptSum * 10) / 10)),
+                h("td", { class: signClass(r.d.yenSum) }, yen(r.d.yenSum)),
+              ),
+            ),
+          ),
+        ),
+        h("div", { class: "hint" }, "名前をタップすると、有効局・和了率・放銃率などの細かい数字と対局一覧を見られます。"),
       ),
       h("div", { class: "hint" }, "対局数が少ないうちは率の差に意味はほとんどありません。対局数と併せて見てください。"),
     );

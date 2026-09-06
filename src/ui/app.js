@@ -65,6 +65,7 @@ let resultBack = "game"; // 結果画面の「戻る」先
 let playerId = null; // 個人ページで見ているプレイヤー
 let settingsPc = 4; // 設定タブで開いている人数
 let statsTab = "games"; // 戦績タブで開いているタブ（対局一覧／個人成績）
+let statsPc = 4; // 個人成績で見ている人数（個人ページもこれに合わせる）
 let openSheetHandle = null;
 let elapsedTimer = null;
 let diffSeat = null; // 点差を表示中の席
@@ -206,6 +207,8 @@ function statsContent() {
     onBack: null,
     initialTab: statsTab,
     onTab: (key) => (statsTab = key),
+    initialPc: statsPc,
+    onPc: (n) => (statsPc = n),
     onPlayer: (id) => {
       playerId = id;
       show("player");
@@ -279,7 +282,9 @@ function renderPlayerScreen() {
     renderPlayer({
       playerId,
       roster: storage.loadRoster(),
-      games: storage.loadGames(),
+      games: storage.loadGames().filter((g) => g.rule.playerCount === statsPc),
+      scopeLabel: `${statsPc}人麻雀`,
+      scopePc: statsPc,
       onBack: () => show("stats"),
       onOpenResult: (id) => {
         resultId = id;

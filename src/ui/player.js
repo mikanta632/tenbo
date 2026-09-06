@@ -9,7 +9,8 @@ const num = (x, d = 1) => (x === null ? "—" : x.toFixed(d));
 const signed = (x) => (x > 0 ? `+${x}` : String(x));
 
 /**
- * props: { playerId, roster, games, onBack, onOpenResult(gameId), onRename(playerId, name) }
+ * props: { playerId, roster, games, scopeLabel, scopePc, onBack, onOpenResult(gameId), onRename(playerId, name) }
+ * games は戦績タブで選んだ人数（4人／3人）に絞ったもの。scopeLabel はその見出し。
  */
 export function renderPlayer(props) {
   const root = h("div", { class: "plain-screen player-screen" });
@@ -60,7 +61,7 @@ export function renderPlayer(props) {
     );
 
     if (!d) {
-      root.append(h("section", { class: "card" }, h("div", { class: "hint" }, "終了した対局がありません")));
+      root.append(h("section", { class: "card" }, h("div", { class: "hint" }, `${props.scopeLabel || ""}の対局がありません`)));
       return;
     }
 
@@ -69,12 +70,12 @@ export function renderPlayer(props) {
       h(
         "section",
         { class: "card" },
-        h("h2", null, `通算（${d.games}対局）`),
+        h("h2", null, `${props.scopeLabel ? props.scopeLabel + " " : ""}通算（${d.games}対局）`),
         h(
           "div",
           { class: "kv-grid" },
           kv("平均順位", num(d.avgRank, 2)),
-          kv("順位分布", d.rankDist.join(" / ")),
+          kv("順位分布", d.rankDist.slice(0, props.scopePc || d.rankDist.length).join(" / ")),
           kv("平均素点", fmtPoints(Math.round(d.avgPoints))),
           kv("通算 pt", signed(Math.round(d.ptSum * 10) / 10)),
           kv("通算 円", signed(d.yenSum)),
