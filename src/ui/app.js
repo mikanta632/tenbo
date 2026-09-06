@@ -328,6 +328,14 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+/**
+ * Service Worker のスクリプト URL。版を query に入れて、版ごとに別のスクリプトにする。
+ * sw.js の中身は版が変わっても同じなので、これをしないとブラウザが更新を取り込まない。
+ */
+function swUrl(version) {
+  return `./sw.js?v=${encodeURIComponent(version)}`;
+}
+
 /** 公開されている最新の版番号を読む（キャッシュを通さない）。取れなければ null */
 async function fetchLatestVersion() {
   try {
@@ -351,13 +359,10 @@ async function checkForUpdate(setStatus) {
   }
   setStatus("確認中…");
   const latest = await fetchLatestVersion();
-  const reg = await navigator.serviceWorker.getRegistration();
-  if (!reg) {
-    setStatus(latest && latest !== APP_VERSION ? `新しい版 ${latest} があります。アプリを開き直すと反映されます。` : `最新です（${APP_VERSION}）。`);
-    return;
-  }
+  let reg;
   try {
-    await reg.update();
+    // 最新の版で登録し直す。版が上がっていればスクリプト URL が変わるので、確実に取り込まれる
+    reg = await navigator.serviceWorker.register(swUrl(latest || APP_VERSION), { updateViaCache: "none" });
   } catch {
     setStatus("更新の確認に失敗しました。ネットワークを確認してください。");
     return;
@@ -396,7 +401,7 @@ async function checkForUpdate(setStatus) {
     apply();
     return;
   }
-  setStatus(latest && latest !== APP_VERSION ? `新しい版 ${latest} が見つかりましたが、まだ取り込めていません。もう一度押してください。` : `最新です（${APP_VERSION}）。`);
+  setStatus(latest && latest !== APP_VERSION ? `新しい版 ${latest} を取り込み中です。少し待ってからもう一度押すか、アプリを開き直してください。` : `最新です（${APP_VERSION}）。`);
 }
 
 // ---- 対局画面 -----------------------------------------------------------
@@ -914,7 +919,7 @@ document.addEventListener("visibilitychange", () => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {
+    navigator.serviceWorker.register(swUrl(APP_VERSION), { updateViaCache: "none" }).catch(() => {
       /* 登録できなくても動作には影響しない（オフラインで開けないだけ） */
     });
   });

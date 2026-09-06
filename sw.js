@@ -3,10 +3,16 @@
 // - キャッシュ名に版番号を埋める。版を上げると新しいキャッシュを作り、古いものは activate で消す
 // - skipWaiting は使わない。新しい SW は、開いているページが全部閉じたあと（次回起動時）に有効になる
 // - 同一オリジンの GET はキャッシュ優先。無ければネットワークから取り、取れたらキャッシュに入れる
+//
+// 版はスクリプト URL の ?v= から取る。このファイル自体は版が変わっても中身が変わらないため、
+// ページ側が ./sw.js?v=版 で登録して「別のスクリプト」にする。そうしないとブラウザが
+// 同じスクリプトと見なして更新を取り込まない（importScripts した version.js の変化は
+// HTTP キャッシュに隠れることがあり、当てにできない）。
 
 importScripts("./version.js");
 
-const CACHE = `tenbo-${self.APP_VERSION}`;
+const VERSION = new URL(self.location.href).searchParams.get("v") || self.APP_VERSION;
+const CACHE = `tenbo-${VERSION}`;
 
 const PRECACHE = [
   "./",
@@ -43,7 +49,9 @@ const PRECACHE = [
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)));
+  // HTTP キャッシュを通さずに取る。通すと、更新直後に古いファイルを事前キャッシュしてしまう
+  const requests = PRECACHE.map((url) => new Request(url, { cache: "reload" }));
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(requests)));
 });
 
 self.addEventListener("activate", (event) => {

@@ -5,7 +5,7 @@ import { runInNewContext } from "node:vm";
 
 const source = await readFile(new URL("../sw.js", import.meta.url), "utf8");
 
-function worker({ failPut = false } = {}) {
+function worker({ failPut = false, scriptUrl = "https://example.test/tenbo/sw.js" } = {}) {
   const handlers = {};
   const puts = [];
   const network = [];
@@ -22,7 +22,8 @@ function worker({ failPut = false } = {}) {
   runInNewContext(source, {
     URL,
     importScripts() {},
-    self: { APP_VERSION: "test", location: new URL("https://example.test/tenbo/sw.js"), addEventListener: (type, fn) => (handlers[type] = fn) },
+    Request,
+    self: { APP_VERSION: "test", location: new URL(scriptUrl), addEventListener: (type, fn) => (handlers[type] = fn) },
     caches: {
       async match(req, options) {
         if (options?.cacheName) return match(stored.get(options.cacheName), req, options);
@@ -85,4 +86,20 @@ test("キャッシュにない応答は保存完了まで待つ", async () => {
 
 test("キャッシュの保存が失敗してもネットワーク応答を返す", async () => {
   assert.equal(await worker({ failPut: true }).request("extra.js"), "network");
+});
+
+test("版はスクリプト URL の ?v= を優先し、無ければ version.js の値を使う", async () => {
+  const next = worker({ scriptUrl: "https://example.test/tenbo/sw.js?v=9.9.9" });
+  await next.request("extra.js");
+  assert.deepEqual(next.puts.map(([cache]) => cache), ["tenbo-9.9.9"]);
+
+  const plain = worker();
+  await plain.request("extra.js");
+  assert.deepEqual(plain.puts.map(([cache]) => cache), ["tenbo-test"]);
+});
+
+test("新しい版の SW は、自分の版のキャッシュしか読まない", async () => {
+  // tenbo-test には version.js があるが、?v=9.9.9 の SW はそれを使わない
+  const next = worker({ scriptUrl: "https://example.test/tenbo/sw.js?v=9.9.9" });
+  assert.equal(await next.request("version.js"), "network");
 });
