@@ -100,6 +100,14 @@ export function playNextKyoku() {
   tone(1319, 0.3, 0.26, { type: "triangle" });
 }
 
+/** 局が終わり親が続く（連荘・チョンボ）: 上がらずに同じ音を3つ */
+export function playRenchan() {
+  if (!soundEnabled()) return;
+  tone(1047, 0.12, 0, { type: "triangle" });
+  tone(1047, 0.12, 0.13, { type: "triangle" });
+  tone(1047, 0.3, 0.26, { type: "triangle" });
+}
+
 /** 終局: 長めの2音 */
 export function playGameOver() {
   if (!soundEnabled()) return;

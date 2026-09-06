@@ -46,6 +46,7 @@ import {
   playMeld,
   playTap,
   playNextKyoku,
+  playRenchan,
   playGameOver,
   playTest,
 } from "./sound.js";
@@ -545,6 +546,7 @@ function renderTableScreen() {
 
 /** イベントを発行して保存し、再描画する。局末なら終局・アガリやめを確認する。 */
 function emit(event) {
+  const prevKyoku = reduce(game.events, game.rule).kyoku;
   let events;
   try {
     events = appendEvent(game.events, event, game.rule);
@@ -556,7 +558,11 @@ function emit(event) {
   storage.saveCurrent(game);
   const state = reduce(game.events, game.rule);
   if (state.over) playGameOver();
-  else if (isEndOfKyoku(event)) playNextKyoku();
+  else if (isEndOfKyoku(event)) {
+    // 局が進んだか、親が続いた（連荘・チョンボ）かで音を変える
+    if (state.kyoku === prevKyoku) playRenchan();
+    else playNextKyoku();
+  }
   show();
   if (state.over) return; // show() 内で終局ダイアログを出している
   if (isEndOfKyoku(event) && agariYameAvailableAfter(game.events, game.rule)) {
