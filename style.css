@@ -358,6 +358,17 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .rtable td.pt { color: var(--digit); font-weight: 700; }
 .rtable td.plus { color: #7fe3a1; }
 .rtable td.minus { color: #ff9d8c; }
+/* 戦績の対局一覧。1対局 = 1カード。左のチェックで選び、日付をタップで操作する */
+.game-card { padding: 10px 12px; }
+.game-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.game-card-head .pick { display: flex; align-items: center; padding: 6px; margin: -6px; }
+.game-card-head .pick input[type=checkbox] { width: 24px; height: 24px; }
+.game-card-head .link-btn { flex: 1; min-width: 0; font-size: 15px; }
+.game-rtable td.rank, .game-rtable th:first-child { width: 3.5em; }
+.game-rtable td.name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 6em; }
+.select-bar .summary { margin: 0 0 8px; }
+.select-bar .sheet-actions { margin-top: 0; }
+
 .transfer { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.12); font-size: 15px; }
 .transfer .amt { font-weight: 700; color: var(--digit); font-variant-numeric: tabular-nums; }
 .kv { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; color: var(--muted); }

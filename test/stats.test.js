@@ -2,7 +2,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { gameStats, aggregate, derive, playerGames } from "../src/stats.js";
+import { gameStats, aggregate, derive, playerGames, combineGames } from "../src/stats.js";
 import { makeRule } from "../src/rules.js";
 import { appendEvent } from "../src/edit.js";
 
@@ -89,5 +89,40 @@ describe("playerGames", () => {
     assert.equal(list[0].agari, 1);
     assert.equal(list[0].effective, 1);
     assert.deepEqual(playerGames([g1], "zzz"), []);
+  });
+});
+
+describe("combineGames", () => {
+  test("選んだ対局の収支を合算し、席の違う同じプレイヤーをまとめる", () => {
+    const g1 = game("g1", ["a", "b", "c", "d"], ron(0, 1, 4, 30), ron(0, 2, 4, 30), { t: "end" });
+    const g2 = game("g2", ["b", "a", "d", "c"], ron(0, 1, 4, 30), { t: "end" });
+    const { players, transfers } = combineGames([g1, g2]);
+    assert.deepEqual(players.map((p) => p.playerId).sort(), ["a", "b", "c", "d"]);
+    for (const p of players) assert.equal(p.games, 2);
+    // 収支の多い順。合計は 0（ゼロサム）
+    assert.deepEqual(
+      players.map((p) => p.yen),
+      [...players.map((p) => p.yen)].sort((x, y) => y - x),
+    );
+    assert.equal(players.reduce((a, p) => a + p.yen, 0), 0);
+    // 各対局の合算値と一致する
+    const expect = new Map();
+    for (const g of [g1, g2]) {
+      for (const s of gameStats(g).seats) expect.set(s.playerId, (expect.get(s.playerId) || 0) + s.yen);
+    }
+    for (const p of players) assert.equal(p.yen, expect.get(p.playerId));
+    // 支払いは受取と支払を突き合わせ、卓外は出ない
+    assert.ok(transfers.length > 0);
+    for (const t of transfers) assert.ok(t.from !== null && t.to !== null);
+    const net = new Array(players.length).fill(0);
+    for (const t of transfers) {
+      net[t.to] += t.amount;
+      net[t.from] -= t.amount;
+    }
+    assert.deepEqual(net, players.map((p) => p.yen));
+  });
+
+  test("対局が無ければ空", () => {
+    assert.deepEqual(combineGames([]), { players: [], transfers: [] });
   });
 });

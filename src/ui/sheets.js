@@ -840,6 +840,44 @@ export function openConfirm({ title, message, okLabel = "OK", onOk }) {
   return sheet;
 }
 
+/**
+ * 選んだ対局をまとめた収支と支払い（§8.5）。
+ * props: { count, players: [{ name, games, pt, yen }], transfers: [{from,to,amount}] }
+ * transfers の from / to は players の添字。null は卓外。
+ */
+export function openCombinedSettlement({ count, players, transfers }) {
+  const signed = (x) => (x > 0 ? `+${x}` : String(x));
+  const label = (i) => (i === null ? "卓外" : players[i].name);
+  const body = h("div", { class: "sheet-body" });
+  append(body,
+    h("div", { class: "hint" }, `選んだ ${count}対局の合計です。`),
+    h(
+      "table",
+      { class: "rtable" },
+      h("thead", null, h("tr", null, h("th", null, "名前"), h("th", null, "対局"), h("th", null, "pt"), h("th", null, "収支"))),
+      h(
+        "tbody",
+        null,
+        players.map((p) =>
+          h(
+            "tr",
+            null,
+            h("td", { class: "name" }, p.name),
+            h("td", null, String(p.games)),
+            h("td", null, signed(Math.round(p.pt * 10) / 10)),
+            h("td", { class: p.yen > 0 ? "plus" : p.yen < 0 ? "minus" : "" }, `${signed(p.yen)}円`),
+          ),
+        ),
+      ),
+    ),
+    h("div", { class: "summary" }, "支払い"),
+    transfers.length
+      ? transfers.map((t) => h("div", { class: "transfer" }, h("span", null, `${label(t.from)} → ${label(t.to)}`), h("span", { class: "amt" }, `${t.amount.toLocaleString("ja-JP")}円`)))
+      : h("div", { class: "hint" }, "支払いはありません"),
+  );
+  return openSheet({ title: "まとめて精算", body });
+}
+
 /** 選択肢だけのシート（ログ画面の行操作など）。items: [{ label, sub?, onPick, danger? }] */
 export function openActionSheet({ title, items }) {
   const body = h("div", { class: "sheet-body" });

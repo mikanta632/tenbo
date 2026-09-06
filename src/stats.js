@@ -5,7 +5,7 @@
 
 import { kyokuGroups } from "./reduce.js";
 import { effectiveWinners } from "./score.js";
-import { computeSettlement } from "./settlement.js";
+import { computeSettlement, settleTransfers } from "./settlement.js";
 
 function emptyAcc() {
   return {
@@ -124,6 +124,28 @@ export function playerGames(games, playerId) {
     out.push({ game, seat, rank: s.rank, points: s.points, pt: s.pt, yen: s.yen, agari: s.agari, houju: s.houju, effective: s.effective });
   }
   return out;
+}
+
+/**
+ * 選んだ複数の対局の収支をプレイヤーごとに合算し、支払い経路を作る（§8.5）。
+ * 人数の違う対局（4人と3人）を混ぜてもよい。返り値:
+ *   { players: [{ playerId, games, points, pt, yen }], transfers: [{ from, to, amount }] }
+ * players は収支の多い順。transfers の from / to は players の添字で、卓外は null。
+ */
+export function combineGames(games) {
+  const map = new Map();
+  for (const game of games) {
+    for (const s of gameStats(game).seats) {
+      if (!map.has(s.playerId)) map.set(s.playerId, { playerId: s.playerId, games: 0, points: 0, pt: 0, yen: 0 });
+      const a = map.get(s.playerId);
+      a.games++;
+      a.points += s.points;
+      a.pt += s.pt;
+      a.yen += s.yen;
+    }
+  }
+  const players = [...map.values()].sort((a, b) => b.yen - a.yen);
+  return { players, transfers: settleTransfers(players.map((p) => p.yen)) };
 }
 
 /** 合算値から率と平均を出す。分母が 0 のときは null。 */

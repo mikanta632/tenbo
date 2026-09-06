@@ -8,6 +8,7 @@ import { PRESETS, validateRule } from "../rules.js";
 import { reduce, isEndOfKyoku, agariYameAvailableAfter, dealerOf, kyokuGroups } from "../reduce.js";
 import { appendEvent, undoLast, removeEvent, replaceEvent, insertEvent, deleteKyoku, withEvents } from "../edit.js";
 import { computeSettlement } from "../settlement.js";
+import { combineGames } from "../stats.js";
 import { clear, h } from "./dom.js";
 import { renderStart } from "./start.js";
 import { renderTable } from "./table.js";
@@ -33,6 +34,7 @@ import {
   openAgariYameDialog,
   openConfirm,
   openActionSheet,
+  openCombinedSettlement,
 } from "./sheets.js";
 import { fmtElapsed, kyokuName } from "./format.js";
 import { customRules, saveCustomRule } from "./prefs.js";
@@ -62,6 +64,7 @@ let resultId = null; // 結果画面で見ている終了済み対局の id
 let resultBack = "game"; // 結果画面の「戻る」先
 let playerId = null; // 個人ページで見ているプレイヤー
 let settingsPc = 4; // 設定タブで開いている人数
+let statsTab = "games"; // 戦績タブで開いているタブ（対局一覧／個人成績）
 let openSheetHandle = null;
 let elapsedTimer = null;
 let diffSeat = null; // 点差を表示中の席
@@ -201,11 +204,26 @@ function statsContent() {
     games: storage.loadGames(),
     roster: storage.loadRoster(),
     onBack: null,
+    initialTab: statsTab,
+    onTab: (key) => (statsTab = key),
     onPlayer: (id) => {
       playerId = id;
       show("player");
     },
     onPickGame: (id) => pickGame(id),
+    onSettle: (ids) => {
+      const roster = storage.loadRoster();
+      const nameOf = (id) => (roster.find((p) => p.id === id) || { name: "?" }).name;
+      const picked = storage.loadGames().filter((g) => ids.includes(g.id));
+      if (picked.length === 0) return;
+      const { players, transfers } = combineGames(picked);
+      closeSheet();
+      openSheetHandle = openCombinedSettlement({
+        count: picked.length,
+        players: players.map((p) => ({ ...p, name: nameOf(p.playerId) })),
+        transfers,
+      });
+    },
   });
 }
 
