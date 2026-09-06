@@ -106,12 +106,14 @@ export function renderStats(props) {
       ),
     );
 
-    if (selected.size > 0) {
+    // 選択バーは常に出す。左のボタンは「すべて選択」と「選択解除」を状態で入れ替える
+    if (shown.length > 0) {
+      const allPicked = shown.every((g) => selected.has(g.id));
       root.append(
         h(
           "section",
           { class: "card select-bar" },
-          h("div", { class: "summary" }, `${selected.size}対局を選択中`),
+          h("div", { class: "summary" }, selected.size > 0 ? `${selected.size}対局を選択中` : `${shown.length}対局。選んでまとめて精算できます`),
           h(
             "div",
             { class: "sheet-actions two" },
@@ -121,13 +123,18 @@ export function renderStats(props) {
                 type: "button",
                 class: "btn-secondary",
                 onclick: () => {
-                  selected.clear();
+                  if (allPicked) selected.clear();
+                  else for (const g of shown) selected.add(g.id);
                   render();
                 },
               },
-              "選択解除",
+              allPicked ? "選択解除" : "すべて選択",
             ),
-            h("button", { type: "button", class: "btn-primary", onclick: () => props.onSettle([...selected]) }, "まとめて精算"),
+            h(
+              "button",
+              { type: "button", class: "btn-primary", disabled: selected.size === 0, onclick: () => props.onSettle([...selected]) },
+              "まとめて精算",
+            ),
           ),
         ),
       );
