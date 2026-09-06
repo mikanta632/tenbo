@@ -55,7 +55,10 @@ button:disabled { opacity: 0.4; }
 .start-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .start-nav { display: flex; gap: 6px; }
 .uma-row { display: flex; gap: 6px; flex: 1; }
-.uma-row input { width: 0; flex: 1; min-width: 0; }
+.uma-row label { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted); }
+.uma-row input { width: 100%; min-width: 0; font: inherit; font-size: 18px; padding: 9px 4px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.25); background: #0b2a1b; color: var(--ink); text-align: center; }
+.uma-editor { margin: 12px 0; }
+.uma-editor .hint { margin-top: 8px; }
 .settings-screen .row input[type=number] { flex: 1; min-width: 0; font: inherit; font-size: 16px; padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); background: #0b2a1b; color: var(--ink); }
 .settings-screen .row input[type=checkbox] { width: 24px; height: 24px; }
 .settings-screen textarea { width: 100%; font: 12px ui-monospace, Menlo, monospace; padding: 8px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); background: #0b2a1b; color: var(--ink); }
@@ -314,12 +317,12 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 }
 
 /* 点差表示（+/−） */
-.adj.on { background: var(--accent); color: #111; border-color: var(--accent); }
-.diffs { display: flex; gap: 10px; flex: 1; min-width: 0; align-items: baseline; }
-.diff { display: flex; flex-direction: column; min-width: 0; line-height: 1.1; }
-.diff-name { font-size: 11px; color: #bbb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.diff-val { font-size: 20px; font-weight: 700; color: var(--digit); font-variant-numeric: tabular-nums; }
-.diff.down .diff-val { color: #ff6b57; }
+.adj.on { background: #444; color: var(--ink); border-color: #ddd; }
+.pts.point-diff.ahead { color: #62adff; }
+.pts.point-diff.behind { color: #ff6b57; }
+.pts.point-diff.tied { color: #ddd; }
+.diff-reference { box-shadow: 0 0 0 2px #ddd; }
+.diff-label { font-size: 11px; border: 1px solid #ddd; border-radius: 4px; padding: 0 4px; }
 
 /* 複数和了・チョンボ manual */
 .chip.wide { width: 100%; text-align: left; display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
@@ -375,6 +378,8 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .game-rtable td.name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 6em; }
 .select-bar .summary { margin: 0 0 8px; }
 .select-bar .sheet-actions { margin-top: 0; }
+.game-day { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 18px 0 8px; flex-wrap: wrap; }
+.game-day b { font-size: 14px; }
 
 .transfer { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.12); font-size: 15px; }
 .transfer .amt { font-weight: 700; color: var(--digit); font-variant-numeric: tabular-nums; }

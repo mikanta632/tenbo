@@ -8,7 +8,7 @@
 
 import { h, clear } from "./dom.js";
 import { aggregate, derive, gameStats } from "../stats.js";
-import { fmtPoints, gameDateTime } from "./format.js";
+import { fmtPoints, fmtDate, gameDateTime } from "./format.js";
 
 const num = (x, d = 1) => (x === null ? "—" : x.toFixed(d));
 const signed = (x) => (x > 0 ? `+${x}` : String(x));
@@ -24,7 +24,7 @@ const FILTERS = [
 /**
  * props: {
  *   games, roster, onBack, initialTab, onTab(key), initialPc, onPc(n),
- *   onPlayer(playerId), onPickGame(gameId), onSettle(gameIds)
+ *   onPlayer(playerId), onPickGame(gameId), onSettle(gameIds), initialListState, onListState(state), now
  * }
  */
 export function renderStats(props) {
@@ -33,11 +33,16 @@ export function renderStats(props) {
   const nameOf = (id) => (roster.find((p) => p.id === id) || { name: "?" }).name;
 
   let tab = props.initialTab === "players" ? "players" : "games";
-  let filter = "all"; // 対局一覧の絞り込み
+  const initial = props.initialListState || {};
+  let filter = FILTERS.some((f) => f.key === initial.filter) ? initial.filter : "all";
+  let period = initial.period === "today" ? "today" : "all";
   let pc = props.initialPc === 3 ? 3 : 4; // 個人成績の人数
-  const selected = new Set(); // 選択中の対局 id
+  const selected = new Set((initial.selectedIds || []).filter((id) => games.some((g) => g.id === id)));
+  const today = fmtDate((props.now || new Date()).toISOString());
 
-  function render() {
+  function render(resetScroll = false) {
+    const scroller = root.closest(".tab-content");
+    const scrollTop = resetScroll ? 0 : (scroller?.scrollTop ?? initial.scrollTop ?? 0);
     clear(root);
     root.append(
       h(
@@ -72,16 +77,18 @@ export function renderStats(props) {
 
     if (games.length === 0) {
       root.append(h("section", { class: "card" }, h("div", { class: "hint" }, "終了した対局がありません")));
-      return;
+    } else {
+      if (tab === "games") renderGameList();
+      else renderPlayerStats();
     }
-    if (tab === "games") renderGameList();
-    else renderPlayerStats();
+    if (scroller) scroller.scrollTop = scrollTop;
+    props.onListState?.({ filter, period, selectedIds: [...selected], scrollTop });
   }
 
   // ---- 対局一覧 ----------------------------------------------------------
 
   function renderGameList() {
-    const shown = games.filter(FILTERS.find((f) => f.key === filter).match);
+    const shown = games.filter((g) => FILTERS.find((f) => f.key === filter).match(g) && (period !== "today" || gameDateTime(g).slice(0, 10) === today));
     // 絞り込みで消えた対局は選択から外す
     for (const id of [...selected]) if (!shown.some((g) => g.id === id)) selected.delete(id);
 
@@ -97,13 +104,17 @@ export function renderStats(props) {
               class: `chip${filter === f.key ? " on" : ""}`,
               onclick: () => {
                 filter = f.key;
-                render();
+                render(true);
               },
             },
             f.label,
           ),
         ),
       ),
+      h("div", { class: "choice grid2" }, [["all", "全期間"], ["today", "今日"]].map(([key, label]) => h("button", {
+        type: "button", class: `chip${period === key ? " on" : ""}`,
+        onclick: () => { period = key; render(true); },
+      }, label))),
     );
 
     // 選択バーは常に出す。左のボタンは「すべて選択」と「選択解除」を状態で入れ替える
@@ -141,10 +152,33 @@ export function renderStats(props) {
     }
 
     if (shown.length === 0) {
-      root.append(h("section", { class: "card" }, h("div", { class: "hint" }, "この人数の対局はありません")));
+      root.append(h("section", { class: "card" }, h("div", { class: "hint" }, "この条件の対局はありません")));
       return;
     }
-    for (const g of shown) root.append(gameCard(g));
+    const days = new Map();
+    for (const game of shown) {
+      const day = gameDateTime(game).slice(0, 10) || "日付不明";
+      if (!days.has(day)) days.set(day, []);
+      days.get(day).push(game);
+    }
+    for (const [day, dayGames] of days) {
+      const allPicked = dayGames.every((g) => selected.has(g.id));
+      root.append(h("div", { class: "game-day" },
+        h("b", null, `${day}${day === today ? "（今日）" : ""} ・ ${dayGames.length}対局`),
+        h("button", {
+          type: "button", class: "btn-secondary small",
+          "aria-label": `${day}の対局を${allPicked ? "選択解除" : "すべて選択"}`,
+          onclick: () => {
+            for (const g of dayGames) {
+              if (allPicked) selected.delete(g.id);
+              else selected.add(g.id);
+            }
+            render();
+          },
+        }, allPicked ? "この日の選択解除" : "この日をすべて選択"),
+      ));
+      for (const game of dayGames) root.append(gameCard(game));
+    }
   }
 
   /** 1対局のカード。左のチェックで選択、日付をタップで操作（結果・編集・削除）。 */
@@ -154,6 +188,7 @@ export function renderStats(props) {
     const date = gameDateTime(g);
     const check = h("input", {
       type: "checkbox",
+      "aria-label": `${date}の対局を選択`,
       checked: selected.has(g.id),
       onchange: (e) => {
         if (e.target.checked) selected.add(g.id);

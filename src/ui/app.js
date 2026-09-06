@@ -6,7 +6,7 @@
 import { createStorage, prepareImport } from "../storage.js";
 import { PRESETS, validateRule } from "../rules.js";
 import { reduce, isEndOfKyoku, agariYameAvailableAfter, dealerOf, kyokuGroups } from "../reduce.js";
-import { appendEvent, undoLast, removeEvent, replaceEvent, insertEvent, deleteKyoku, withEvents } from "../edit.js";
+import { appendEvent, removeEvent, replaceEvent, insertEvent, deleteKyoku, withEvents } from "../edit.js";
 import { computeSettlement } from "../settlement.js";
 import { combineGames } from "../stats.js";
 import { clear, h } from "./dom.js";
@@ -66,6 +66,7 @@ let playerId = null; // 個人ページで見ているプレイヤー
 let settingsPc = 4; // 設定タブで開いている人数
 let statsTab = "games"; // 戦績タブで開いているタブ（対局一覧／個人成績）
 let statsPc = 4; // 個人成績で見ている人数（個人ページもこれに合わせる）
+let statsListState = { filter: "all", period: "all", selectedIds: [], scrollTop: 0 };
 let openSheetHandle = null;
 let elapsedTimer = null;
 let diffSeat = null; // 点差を表示中の席
@@ -101,6 +102,8 @@ document.addEventListener(
 const TAB_SCREENS = new Set(["game", "settings", "stats", "misc"]);
 
 function show(next) {
+  const statsScroller = root.querySelector(".stats-screen")?.closest(".tab-content");
+  if (statsScroller) statsListState.scrollTop = statsScroller.scrollTop;
   if (next) screen = next;
   closeSheet();
   clear(root);
@@ -123,7 +126,11 @@ function renderTabScreen() {
   else if (screen === "stats") content = statsContent();
   else if (screen === "misc") content = miscContent();
   else content = gameTabContent();
-  root.append(h("div", { class: "tab-shell" }, h("div", { class: "tab-content" }, content), renderTabBar(screen, (key) => show(key))));
+  const scroller = h("div", { class: "tab-content", onscroll: () => {
+    if (screen === "stats" && scroller.isConnected) statsListState.scrollTop = scroller.scrollTop;
+  } }, content);
+  root.append(h("div", { class: "tab-shell" }, scroller, renderTabBar(screen, (key) => show(key))));
+  if (screen === "stats") scroller.scrollTop = statsListState.scrollTop;
 }
 
 function closeSheet() {
@@ -208,6 +215,8 @@ function statsContent() {
     initialTab: statsTab,
     onTab: (key) => (statsTab = key),
     initialPc: statsPc,
+    initialListState: statsListState,
+    onListState: (state) => (statsListState = state),
     onPc: (n) => (statsPc = n),
     onPlayer: (id) => {
       playerId = id;
@@ -484,11 +493,6 @@ function renderTableScreen() {
       }
       show();
     },
-    onUndo: () => {
-      game = withEvents(game, undoLast(game.events, rule));
-      storage.saveCurrent(game);
-      show();
-    },
     onSpecial: () => {
       if (state.over) return;
       closeSheet();
@@ -592,11 +596,6 @@ function showOver(state, names) {
       resultId = finished.id;
       resultBack = "game";
       show("result");
-    },
-    onUndo: () => {
-      game = withEvents(game, undoLast(game.events, rule));
-      storage.saveCurrent(game);
-      show();
     },
     onDiscard: () => {
       closeSheet();

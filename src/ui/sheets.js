@@ -766,9 +766,9 @@ export function openMenu({ version, soundOn, onToggleSound, onTestSound, onAdjus
 // ---- 終局 -----------------------------------------------------------------
 
 /**
- * 終局ダイアログ。順位と持ち点を表示し、保存して終了するか、戻すかを選ぶ。
+ * 終局ダイアログ。順位と持ち点を表示し、保存して終了するか、破棄するかを選ぶ。
  */
-export function openOverDialog({ state, rule, names, reason, onSave, onUndo, onDiscard }) {
+export function openOverDialog({ state, rule, names, reason, onSave, onDiscard }) {
   const n = rule.playerCount;
   const ranks = ranksOf(state.points);
   const order = [...Array(n).keys()].sort((a, b) => ranks[a] - ranks[b]);
@@ -785,8 +785,7 @@ export function openOverDialog({ state, rule, names, reason, onSave, onUndo, onD
     state.kyotaku > 0 ? h("div", { class: "hint" }, `供託 ${state.kyotaku}本が残っています（${rule.finalKyotaku === "remain" ? "場に残します" : "トップに加算します"}）`) : null,
     h(
       "div",
-      { class: "sheet-actions two" },
-      h("button", { type: "button", class: "btn-secondary", onclick: onUndo }, "戻す"),
+      { class: "sheet-actions" },
       h("button", { type: "button", class: "btn-primary", onclick: onSave }, "保存して終了"),
     ),
     onDiscard

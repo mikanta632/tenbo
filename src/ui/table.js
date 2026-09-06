@@ -2,7 +2,7 @@
 
 import { h, svg } from "./dom.js";
 import { dealerOf, canRiichi } from "../reduce.js";
-import { kyokuName, windName, fmtPoints, fmtElapsed, seatPositions } from "./format.js";
+import { kyokuName, windName, fmtPoints, fmtDelta, fmtElapsed, seatPositions } from "./format.js";
 
 const ICON_RIICHI = `<svg viewBox="0 0 64 24" width="56" height="21" aria-hidden="true">
   <rect x="1" y="4" width="62" height="16" rx="4" fill="#f4f4f4" stroke="#999"/>
@@ -31,7 +31,7 @@ function sticks(count) {
 /**
  * 対局画面を描画して要素を返す。
  * actions: { onPanel(seat), onRiichi(seat), onMeld(seat, value), onDiff(seat),
- *            onUndo(), onSpecial(), onMenu(), onLog() }
+ *            onSpecial(), onMenu(), onLog() }
  * diffSeat: 点差を表示中の席（null なら通常表示）
  */
 export function renderTable({ game, state, names, actions, diffSeat = null }) {
@@ -52,12 +52,11 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
     "div",
     { class: "bar" },
     h("div", { class: "bar-left" }, h("button", { type: "button", class: "btn-flat", onclick: actions.onLog, disabled: !actions.onLog }, "ログ"), elapsed),
-    h("button", { type: "button", class: "btn-flat", onclick: actions.onUndo, disabled: game.events.length === 0 }, "戻す"),
   );
 
   const felt = h("div", { class: "felt" });
   for (const [position, seat] of Object.entries(pos)) {
-    felt.append(renderPanel({ position, seat, state, rule, dealer, names, actions, diff: diffSeat === seat }));
+    felt.append(renderPanel({ position, seat, state, rule, dealer, names, actions, diffSeat }));
   }
   felt.append(
     h(
@@ -78,29 +77,14 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
   return h("div", { class: "table-screen" }, header, bar, felt, footer);
 }
 
-/** 押した人と他の人との点差（自分 − 相手）。正なら自分が上。 */
-function renderDiffs(seat, state, names) {
-  const items = [];
-  for (let i = 0; i < state.points.length; i++) {
-    if (i === seat) continue;
-    const d = state.points[seat] - state.points[i];
-    items.push(
-      h(
-        "span",
-        { class: `diff${d > 0 ? " up" : d < 0 ? " down" : ""}` },
-        h("span", { class: "diff-name" }, names[i]),
-        h("span", { class: "diff-val" }, d > 0 ? `+${fmtPoints(d)}` : d < 0 ? fmtPoints(d) : "±0"),
-      ),
-    );
-  }
-  return h("div", { class: "diffs" }, items);
-}
-
-function renderPanel({ position, seat, state, rule, dealer, names, actions, diff = false }) {
+function renderPanel({ position, seat, state, rule, dealer, names, actions, diffSeat }) {
   const n = rule.playerCount;
   const isDealer = seat === dealer;
   const riichiOn = state.round.riichi[seat];
   const melded = state.round.melded[seat];
+  const diffMode = diffSeat !== null;
+  const isReference = diffSeat === seat;
+  const delta = diffMode && !isReference ? state.points[diffSeat] - state.points[seat] : null;
   // リーチ中は再タップで解除できるので有効のまま。未リーチで 1000点未満なら不可
   const riichiDisabled = state.over || (!riichiOn && !canRiichi(state, seat, rule));
 
@@ -134,12 +118,12 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions, diff
   const panel = h(
     "div",
     {
-      class: `panel${isDealer ? " dealer" : ""}${diff ? " diff-mode" : ""}`,
+      class: `panel${isDealer ? " dealer" : ""}${isReference ? " diff-reference" : ""}`,
       role: "button",
       tabindex: "0",
-      "aria-label": diff ? `${names[seat]} の点差` : `${names[seat]} の和了入力`,
+      "aria-label": diffMode ? `${names[diffSeat]}から見た${names[seat]}との点差表示。タップで持ち点に戻る` : `${names[seat]} の和了入力`,
       // 点差表示中は本体タップで通常表示に戻す（誤って和了入力を開かない）
-      onclick: () => (diff ? actions.onDiff(seat) : actions.onPanel(seat)),
+      onclick: () => (diffMode ? actions.onDiff(diffSeat) : actions.onPanel(seat)),
     },
     h(
       "div",
@@ -147,22 +131,23 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions, diff
       h("span", { class: "wind" }, windName(seat, state.kyoku, n)),
       seat === 0 ? h("span", { class: "chiicha" }, "起家") : null,
       h("span", { class: "pname" }, names[seat]),
+      isReference ? h("span", { class: "diff-label" }, "基準") : null,
       riichiOn ? h("span", { class: "flag" }, "リーチ") : null,
       melded ? h("span", { class: "flag" }, "副露") : null,
     ),
     h(
       "div",
       { class: "prow" },
-      diff
-        ? renderDiffs(seat, state, names)
+      delta !== null
+        ? h("span", { class: `pts point-diff${delta > 0 ? " ahead" : delta < 0 ? " behind" : " tied"}` }, fmtDelta(delta))
         : h("span", { class: `pts${state.points[seat] < 0 ? " neg" : ""}` }, fmtPoints(state.points[seat])),
       h(
         "button",
         {
           type: "button",
-          class: `adj${diff ? " on" : ""}`,
+          class: `adj${isReference ? " on" : ""}`,
           "aria-label": "点差表示",
-          "aria-pressed": diff ? "true" : "false",
+          "aria-pressed": isReference ? "true" : "false",
           onclick: (e) => {
             e.stopPropagation();
             actions.onDiff(seat);

@@ -1,6 +1,6 @@
 // 設定タブ（docs/design.md §7, §8.9）。新しい対局に使うルールを 4人／3人それぞれ編集する。
 //
-// 変更はその場で保存する（mj.prefs.rules）。「標準に戻す」でプリセットに戻る。
+// ウマは全順位をまとめて保存し、その他の変更はその場で保存する（mj.prefs.rules）。
 // 仕様が決まっていない項目（西入・チップ・同点の扱い）は表示だけして無効にする。
 
 import { h, clear } from "./dom.js";
@@ -14,6 +14,7 @@ export function renderSettings(props) {
   let pc = props.initialPc || 4;
   const copy = (r) => JSON.parse(JSON.stringify(r));
   let rule = copy(props.rulesFor(pc));
+  let umaDraft = rule.uma.map(String);
   const msg = h("div", { class: "hint", hidden: true });
 
   function setMsg(text, error = false) {
@@ -33,6 +34,51 @@ export function renderSettings(props) {
     props.onChange(pc, copy(rule));
     setMsg("");
     render();
+  }
+
+  function umaEditor() {
+    const status = h("div", { class: "hint", "aria-live": "polite" });
+    const values = () => umaDraft.map((value) => value.trim() === "" ? NaN : Number(value));
+    const save = h("button", {
+      type: "button", class: "btn-primary", onclick: () => {
+        const candidate = { ...rule, uma: values() };
+        const errors = validateRule(candidate);
+        if (errors.length) {
+          status.textContent = errors.join(" / ");
+          return;
+        }
+        rule = candidate;
+        umaDraft = rule.uma.map(String);
+        commit();
+      },
+    }, "ウマを保存");
+    const reset = h("button", {
+      type: "button", class: "btn-secondary", onclick: () => {
+        umaDraft = rule.uma.map(String);
+        render();
+      },
+    }, "変更を戻す");
+    const update = () => {
+      const parsed = values();
+      const valid = parsed.every(Number.isFinite);
+      const total = valid ? parsed.reduce((a, b) => a + b, 0) : null;
+      const dirty = umaDraft.some((v, i) => v !== String(rule.uma[i]));
+      const sum = total === null ? "全順位に数値を入力してください" : `合計：${total > 0 ? "+" : ""}${total}${total === 0 ? "" : "（0にしてください）"}`;
+      status.textContent = `${sum} ・ ${dirty ? "未保存" : "保存済み"}`;
+      save.disabled = !dirty || total !== 0;
+      reset.disabled = !dirty;
+    };
+    const editor = h("div", { class: "uma-editor" },
+      h("div", { class: "label" }, "ウマ"),
+      h("div", { class: "uma-row" }, umaDraft.map((value, i) => h("label", null, `${i + 1}位`, h("input", {
+        type: "number", step: "any", inputmode: "decimal", value, "aria-label": `${i + 1}位のウマ`,
+        oninput: (e) => { umaDraft[i] = e.target.value; update(); },
+      })))),
+      status,
+      h("div", { class: "sheet-actions two" }, reset, save),
+    );
+    update();
+    return editor;
   }
 
   function render() {
@@ -92,6 +138,7 @@ export function renderSettings(props) {
               onclick: () => {
                 pc = k;
                 rule = copy(props.rulesFor(pc));
+                umaDraft = rule.uma.map(String);
                 setMsg("");
                 render();
               },
@@ -100,7 +147,7 @@ export function renderSettings(props) {
           ),
         ),
       ),
-      h("div", { class: "hint" }, props.isCustom(pc) ? `${n}人麻雀のルールを変更しています（標準から変更あり）。変更はすぐ保存され、次の対局から使われます。` : `${n}人標準のルールです。変更はすぐ保存され、次の対局から使われます。`),
+      h("div", { class: "hint" }, `${n}人麻雀${props.isCustom(pc) ? "（標準から変更あり）" : "の標準ルール"}。ウマは「ウマを保存」、その他は変更時に保存され、次の対局から使われます。`),
       msg,
     );
 
@@ -141,26 +188,7 @@ export function renderSettings(props) {
     root.append(
       section(
         "結果関連",
-        row(
-          "ウマ",
-          h(
-            "div",
-            { class: "uma-row" },
-            rule.uma.map((u, i) =>
-              h("input", {
-                type: "number",
-                inputmode: "numeric",
-                value: String(u),
-                onchange: (e) => {
-                  const v = Number(e.target.value);
-                  if (Number.isFinite(v)) rule.uma[i] = v;
-                  commit();
-                },
-              }),
-            ),
-          ),
-          "合計 0",
-        ),
+        umaEditor(),
         row("端数処理", selectInput("ptRounding", [["round5", "五捨六入"], ["none", "小数のまま"]])),
         row("同点の扱い", selectInput("tieBreak", [["chiicha", "起家に近い方が上位"]], { disabled: true }), "これのみ"),
       ),
@@ -208,6 +236,7 @@ export function renderSettings(props) {
               onclick: () => {
                 props.onChange(pc, null);
                 rule = copy(props.rulesFor(pc));
+                umaDraft = rule.uma.map(String);
                 setMsg(`${n}人麻雀を標準に戻しました。`);
                 render();
               },

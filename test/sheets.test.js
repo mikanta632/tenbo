@@ -1,42 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { openAdjustSheet } from "../src/ui/sheets.js";
+import { openAdjustSheet, openMenu, openOverDialog } from "../src/ui/sheets.js";
 import { renderSettings } from "../src/ui/settings.js";
 import { makeRule, PRESETS } from "../src/rules.js";
 import { initialState } from "../src/reduce.js";
 
-// このシートが使う DOM 操作だけを実装し、実際の入力ハンドラと確定処理を検証する。
-class Element {
-  constructor(tag) { this.tag = tag; this.children = []; this.handlers = {}; this.disabled = false; }
-  append(...children) { this.children.push(...children); }
-  setAttribute(key, value) { this[key] = key === "disabled" ? true : value; }
-  addEventListener(type, fn) { this.handlers[type] = fn; }
-  get firstChild() { return this.children[0]; }
-  removeChild(child) { this.children.splice(this.children.indexOf(child), 1); }
-  select() {}
-  querySelector() { return this.find((el) => el.className === "points-input"); }
-  find(predicate) {
-    if (predicate(this)) return this;
-    for (const child of this.children) {
-      if (child instanceof Element) {
-        const found = child.find(predicate);
-        if (found) return found;
-      }
-    }
-  }
-}
-
-function mockDom(t) {
-  const previous = Object.fromEntries(["Node", "document"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
-  t.after(() => {
-    for (const [key, descriptor] of Object.entries(previous)) {
-      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-      else delete globalThis[key];
-    }
-  });
-  globalThis.Node = Element;
-  globalThis.document = { createElement: (tag) => new Element(tag), body: new Element("body") };
-}
+import { mockDom, button } from "./support/dom.js";
 
 test("手動修正は空欄を拒否し、明示的な 0 点や負数は確定できる", (t) => {
   mockDom(t);
@@ -44,7 +13,7 @@ test("手動修正は空欄を拒否し、明示的な 0 点や負数は確定�
   const rule = makeRule();
   const { box } = openAdjustSheet({ state: initialState(rule), rule, names: ["A", "B", "C", "D"], onAdjust: (...args) => changes.push(args) });
   box.find((el) => el.tag === "button" && el.children[0] === "東 A 25,000").handlers.click();
-  const input = box.querySelector();
+  const input = box.querySelector(".points-input");
   const confirm = box.find((el) => el.tag === "button" && el.children[0] === "確定");
   for (const value of ["", " ", ",，", "abc", "12.5"]) {
     input.handlers.input({ target: { value } });
@@ -58,13 +27,54 @@ test("手動修正は空欄を拒否し、明示的な 0 点や負数は確定�
   }
 });
 
-test("合計が 0 にならないウマは保存せず、直せば保存できる", (t) => {
+test("ウマは合計が 0 になっても自動保存せず、保存ボタンで全順位を反映する", (t) => {
   mockDom(t);
   const saved = [];
   const root = renderSettings({ presets: PRESETS, rulesFor: () => makeRule(), isCustom: () => false, onChange: (...args) => saved.push(args), version: "test" });
-  const uma = () => root.find((el) => el.className === "uma-row").children;
-  uma()[0].handlers.change({ target: { value: "30" } });
+  const uma = () => root.querySelector(".uma-row").findAll((el) => el.tag === "input");
+  uma()[0].handlers.input({ target: { value: "30" } });
   assert.deepEqual(saved, []);
-  uma()[1].handlers.change({ target: { value: "0" } });
+  assert.equal(button(root, "ウマを保存").disabled, true);
+  uma()[1].handlers.input({ target: { value: "0" } });
+  assert.deepEqual(saved, []);
+  assert.match(root.textContent, /未保存/);
+  button(root, "ウマを保存").handlers.click();
   assert.deepEqual(saved, [[4, makeRule({ uma: [30, 0, -10, -20] })]]);
+  assert.match(root.textContent, /保存済み/);
+});
+
+test("編集中のウマは他の設定の保存に混入せず、変更を戻せる", (t) => {
+  mockDom(t);
+  const saved = [];
+  const root = renderSettings({ rulesFor: () => makeRule(), isCustom: () => false, onChange: (...args) => saved.push(args) });
+  root.querySelector(".uma-row").querySelector("input").handlers.input({ target: { value: "30" } });
+  root.find((el) => el.tag === "input" && el.type === "checkbox" && !el.disabled).handlers.change({ target: { checked: false } });
+  assert.deepEqual(saved[0][1].uma, makeRule().uma);
+  assert.match(root.textContent, /未保存/);
+  button(root, "変更を戻す").handlers.click();
+  assert.equal(root.querySelector(".uma-row").querySelector("input").value, "20");
+  assert.equal(button(root, "ウマを保存").disabled, true);
+});
+
+test("三麻のウマは3順位を一括保存し、空欄では保存できない", (t) => {
+  mockDom(t);
+  const saved = [];
+  const root = renderSettings({ initialPc: 3, rulesFor: () => PRESETS["3人標準"], isCustom: () => false, onChange: (...args) => saved.push(args) });
+  const inputs = root.querySelector(".uma-row").findAll((el) => el.tag === "input");
+  assert.equal(inputs.length, 3);
+  inputs[0].handlers.input({ target: { value: "" } });
+  assert.equal(button(root, "ウマを保存").disabled, true);
+  [40, 0, -40].forEach((value, i) => inputs[i].handlers.input({ target: { value: String(value) } }));
+  button(root, "ウマを保存").handlers.click();
+  assert.equal(saved[0][0], 3);
+  assert.deepEqual(saved[0][1].uma, [40, 0, -40]);
+});
+
+test("メニュー・終局画面に直前操作の取り消しを置かない", (t) => {
+  mockDom(t);
+  const rule = makeRule();
+  for (const { box } of [openMenu({}), openOverDialog({ state: initialState(rule), rule, names: ["A", "B", "C", "D"] })]) {
+    assert.equal(button(box, "戻す"), undefined);
+    assert.equal(button(box, "直前の操作を取り消す"), undefined);
+  }
 });
