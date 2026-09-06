@@ -5,13 +5,14 @@
 //     下（A）
 //
 // 各位置で既存のプレイヤーを選ぶか、その場で新しい名前を入れる。
+// 終了した対局の一覧は戦績タブに置く（§8.5）。
 // 3人麻雀は 4席のうち 1つを「空席」にする（どの位置でもよい）。起家は配置とは別に選ぶ。
 // 画面上の配置はここで決めた位置がそのまま使われる。
 
 import { h, clear } from "./dom.js";
 import { validateRule } from "../rules.js";
-import { reduce, ranksOf } from "../reduce.js";
-import { kyokuName, gameId, fmtPoints, positionsFor, POSITION_ORDER } from "./format.js";
+import { reduce } from "../reduce.js";
+import { kyokuName, gameId, positionsFor, POSITION_ORDER } from "./format.js";
 
 const POS_LABEL = { bottom: "下", right: "右", top: "上", left: "左" };
 const NEW_PLAYER = "__new__";
@@ -47,7 +48,7 @@ export function seatsFromPositions({ posPlayers, chiichaPos }) {
 
 /**
  * 対局タブを描画する。
- * props: { storage, current, rulesFor(pc), onResume(), onStart(game), onDiscard(), onOpenResult(gameId) }
+ * props: { storage, current, rulesFor(pc), onResume(), onStart(game), onDiscard() }
  */
 export function renderStart(props) {
   const { storage, current } = props;
@@ -248,27 +249,6 @@ export function renderStart(props) {
       ),
     );
     root.append(sec);
-
-    // 終了した対局
-    const games = storage.loadGames();
-    if (games.length) {
-      const list = h("div", { class: "menu-list" });
-      for (const g of games.slice(0, 20)) {
-        const st = reduce(g.events, g.rule);
-        const ranks = ranksOf(st.points);
-        const ord = [...Array(g.rule.playerCount).keys()].sort((a, b) => ranks[a] - ranks[b]);
-        const date = (g.endedAt || g.startedAt || "").slice(0, 16).replace("T", " ");
-        list.append(
-          h(
-            "button",
-            { type: "button", class: "menu-item", onclick: () => props.onOpenResult(g.id) },
-            h("span", null, date),
-            h("span", { class: "menu-sub" }, ord.map((i) => `${nameOf(g.seats[i])} ${fmtPoints(st.points[i])}`).join(" / ")),
-          ),
-        );
-      }
-      root.append(h("section", { class: "card" }, h("h2", null, `終了した対局（${games.length}）`), list));
-    }
   }
 
   render();

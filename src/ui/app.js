@@ -174,11 +174,6 @@ function gameTabContent() {
       storage.saveCurrent(game);
       show("table");
     },
-    onOpenResult: (id) => {
-      resultId = id;
-      resultBack = "game";
-      show("result");
-    },
     onSettings: () => show("settings"),
   });
 }
