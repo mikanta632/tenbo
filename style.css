@@ -123,7 +123,10 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
   padding: 8px 0 6px; background: none; border: none; color: var(--muted); font-size: 11px;
 }
 .tab.on { color: var(--digit); }
-.tab-icon { font-size: 20px; line-height: 1; }
+/* アイコンは currentColor の線画。選択中は後ろに角丸の面を敷く */
+.tab-icon { padding: 3px 14px; border-radius: 13px; line-height: 0; }
+.tab-icon svg { display: block; width: 24px; height: 24px; }
+.tab.on .tab-icon { background: rgba(255, 212, 0, 0.18); }
 .rule-summary { font-size: 13px; color: var(--muted); margin: 4px 0 8px; line-height: 1.5; }
 .row-note { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .settings-screen .row select:disabled, .settings-screen .row input:disabled { opacity: 0.4; }
