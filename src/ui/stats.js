@@ -124,7 +124,7 @@ export function renderStats(props) {
         h(
           "section",
           { class: "card select-bar" },
-          h("div", { class: "summary" }, selected.size > 0 ? `${selected.size}対局を選択中` : `${shown.length}対局。選んでまとめて精算できます`),
+          selected.size > 0 ? h("div", { class: "summary" }, `${selected.size}対局を選択中`) : null,
           h(
             "div",
             { class: "sheet-actions two" },
@@ -298,9 +298,7 @@ export function renderStats(props) {
             ),
           ),
         ),
-        h("div", { class: "hint" }, "名前をタップすると、有効局・和了率・放銃率などの細かい数字と対局一覧を見られます。改名もそこで行います。"),
       ),
-      h("div", { class: "hint" }, "対局数が少ないうちは率の差に意味はほとんどありません。対局数と併せて見てください。"),
     );
   }
 

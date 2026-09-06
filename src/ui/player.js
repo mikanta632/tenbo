@@ -52,12 +52,12 @@ export function renderPlayer(props) {
           h("button", { type: "button", class: "btn-flat", onclick: () => {
             editing = true;
             render();
-          } }, "改名"),
+          } }, "名前を編集"),
         );
 
     root.append(
       h("header", { class: "plain-top" }, h("button", { type: "button", class: "btn-flat", onclick: props.onBack }, "戻る"), h("div", { class: "plain-title" }, "プレイヤー")),
-      h("section", { class: "card" }, nameBlock, h("div", { class: "hint" }, "改名しても過去の対局は同じプレイヤーとして扱われます（ID で参照しています）")),
+      h("section", { class: "card" }, nameBlock, h("div", { class: "hint" }, "名前を変えても過去の対局は同じプレイヤーとして扱われます（ID で参照しています）")),
     );
 
     if (!d) {

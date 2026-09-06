@@ -23,10 +23,6 @@
 /* touch-action: manipulation でダブルタップ拡大を止める（iOS は user-scalable=no を無視する） */
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 html, body { margin: 0; height: 100%; }
-/* html に背景を置くと、キャンバス全体（body の外側も含む）がこの色で塗られる。
-   iOS がホーム画面起動時に表示領域を実際より小さく返したとき、body の下に残る帯を
-   下部バーと同じ色にして、卓の緑が覗かないようにする。高さが合っていれば見えない */
-html { background: var(--bar); }
 /* 横向きにされたときは body ごと逆回転して縦向きのまま見せる（app.js の applyOrientation） */
 body.rotated {
   position: fixed; left: 50%; top: 50%; transform-origin: center center; overflow: auto;
@@ -77,6 +73,13 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
   flex: none; display: flex; background: var(--bar);
   border-top: 1px solid rgba(255,255,255,0.15);
   padding-bottom: var(--sab);
+}
+/* iOS がホーム画面起動時に、表示領域（レイアウトビューポート）を実際の画面より小さく
+   返すことがある。その外側は卓の緑（body の背景）が覗くので、バーと同じ色で塗って隠す。
+   fixed にしてビューポートの下端から流すため、文書の高さは増えずスクロールの余地も作らない */
+.tabbar::after {
+  content: ""; position: fixed; left: 0; right: 0; top: 100%; height: 200px;
+  background: var(--bar); pointer-events: none;
 }
 .metrics { font-size: 11px; opacity: 0.6; font-variant-numeric: tabular-nums; }
 
@@ -376,6 +379,7 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .game-card-head .link-btn { flex: 1; min-width: 0; font-size: 15px; }
 .game-rtable td.rank, .game-rtable th:first-child { width: 3.5em; }
 .game-rtable td.name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 6em; }
+.stats-screen .choice { margin-bottom: 14px; }
 .select-bar .summary { margin: 0 0 8px; }
 .select-bar .sheet-actions { margin-top: 0; }
 .game-day { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 18px 0 8px; flex-wrap: wrap; }
