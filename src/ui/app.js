@@ -314,6 +314,8 @@ function miscContent() {
     onExport: () => exportJson(),
     onImport: (file) => importJson(file),
     onCheckUpdate: (setStatus) => checkForUpdate(setStatus),
+    metrics: () =>
+      `表示 ${document.documentElement.clientHeight} / 内 ${window.innerHeight} / 画面 ${window.screen ? window.screen.height : "?"} / 下余白 ${safeAreaBottom()} / ${isStandalone() ? "ホーム画面" : "ブラウザ"}`,
   });
 }
 
@@ -881,7 +883,7 @@ function applyOrientation() {
     // ホーム画面から起動したとき（standalone）は 100dvh が実際の画面より小さく出て、
     // 下部のタブバーの下に隙間が残る。ツールバーの伸縮が無いので実測値をそのまま使う。
     // Safari のタブでは上下のツールバーに追従する必要があるので CSS の 100dvh に任せる。
-    if (isStandalone()) rootEl.style.setProperty("--app-h", `${Math.max(h, rootEl.clientHeight)}px`);
+    if (isStandalone()) rootEl.style.setProperty("--app-h", `${viewportHeight()}px`);
     else rootEl.style.removeProperty("--app-h");
   }
 }
@@ -889,6 +891,30 @@ function applyOrientation() {
 /** ホーム画面に追加したアイコンから起動したか */
 function isStandalone() {
   return window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+}
+
+/**
+ * 縦向きの表示領域の高さ（px）。
+ *
+ * ホーム画面から起動すると、status-bar-style=black-translucent でウェブビューは画面全体を
+ * 覆うのに、iOS はステータスバーの分だけ小さい高さを返すことがある。100dvh も innerHeight も
+ * 同じ値なので、画面の高さのほうが大きければそちらを採る。差がステータスバー程度（80px）を
+ * 超えるときは、画面全体を覆っていないとみて実測値のままにする（バーを画面外へ押し出さない）。
+ */
+function viewportHeight() {
+  const measured = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0);
+  const screenHeight = (window.screen && window.screen.height) || 0;
+  const diff = screenHeight - measured;
+  return diff > 0 && diff <= 80 ? screenHeight : measured;
+}
+
+/** env(safe-area-inset-bottom) の実測値（px）。診断表示に使う */
+function safeAreaBottom() {
+  const probe = h("div", { style: "position:fixed;bottom:0;left:0;width:1px;height:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none" });
+  document.body.append(probe);
+  const value = Math.round(probe.getBoundingClientRect().height);
+  probe.remove();
+  return value;
 }
 window.addEventListener("resize", applyOrientation);
 window.addEventListener("orientationchange", () => setTimeout(applyOrientation, 50));
