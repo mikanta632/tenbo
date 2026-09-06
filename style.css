@@ -11,6 +11,7 @@
   --danger: #e0533c;
   --ph: 116px;                                  /* パネル群の高さ（ボタン列 + パネル） */
   --adj-w: 52px;                                /* 点数パネルの右に置く点差ボタンの幅 */
+  --chiicha-w: 36px;                            /* 点数パネルの左に置く起家の印の幅 */
   /* 左右パネル群が縦に収まる長さ: 卓面の高さ（画面 − 上部・バー・下部 ≈ 130px）から上下パネル群と隙間を引く */
   --pw-avail: calc(var(--app-h) - 2 * var(--ph) - 154px);
   /* 上下・左右とも同じ長さにする。小さい画面では収まる長さに全員が合わせる */
@@ -191,7 +192,7 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .pos-right  { width: var(--pw-side); left: calc(100% - var(--ph) / 2 - 4px); transform: translate(-50%, -50%) rotate(-90deg); }
 
 /* ボタン行の幅は点数パネルにそろえる（左右のブロックのぶんだけ空ける） */
-.pbtns { display: flex; gap: 8px; height: 44px; flex: none; margin: 0 calc(var(--adj-w) + 8px); }
+.pbtns { display: flex; gap: 8px; height: 44px; flex: none; margin: 0 calc(var(--adj-w) + 8px) 0 calc(var(--chiicha-w) + 8px); }
 .ibtn {
   flex: 1 1 0; min-width: 0; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25);
   background: rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center;
@@ -216,10 +217,10 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .panel.dealer .wind { color: var(--accent); }
 /* 起家の印。点差ボタンと同じ形でパネルの左に置く。起家でない席は透明な場所取り */
 .chiicha {
-  flex: 0 0 var(--adj-w); align-self: stretch;
+  flex: 0 0 var(--chiicha-w); align-self: stretch;
   display: flex; align-items: center; justify-content: center;
-  background: var(--danger); color: #fff; border-radius: 10px;
-  writing-mode: vertical-rl; font-size: 13px; font-weight: 700; letter-spacing: 2px;
+  background: var(--danger); color: #fff; border-radius: 8px;
+  writing-mode: vertical-rl; font-size: 12px; font-weight: 700; letter-spacing: 1px;
 }
 .chiicha.off { background: none; }
 .pname { overflow: hidden; text-overflow: ellipsis; }
