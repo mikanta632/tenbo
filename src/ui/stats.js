@@ -75,12 +75,8 @@ export function renderStats(props) {
       ),
     );
 
-    if (games.length === 0) {
-      root.append(h("section", { class: "card" }, h("div", { class: "hint" }, "終了した対局がありません")));
-    } else {
-      if (tab === "games") renderGameList();
-      else renderPlayerStats();
-    }
+    if (tab === "games") renderGameList();
+    else renderPlayerStats();
     if (scroller) scroller.scrollTop = scrollTop;
     props.onListState?.({ filter, period, selectedIds: [...selected], scrollTop });
   }
@@ -88,6 +84,10 @@ export function renderStats(props) {
   // ---- 対局一覧 ----------------------------------------------------------
 
   function renderGameList() {
+    if (games.length === 0) {
+      root.append(h("section", { class: "card" }, h("div", { class: "hint" }, "終了した対局がありません")));
+      return;
+    }
     const shown = games.filter((g) => FILTERS.find((f) => f.key === filter).match(g) && (period !== "today" || gameDateTime(g).slice(0, 10) === today));
     // 絞り込みで消えた対局は選択から外す
     for (const id of [...selected]) if (!shown.some((g) => g.id === id)) selected.delete(id);
@@ -260,13 +260,18 @@ export function renderStats(props) {
       ),
     );
 
-    if (target.length === 0) {
-      root.append(h("section", { class: "card" }, h("div", { class: "hint" }, `${pc}人麻雀の対局がありません`)));
+    // 記録が無くても、登録してあるプレイヤーは名前を直せるように一覧へ出す。
+    // roster から消えたが対局には残っている ID も落とさない。
+    const map = aggregate(target);
+    const ids = [...new Set([...roster.map((p) => p.id), ...map.keys()])];
+    const rows = ids.map((id) => ({ id, name: nameOf(id), d: map.has(id) ? derive(map.get(id)) : null }));
+    // 記録のある人を通算 pt の多い順に。記録の無い人はその後ろへ roster の順で並べる
+    rows.sort((x, y) => (x.d ? 0 : 1) - (y.d ? 0 : 1) || (x.d && y.d ? y.d.ptSum - x.d.ptSum : 0));
+
+    if (rows.length === 0) {
+      root.append(h("section", { class: "card" }, h("div", { class: "hint" }, "プレイヤーがいません。対局タブで名前を追加してください。")));
       return;
     }
-
-    const map = aggregate(target);
-    const rows = [...map.entries()].map(([id, a]) => ({ id, name: nameOf(id), d: derive(a) })).sort((x, y) => y.d.ptSum - x.d.ptSum);
 
     root.append(
       h(
@@ -285,15 +290,15 @@ export function renderStats(props) {
                 "tr",
                 null,
                 h("td", { class: "name" }, h("button", { type: "button", class: "link-btn", onclick: () => props.onPlayer(r.id) }, r.name, " ›")),
-                h("td", null, String(r.d.games)),
-                h("td", null, num(r.d.avgRank, 2)),
-                h("td", { class: "pt" }, signed(Math.round(r.d.ptSum * 10) / 10)),
-                h("td", { class: signClass(r.d.yenSum) }, yen(r.d.yenSum)),
+                h("td", null, r.d ? String(r.d.games) : "0"),
+                h("td", null, r.d ? num(r.d.avgRank, 2) : "—"),
+                h("td", { class: "pt" }, r.d ? signed(Math.round(r.d.ptSum * 10) / 10) : "—"),
+                h("td", { class: r.d ? signClass(r.d.yenSum) : "" }, r.d ? yen(r.d.yenSum) : "—"),
               ),
             ),
           ),
         ),
-        h("div", { class: "hint" }, "名前をタップすると、有効局・和了率・放銃率などの細かい数字と対局一覧を見られます。"),
+        h("div", { class: "hint" }, "名前をタップすると、有効局・和了率・放銃率などの細かい数字と対局一覧を見られます。改名もそこで行います。"),
       ),
       h("div", { class: "hint" }, "対局数が少ないうちは率の差に意味はほとんどありません。対局数と併せて見てください。"),
     );

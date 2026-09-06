@@ -65,3 +65,31 @@ test("チェック操作ではスクロール位置を維持し、絞り込み�
   assert.equal(scroller.scrollTop, 0);
   assert.equal(state.scrollTop, 0);
 });
+
+test("記録の無い登録プレイヤーも個人成績に出し、名前から個人ページへ入れる", (t) => {
+  mockDom(t);
+  const base = fixture();
+  const opened = [];
+  const props = { ...base, roster: [...base.roster, { id: "e", name: "新人" }], initialTab: "players", onPlayer: (id) => opened.push(id) };
+  const root = renderStats(props);
+  const rows = root.querySelector("tbody").findAll((el) => el.tag === "tr");
+  const cells = rows.map((r) => r.findAll((el) => el.tag === "td").map((td) => td.textContent));
+  // 記録のある4人が先、記録の無い「新人」は最後
+  assert.equal(cells.length, 5);
+  assert.equal(cells.at(-1)[0], "新人 ›");
+  assert.deepEqual(cells.at(-1).slice(1), ["0", "—", "—", "—"]);
+  for (const row of cells.slice(0, 4)) assert.equal(row[1], "2");
+  button(root, "新人 ›").handlers.click();
+  assert.deepEqual(opened, ["e"]);
+});
+
+test("対局が1つも無くても登録プレイヤーの一覧を出す", (t) => {
+  mockDom(t);
+  const base = fixture();
+  const root = renderStats({ ...base, games: [], initialTab: "players" });
+  const rows = root.querySelector("tbody").findAll((el) => el.tag === "tr");
+  assert.deepEqual(rows.map((r) => r.querySelector(".name").textContent), ["a ›", "b ›", "c ›", "d ›"]);
+  // 対局一覧タブは従来どおり空の案内を出す
+  const list = renderStats({ ...base, games: [] });
+  assert.match(list.textContent, /終了した対局がありません/);
+});
