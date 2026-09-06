@@ -215,14 +215,15 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .pmeta { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #ddd; white-space: nowrap; overflow: hidden; }
 .wind { font-weight: 700; font-size: 15px; color: var(--ink); }
 .panel.dealer .wind { color: var(--accent); }
-/* 起家の印。点差ボタンと同じ形でパネルの左に置く。起家でない席は透明な場所取り */
-.chiicha {
+/* 起家の印。点差ボタンと同じ形でパネルの左に置く。起家でない席は透明な場所取り。
+   対局タブの座席スロット（.seat-slot.chiicha）と当たらないよう別の名前にする */
+.chiicha-mark {
   flex: 0 0 var(--chiicha-w); align-self: stretch;
   display: flex; align-items: center; justify-content: center;
   background: var(--danger); color: #fff; border-radius: 8px;
   writing-mode: vertical-rl; font-size: 12px; font-weight: 700; letter-spacing: 1px;
 }
-.chiicha.off { background: none; }
+.chiicha-mark.off { background: none; }
 .pname { overflow: hidden; text-overflow: ellipsis; }
 .flag { font-size: 11px; background: var(--danger); color: #fff; border-radius: 4px; padding: 1px 5px; }
 .prow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

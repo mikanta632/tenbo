@@ -165,7 +165,7 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions, diff
   const isChiicha = seat === 0;
   const chiichaSlot = h(
     "span",
-    { class: `chiicha${isChiicha ? "" : " off"}`, "aria-hidden": isChiicha ? false : "true" },
+    { class: `chiicha-mark${isChiicha ? "" : " off"}`, "aria-hidden": isChiicha ? false : "true" },
     isChiicha ? "起家" : "",
   );
 
