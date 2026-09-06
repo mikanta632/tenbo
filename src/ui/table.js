@@ -66,8 +66,7 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
     h(
       "button",
       { type: "button", class: "btn-special", onclick: actions.onSpecial },
-      h("span", null, "特殊終局"),
-      h("span", { class: "sub" }, "流局など"),
+      "終局",
     ),
   );
 
