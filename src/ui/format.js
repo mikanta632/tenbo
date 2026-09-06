@@ -1,4 +1,4 @@
-// 表示用の整形。純関数。
+// 表示用の整形（対局 ID の生成以外は純関数）。
 
 import { roundWind, kyokuNumber, seatWind } from "../reduce.js";
 
@@ -37,10 +37,11 @@ export function fmtElapsed(ms) {
   return `${hh}h${mm}m`;
 }
 
-/** 対局 ID。g_YYYYMMDD_HHMM */
+/** 対局 ID。同じ時刻に開始しても別対局になるよう一意な接尾辞を付ける。 */
 export function gameId(date) {
   const p = (x) => String(x).padStart(2, "0");
-  return `g_${date.getFullYear()}${p(date.getMonth() + 1)}${p(date.getDate())}_${p(date.getHours())}${p(date.getMinutes())}`;
+  const suffix = globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2);
+  return `g_${date.getFullYear()}${p(date.getMonth() + 1)}${p(date.getDate())}_${p(date.getHours())}${p(date.getMinutes())}_${suffix}`;
 }
 
 /** 画面位置の順。下（自家）から反時計回り。 */

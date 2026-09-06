@@ -65,13 +65,22 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  // 更新確認の版番号はキャッシュを読まず、現在の版のキャッシュにも書き込まない。
+  // Request.cache は古い iOS Safari では読めないので、クエリ付き（キャッシュ避けの ?t=）も同じ扱いにする。
+  // 事前キャッシュの URL にクエリは無いため、これで取りこぼしは起きない。
+  if (req.cache === "no-store" || url.search !== "") {
+    event.respondWith(fetch(req));
+    return;
+  }
   event.respondWith(
-    caches.match(req, { ignoreSearch: true }).then((hit) => {
+    caches.match(req, { ignoreSearch: true, cacheName: CACHE }).then((hit) => {
       if (hit) return hit;
       return fetch(req).then((res) => {
         if (res && res.ok) {
           const copy = res.clone();
-          caches.open(CACHE).then((cache) => cache.put(req, copy));
+          event.waitUntil(caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => {
+            /* 容量不足でもネットワークから取得した応答は利用できる */
+          }));
         }
         return res;
       });

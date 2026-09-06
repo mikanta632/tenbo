@@ -350,6 +350,22 @@ describe("6. 複数和了の原子性", () => {
 // ---- 終局判定 -------------------------------------------------------------
 
 describe("終局判定", () => {
+  test("アガリやめ: チョンボ・途中流局では選べない", () => {
+    for (const rule of [R4, R3]) {
+      const dealer = rule.playerCount - 1;
+      const prefix = Array.from({ length: rule.length - 1 }, () => exhaustive([]));
+      const gains = new Array(rule.playerCount).fill(0);
+      gains[dealer] = 20000;
+      for (const event of [chombo(0), abortive()]) {
+        const events = build(rule, ...prefix, adjust(gains), event);
+        assert.equal(reduce(events, rule).over, false);
+        assert.equal(agariYameAvailableAfter(events, rule), false);
+      }
+      for (const event of [tsumo(dealer, 1, 30), exhaustive([dealer]), nagashi([dealer], [dealer])]) {
+        assert.equal(agariYameAvailableAfter(build(rule, ...prefix, adjust(gains), event), rule), true);
+      }
+    }
+  });
   test("規定局数の消化", () => {
     const events = [];
     for (let i = 0; i < 8; i++) events.push(ron((i + 1) % 4, (i + 2) % 4, 1, 30));

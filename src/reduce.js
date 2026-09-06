@@ -125,7 +125,8 @@ export function agariYameAvailable(prev, next, rule) {
 export function agariYameAvailableAfter(events, rule) {
   if (events.length === 0) return false;
   const lastEvent = events[events.length - 1];
-  if (!isEndOfKyoku(lastEvent)) return false;
+  // 局の据置だけでは不十分。チョンボのやり直し・途中流局は和了／テンパイ連荘ではない。
+  if (lastEvent.t !== "agari" && !(lastEvent.t === "ryuukyoku" && ["exhaustive", "nagashi"].includes(lastEvent.type))) return false;
   const prev = reduce(events.slice(0, -1), rule);
   const next = applyEvent(prev, lastEvent, rule);
   return agariYameAvailable(prev, next, rule);

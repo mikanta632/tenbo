@@ -684,8 +684,10 @@ export function openAdjustSheet({ state, rule, names, onAdjust }) {
   const body = h("div", { class: "sheet-body" });
 
   function parsed() {
-    const v = Number(String(text).replace(/[,，\s]/g, ""));
-    return Number.isInteger(v) ? v : null;
+    const normalized = String(text).replace(/[,，\s]/g, "");
+    if (!normalized) return null;
+    const v = Number(normalized);
+    return Number.isSafeInteger(v) ? v : null;
   }
 
   function render() {

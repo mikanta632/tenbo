@@ -3,7 +3,20 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { seatPositions, positionsFor, kyokuName, windName, fmtPoints, fmtDelta, hanName } from "../src/ui/format.js";
-import { seatsFromPositions } from "../src/ui/start.js";
+import { buildGame, seatsFromPositions } from "../src/ui/start.js";
+import { makeRule } from "../src/rules.js";
+import { createStorage, memoryStorage } from "../src/storage.js";
+
+test("同じ時刻に開始した別対局を保存しても履歴を上書きしない", () => {
+  const props = { rule: makeRule(), seats: ["a", "b", "c", "d"], bottomSeat: 0, now: new Date(2026, 8, 6, 12, 30) };
+  const first = buildGame(props);
+  const second = buildGame(props);
+  const storage = createStorage(memoryStorage());
+  storage.appendGame(first);
+  storage.appendGame(second);
+  assert.notEqual(first.id, second.id);
+  assert.equal(storage.loadGames().length, 2);
+});
 
 describe("seatPositions", () => {
   test("4人: 下から反時計回りに 右・上・左", () => {

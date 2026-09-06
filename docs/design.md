@@ -122,7 +122,7 @@ mj.prefs    { sound }            // この端末だけの好み。エクスポ�
 
 ```
 Game = {
-  id: "g_20260905_2130",
+  id: "g_20260905_2130_3f9c1a",   // g_YYYYMMDD_HHMM_一意な接尾辞
   startedAt, endedAt,
   rule: Rule,                    // 対局開始時のルールをスナップショット
   seats: [playerId, ...],        // 起家順。長さ = rule.playerCount
@@ -132,6 +132,8 @@ Game = {
   settlement: Settlement | null  // 終局時に確定。編集したら null に戻して再計算
 }
 ```
+
+`id` の接尾辞は、同じ分に 2つの対局を始めたときに ID が衝突して履歴を上書きしないために付ける（`crypto.randomUUID`。使えなければ乱数）。
 
 `bottomSeat` と `emptyPosition` は「誰がどこに座っているか」の記録であり、点数計算には関与しない。対局タブの配置図で画面位置ごとにプレイヤーを選び、起家の位置から `seats` と `bottomSeat` を導く（`seatsFromPositions`。使う位置の順は 下→右→上→左 から空席を除いたもの。空席が下なら 右→上→左 で、`bottomSeat` は右に置く席になる）。
 

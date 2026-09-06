@@ -225,6 +225,11 @@ export function renderSettings(props) {
               onclick: () => {
                 try {
                   const parsed = JSON.parse(jsonArea.value);
+                  const errors = validateRule(parsed);
+                  if (errors.length) {
+                    setMsg("不正: " + errors.join(" / "), true);
+                    return;
+                  }
                   if (parsed.playerCount !== pc) {
                     setMsg(`playerCount は ${pc} にしてください`, true);
                     return;

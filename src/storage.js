@@ -2,6 +2,9 @@
 //
 // createStorage(ls) で保存先を差し替えられる（テスト用）。既定は globalThis.localStorage。
 
+import { assertRule } from "./rules.js";
+import { reduce } from "./reduce.js";
+
 export const SCHEMA_VERSION = 1;
 
 export const KEYS = Object.freeze({
@@ -24,7 +27,11 @@ const MIGRATIONS = {
  * 保存データ全体 { meta, roster, current, games } を最新の schemaVersion に上げる。
  */
 export function migrate(data) {
-  let version = (data.meta && data.meta.schemaVersion) || 0;
+  if (!isObject(data)) throw new Error("バックアップはオブジェクトである必要があります");
+  let version = data.meta?.schemaVersion ?? 0;
+  if (!Number.isInteger(version) || version < 0 || version > SCHEMA_VERSION) {
+    throw new Error(`対応していない schemaVersion: ${version}`);
+  }
   let d = data;
   while (version < SCHEMA_VERSION) {
     const step = MIGRATIONS[version];
@@ -33,6 +40,73 @@ export function migrate(data) {
     version += 1;
   }
   return { ...d, meta: { ...(d.meta || {}), schemaVersion: SCHEMA_VERSION } };
+}
+
+function isObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/** 保存前に、復元後の画面表示・畳み込みで必要なデータを検証する。保存データは変更しない。 */
+export function prepareImport(data) {
+  const migrated = migrate(data);
+  const check = (ok, field) => {
+    if (!ok) throw new Error(`バックアップの形式が不正: ${field}`);
+  };
+  const id = (value) => typeof value === "string" && value.length > 0;
+  check(Array.isArray(migrated.roster), "roster");
+  check(Array.isArray(migrated.games), "games");
+  for (const player of migrated.roster) {
+    check(isObject(player) && id(player.id) && typeof player.name === "string", "roster のプレイヤー");
+  }
+  check(new Set(migrated.roster.map((p) => p.id)).size === migrated.roster.length, "roster の ID 重複");
+  const games = migrated.current == null ? migrated.games : [...migrated.games, migrated.current];
+  for (const game of games) {
+    check(isObject(game) && id(game.id), "Game");
+    check(isObject(game.rule), `${game.id}.rule`);
+    const rule = assertRule(game.rule);
+    check(rule.abortiveRyuukyoku == null || Array.isArray(rule.abortiveRyuukyoku), "abortiveRyuukyoku");
+    const n = rule.playerCount;
+    const seat = (value) => Number.isInteger(value) && value >= 0 && value < n;
+    const seats = (value) => Array.isArray(value) && value.every(seat) && new Set(value).size === value.length;
+    const numbers = (value) => Array.isArray(value) && value.length === n && value.every(Number.isFinite);
+    check(Array.isArray(game.seats) && game.seats.length === n && game.seats.every(id) && new Set(game.seats).size === n, `${game.id}.seats`);
+    check(game.bottomSeat == null || seat(game.bottomSeat), "bottomSeat");
+    check(game.emptyPosition == null || ["bottom", "right", "top", "left"].includes(game.emptyPosition), "emptyPosition");
+    for (const key of ["startedAt", "endedAt"]) check(game[key] == null || typeof game[key] === "string", key);
+    check(Array.isArray(game.events), `${game.id}.events`);
+    for (const event of game.events) {
+      check(isObject(event), "Event");
+      check(["riichi", "meld", "kita", "agari", "ryuukyoku", "chombo", "adjust", "end"].includes(event.t), "Event.t");
+      if (["riichi", "meld", "kita", "chombo"].includes(event.t)) check(seat(event.who), "Event.who");
+      if (event.t === "meld") check(typeof event.value === "boolean", "meld.value");
+      if (event.t === "kita") check(event.delta === 1 || event.delta === -1, "kita.delta");
+      if (["agari", "ryuukyoku", "chombo", "adjust"].includes(event.t)) check(numbers(event.deltas), "Event.deltas");
+      if (event.t === "agari") {
+        check(typeof event.tsumo === "boolean" && (event.tsumo ? event.from === null : seat(event.from)), "agari.from / tsumo");
+        check(Array.isArray(event.winners) && event.winners.length > 0 && event.winners.every(isObject), "agari.winners");
+        check(seats(event.winners.map((w) => w.who)) && (!event.tsumo || event.winners.length === 1), "agari.winners.who");
+        for (const winner of event.winners) {
+          check(event.tsumo || winner.who !== event.from, "和了者と放銃者の重複");
+          check(winner.yakumanCount == null || (Number.isInteger(winner.yakumanCount) && winner.yakumanCount >= 0 && winner.yakumanCount <= 3), "yakumanCount");
+          if (!winner.yakumanCount) check(Number.isFinite(winner.han) && winner.han > 0 && Number.isFinite(winner.fu) && winner.fu > 0, "han / fu");
+          if (winner.sekinin != null) check(isObject(winner.sekinin) && seat(winner.sekinin.who) && Number.isInteger(winner.sekinin.yakumanCount) && winner.sekinin.yakumanCount > 0, "sekinin");
+        }
+      }
+      if (event.t === "ryuukyoku") {
+        check(["exhaustive", "abortive", "nagashi"].includes(event.type), "ryuukyoku.type");
+        check(seats(event.tenpai) && seats(event.nagashiBy), "tenpai / nagashiBy");
+      }
+    }
+    const state = reduce(game.events, rule);
+    check(numbers(state.points) && Number.isFinite(state.kyotaku), "畳み込み後の点数");
+    if (game.settlement != null) {
+      const s = game.settlement;
+      check(isObject(s) && [s.points, s.ranks, s.pt, s.yen].every(numbers), "settlement");
+      check(Array.isArray(s.transfers) && s.transfers.every((v) => isObject(v) && (v.from === null || seat(v.from)) && (v.to === null || seat(v.to)) && Number.isFinite(v.amount)), "settlement.transfers");
+    }
+  }
+  check(new Set(migrated.games.map((g) => g.id)).size === migrated.games.length, "games の ID 重複");
+  return migrated;
 }
 
 function parse(json, fallback) {
@@ -146,11 +220,27 @@ export function createStorage(ls = globalThis.localStorage, now = () => new Date
       };
     },
     importAll(data) {
-      const migrated = migrate(data);
-      ls.setItem(KEYS.roster, JSON.stringify(migrated.roster || []));
-      ls.setItem(KEYS.current, JSON.stringify(migrated.current || null));
-      ls.setItem(KEYS.games, JSON.stringify(migrated.games || []));
-      ls.setItem(KEYS.meta, JSON.stringify({ schemaVersion: SCHEMA_VERSION, updatedAt: now() }));
+      const migrated = prepareImport(data);
+      const entries = [
+        [KEYS.roster, migrated.roster],
+        [KEYS.current, migrated.current ?? null],
+        [KEYS.games, migrated.games],
+        [KEYS.meta, { schemaVersion: SCHEMA_VERSION, updatedAt: now() }],
+      ].map(([key, value]) => [key, JSON.stringify(value), ls.getItem(key)]);
+      const written = [];
+      try {
+        for (const entry of entries) {
+          ls.setItem(entry[0], entry[1]);
+          written.push(entry);
+        }
+      } catch (error) {
+        // localStorage は複数キーを一括保存できない。成功した書き込みだけを逆順で戻す。
+        for (const [key, , previous] of written.reverse()) {
+          if (previous === null) ls.removeItem(key);
+          else ls.setItem(key, previous);
+        }
+        throw error;
+      }
     },
   };
 }

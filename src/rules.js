@@ -71,12 +71,21 @@ export function makeRule(overrides = {}) {
  * §7 の制約を検証する。問題があればメッセージの配列を返す。空配列なら合格。
  */
 export function validateRule(rule) {
+  if (!rule || typeof rule !== "object" || Array.isArray(rule)) return ["Rule はオブジェクト"];
   const errors = [];
+  for (const key of ["startPoints", "returnPoints", "rate", "ryuukyokuTenpaiTotal"]) {
+    if (!Number.isFinite(rule[key])) errors.push(`${key} は有限の数値`);
+  }
+  // 古いルールでは本場の設定が無く、計算側の既定値を使う。
+  for (const key of ["honbaPoints", "tobiLine"]) {
+    if (rule[key] !== undefined && !Number.isFinite(rule[key])) errors.push(`${key} は有限の数値`);
+  }
   const n = rule.playerCount;
   if (n !== 3 && n !== 4) errors.push(`playerCount は 3 か 4: ${n}`);
   if (!Array.isArray(rule.uma)) {
     errors.push("uma は配列");
   } else {
+    if (!rule.uma.every(Number.isFinite)) errors.push("uma の各値は有限の数値");
     if (rule.uma.length !== n) {
       errors.push(`uma の長さは playerCount と一致: ${rule.uma.length} !== ${n}`);
     }

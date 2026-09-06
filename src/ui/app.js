@@ -3,7 +3,7 @@
 //
 // 画面: 初期画面はタブ（対局・設定・戦績・その他）。対局中・ログ・結果・個人ページはタブ無しの全画面。
 
-import { createStorage, SCHEMA_VERSION } from "../storage.js";
+import { createStorage, prepareImport } from "../storage.js";
 import { PRESETS, validateRule } from "../rules.js";
 import { reduce, isEndOfKyoku, agariYameAvailableAfter, dealerOf, kyokuGroups } from "../reduce.js";
 import { appendEvent, undoLast, removeEvent, replaceEvent, insertEvent, deleteKyoku, withEvents } from "../edit.js";
@@ -734,13 +734,10 @@ function importJson(file) {
       alert("JSON として読めませんでした");
       return;
     }
-    if (!data || typeof data !== "object" || !Array.isArray(data.games) || !Array.isArray(data.roster)) {
-      alert("形式が違います（roster と games が必要です）");
-      return;
-    }
-    const ver = (data.meta && data.meta.schemaVersion) || 0;
-    if (ver > SCHEMA_VERSION) {
-      alert(`このアプリより新しい形式です（schemaVersion ${ver}）`);
+    try {
+      data = prepareImport(data);
+    } catch (error) {
+      alert(error.message);
       return;
     }
     closeSheet();
@@ -749,7 +746,12 @@ function importJson(file) {
       message: `対局 ${data.games.length}件、プレイヤー ${data.roster.length}人を読み込み、今のデータをすべて置き換えます。`,
       okLabel: "置き換える",
       onOk: () => {
-        storage.importAll(data);
+        try {
+          storage.importAll(data);
+        } catch (error) {
+          alert("インポートに失敗しました: " + error.message);
+          return;
+        }
         game = storage.loadCurrent();
         show(game ? "table" : "game");
       },
