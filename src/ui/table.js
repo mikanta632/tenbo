@@ -133,7 +133,6 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions, diff
       "div",
       { class: "pmeta" },
       h("span", { class: "wind" }, windName(seat, state.kyoku, n)),
-      seat === 0 ? h("span", { class: "chiicha" }, "起家") : null,
       h("span", { class: "pname" }, names[seat]),
       isReference ? h("span", { class: "diff-label" }, "基準") : null,
       riichiOn ? h("span", { class: "flag" }, "リーチ") : null,
@@ -162,10 +161,19 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions, diff
     svg(ICON_DIFF),
   );
 
+  // 起家の印。点差ボタンと同じ形の赤いブロックをパネルの左に置く。
+  // 起家でない席にも同じ幅の透明な枠を置いて、どの席もパネルの幅をそろえる
+  const isChiicha = seat === 0;
+  const chiichaSlot = h(
+    "span",
+    { class: `chiicha${isChiicha ? "" : " off"}`, "aria-hidden": isChiicha ? false : "true" },
+    isChiicha ? "起家" : "",
+  );
+
   return h(
     "div",
     { class: `pgroup pos-${position}`, dataset: { seat: String(seat) } },
     h("div", { class: "pbtns" }, riichiBtn, meldBtn),
-    h("div", { class: "prow-outer" }, panel, diffBtn),
+    h("div", { class: "prow-outer" }, chiichaSlot, panel, diffBtn),
   );
 }
