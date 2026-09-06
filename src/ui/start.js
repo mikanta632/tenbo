@@ -200,7 +200,7 @@ export function renderStart(props) {
       h("div", { class: "label" }, "起家"),
       h(
         "div",
-        { class: "choice grid4" },
+        { class: "choice seat-choice" },
         order.map((key) =>
           h(
             "button",

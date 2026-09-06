@@ -106,6 +106,8 @@ function show(next) {
   else if (screen === "result" && resultId) renderResultScreen();
   else if (screen === "player" && playerId) renderPlayerScreen();
   else renderTabScreen();
+  // タブ画面のときだけ body のスクロールを止める（起動直後に下部バーが浮くのを防ぐ）
+  document.body.classList.toggle("tabs-screen", TAB_SCREENS.has(screen));
 }
 
 /** タブ付きの初期画面 */
