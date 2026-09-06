@@ -10,6 +10,7 @@
   --accent: #ffb300;
   --danger: #e0533c;
   --ph: 116px;                                  /* パネル群の高さ（ボタン列 + パネル） */
+  --adj-w: 52px;                                /* 点数パネルの右に置く点差ボタンの幅 */
   /* 左右パネル群が縦に収まる長さ: 卓面の高さ（画面 − 上部・バー・下部 ≈ 130px）から上下パネル群と隙間を引く */
   --pw-avail: calc(var(--app-h) - 2 * var(--ph) - 154px);
   /* 上下・左右とも同じ長さにする。小さい画面では収まる長さに全員が合わせる */
@@ -189,7 +190,8 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .pos-left   { width: var(--pw-side); left: calc(var(--ph) / 2 + 4px); transform: translate(-50%, -50%) rotate(90deg); }
 .pos-right  { width: var(--pw-side); left: calc(100% - var(--ph) / 2 - 4px); transform: translate(-50%, -50%) rotate(-90deg); }
 
-.pbtns { display: flex; gap: 8px; justify-content: center; height: 44px; flex: none; }
+/* ボタン行の幅は点数パネルにそろえる（右の点差ボタンのぶんだけ空ける） */
+.pbtns { display: flex; gap: 8px; height: 44px; flex: none; margin-right: calc(var(--adj-w) + 8px); }
 .ibtn {
   flex: 1 1 0; min-width: 0; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25);
   background: rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center;
@@ -212,11 +214,11 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .pmeta { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #ddd; white-space: nowrap; overflow: hidden; }
 .wind { font-weight: 700; font-size: 15px; color: var(--ink); }
 .panel.dealer .wind { color: var(--accent); }
-/* 起家の印。名前の行に混ぜると埋もれるので、枠の左上から少しはみ出させて赤で置く */
+/* 起家の印。名前の行に混ぜると埋もれるので、点数パネルの左端に赤い縦帯として置く */
 .chiicha {
-  position: absolute; top: -9px; left: 10px; z-index: 2;
-  font-size: 11px; font-weight: 700; line-height: 1.5;
-  color: #fff; background: var(--danger); border-radius: 5px; padding: 1px 7px;
+  position: absolute; top: 50%; left: -12px; transform: translateY(-50%); z-index: 2;
+  writing-mode: vertical-rl; font-size: 11px; font-weight: 700; letter-spacing: 1px;
+  color: #fff; background: var(--danger); border-radius: 5px; padding: 6px 2px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.5);
 }
 .pname { overflow: hidden; text-overflow: ellipsis; }
@@ -225,7 +227,7 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .pts { font-size: 34px; font-weight: 700; color: var(--digit); font-variant-numeric: tabular-nums; letter-spacing: 1px; line-height: 1; }
 .pts.neg { color: #ff6b57; }
 .adj {
-  flex: 0 0 52px; align-self: stretch;
+  flex: 0 0 var(--adj-w); align-self: stretch;
   background: #2a2a2a; border: 1px solid #555; border-radius: 10px; color: #ddd;
   display: flex; align-items: center; justify-content: center;
 }
