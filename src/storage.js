@@ -206,6 +206,13 @@ export function createStorage(ls = globalThis.localStorage, now = () => new Date
       write(KEYS.games, next);
       return next;
     },
+    /** 終了した対局を id で削除する（§8.5）。無ければ何もしない。 */
+    deleteGame(id) {
+      const games = this.loadGames();
+      const next = games.filter((g) => g.id !== id);
+      if (next.length !== games.length) write(KEYS.games, next);
+      return next;
+    },
     findGame(id) {
       return this.loadGames().find((g) => g.id === id) || null;
     },

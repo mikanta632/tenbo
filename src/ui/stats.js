@@ -2,6 +2,7 @@
 
 import { h } from "./dom.js";
 import { aggregate, derive } from "../stats.js";
+import { reduce, ranksOf } from "../reduce.js";
 import { fmtPoints } from "./format.js";
 
 const pct = (x) => (x === null ? "—" : `${(x * 100).toFixed(1)}%`);
@@ -9,9 +10,9 @@ const num = (x, d = 1) => (x === null ? "—" : x.toFixed(d));
 const signed = (x) => (x > 0 ? `+${x}` : String(x));
 
 /**
- * props: { games, roster, onBack, onPlayer(playerId) }
+ * props: { games, roster, onBack, onPlayer(playerId), onPickGame(gameId) }
  */
-export function renderStats({ games, roster, onBack, onPlayer }) {
+export function renderStats({ games, roster, onBack, onPlayer, onPickGame }) {
   const nameOf = (id) => (roster.find((p) => p.id === id) || { name: "?" }).name;
   const map = aggregate(games);
   const rows = [...map.entries()].map(([id, a]) => ({ id, name: nameOf(id), d: derive(a) })).sort((x, y) => y.d.ptSum - x.d.ptSum);
@@ -73,6 +74,24 @@ export function renderStats({ games, roster, onBack, onPlayer }) {
     ),
   );
 
+  // 対局一覧。行を選ぶと app.js 側が操作シートを出す（結果・編集・削除）
+  const gameList = h(
+    "div",
+    { class: "menu-list" },
+    games.map((g) => {
+      const st = reduce(g.events, g.rule);
+      const ranks = ranksOf(st.points);
+      const ord = [...Array(g.rule.playerCount).keys()].sort((a, b) => ranks[a] - ranks[b]);
+      const date = (g.endedAt || g.startedAt || "").slice(0, 16).replace("T", " ");
+      return h(
+        "button",
+        { type: "button", class: "menu-item", onclick: () => onPickGame(g.id) },
+        h("span", null, `${date} ・ ${g.rule.playerCount}人`),
+        h("span", { class: "menu-sub" }, ord.map((i) => `${nameOf(g.seats[i])} ${fmtPoints(st.points[i])}`).join(" / ")),
+      );
+    }),
+  );
+
   return h(
     "div",
     { class: "plain-screen stats-screen" },
@@ -85,9 +104,16 @@ export function renderStats({ games, roster, onBack, onPlayer }) {
     games.length === 0
       ? h("section", { class: "card" }, h("div", { class: "hint" }, "終了した対局がありません"))
       : [
-          h("section", { class: "card" }, h("h2", null, "対局"), h("div", { class: "stats-wrap" }, gameTable)),
-          h("section", { class: "card" }, h("h2", null, "局（チョンボの局は分母に含めない）"), h("div", { class: "stats-wrap" }, kyokuTable)),
+          h("section", { class: "card" }, h("h2", null, "対局ごとの成績"), h("div", { class: "stats-wrap" }, gameTable)),
+          h(
+            "section",
+            { class: "card" },
+            h("h2", null, "局ごとの成績"),
+            h("div", { class: "hint" }, "チョンボで流れた局は、その局のリーチ・副露も含めて分母に入れません。"),
+            h("div", { class: "stats-wrap" }, kyokuTable),
+          ),
           h("div", { class: "hint" }, "対局数が少ないうちは率の差に意味はほとんどありません。対局数と併せて見てください。"),
+          h("section", { class: "card" }, h("h2", null, "対局一覧"), h("div", { class: "hint" }, "行を選ぶと、結果を見る・局を編集する・削除する を選べます。"), gameList),
         ],
   );
 }

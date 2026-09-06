@@ -68,6 +68,18 @@ describe("storage", () => {
     assert.deepEqual(st.loadGames().map((g) => g.id), ["g_1", "g_2"]);
   });
 
+  test("deleteGame は id の対局だけを消す", () => {
+    const { st } = make();
+    st.init();
+    st.appendGame({ id: "g_1" });
+    st.appendGame({ id: "g_2" });
+    st.appendGame({ id: "g_3" });
+    assert.deepEqual(st.deleteGame("g_2").map((g) => g.id), ["g_3", "g_1"]);
+    assert.deepEqual(st.loadGames().map((g) => g.id), ["g_3", "g_1"]);
+    // 無い id は何もしない
+    assert.deepEqual(st.deleteGame("g_9").map((g) => g.id), ["g_3", "g_1"]);
+  });
+
   test("updateGame は順序を保って差し替える", () => {
     const { st } = make();
     st.init();

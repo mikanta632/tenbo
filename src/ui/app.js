@@ -210,8 +210,55 @@ function statsContent() {
       playerId = id;
       show("player");
     },
+    onPickGame: (id) => pickGame(id),
   });
 }
+
+/** 戦績タブの対局一覧で行を選んだとき。結果・編集・削除を選ばせる（§8.5）。 */
+function pickGame(id) {
+  const g = storage.findGame(id);
+  if (!g) return;
+  const date = (g.endedAt || g.startedAt || "").slice(0, 16).replace("T", " ");
+  resultBack = "stats";
+  closeSheet();
+  openSheetHandle = openActionSheet({
+    title: date,
+    items: [
+      {
+        label: "結果を見る",
+        onPick: () => {
+          resultId = id;
+          show("result");
+        },
+      },
+      {
+        label: "局を編集",
+        sub: "ログ画面で局の内容を直す",
+        onPick: () => {
+          logTarget = { kind: "finished", id };
+          show("log");
+        },
+      },
+      {
+        label: "削除",
+        sub: playerNames(g).join(" / "),
+        danger: true,
+        onPick: () => {
+          openSheetHandle = openConfirm({
+            title: "対局の削除",
+            message: `${date} の対局を削除します。元に戻せません。`,
+            okLabel: "削除する",
+            onOk: () => {
+              storage.deleteGame(id);
+              show("stats");
+            },
+          });
+        },
+      },
+    ],
+  });
+}
+
 
 function renderPlayerScreen() {
   stopElapsed();
