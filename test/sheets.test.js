@@ -58,17 +58,13 @@ test("手動修正は空欄を拒否し、明示的な 0 点や負数は確定�
   }
 });
 
-test("不正な設定 JSON を反映してもフォームが壊れず、修正して保存できる", (t) => {
+test("合計が 0 にならないウマは保存せず、直せば保存できる", (t) => {
   mockDom(t);
   const saved = [];
   const root = renderSettings({ presets: PRESETS, rulesFor: () => makeRule(), isCustom: () => false, onChange: (...args) => saved.push(args), version: "test" });
-  const area = () => root.find((el) => el.tag === "textarea");
-  const apply = () => root.find((el) => el.tag === "button" && el.children[0] === "JSON を反映").handlers.click();
-  area().value = JSON.stringify(makeRule({ uma: null }));
-  apply();
+  const uma = () => root.find((el) => el.className === "uma-row").children;
+  uma()[0].handlers.change({ target: { value: "30" } });
   assert.deepEqual(saved, []);
-  assert.ok(area(), "入力フォームを保持する");
-  area().value = JSON.stringify(makeRule({ rate: 0 }));
-  apply();
-  assert.deepEqual(saved, [[4, makeRule({ rate: 0 })]]);
+  uma()[1].handlers.change({ target: { value: "0" } });
+  assert.deepEqual(saved, [[4, makeRule({ uma: [30, 0, -10, -20] })]]);
 });

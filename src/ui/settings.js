@@ -2,7 +2,6 @@
 //
 // 変更はその場で保存する（mj.prefs.rules）。「標準に戻す」でプリセットに戻る。
 // 仕様が決まっていない項目（西入・チップ・同点の扱い）は表示だけして無効にする。
-// 全項目は最下部の JSON で直接編集できる。
 
 import { h, clear } from "./dom.js";
 import { validateRule } from "../rules.js";
@@ -192,16 +191,14 @@ export function renderSettings(props) {
       ),
     );
 
-    // ---- 標準に戻す / JSON ----
-    const jsonArea = h("textarea", { rows: "12", spellcheck: "false" }, JSON.stringify(rule, null, 2));
+    // ---- 標準に戻す ----
     root.append(
       section(
-        "上級者向け",
-        h("div", { class: "hint" }, "全項目を JSON で直接編集できます。反映すると保存されます。"),
-        jsonArea,
+        "リセット",
+        h("div", { class: "hint" }, `${n}人麻雀のルールをプリセットの値に戻します。`),
         h(
           "div",
-          { class: "sheet-actions two" },
+          { class: "sheet-actions" },
           h(
             "button",
             {
@@ -216,35 +213,6 @@ export function renderSettings(props) {
               },
             },
             "標準に戻す",
-          ),
-          h(
-            "button",
-            {
-              type: "button",
-              class: "btn-primary",
-              onclick: () => {
-                try {
-                  const parsed = JSON.parse(jsonArea.value);
-                  const errors = validateRule(parsed);
-                  if (errors.length) {
-                    setMsg("不正: " + errors.join(" / "), true);
-                    return;
-                  }
-                  if (parsed.playerCount !== pc) {
-                    setMsg(`playerCount は ${pc} にしてください`, true);
-                    return;
-                  }
-                  rule = parsed;
-                  commit();
-                  if (!msg.hidden && msg.classList.contains("error")) return;
-                  setMsg("JSON を反映して保存しました。");
-                  render();
-                } catch (e) {
-                  setMsg("JSON として読めません: " + e.message, true);
-                }
-              },
-            },
-            "JSON を反映",
           ),
         ),
       ),
