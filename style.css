@@ -189,18 +189,21 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .pos-left   { width: var(--pw-side); left: calc(var(--ph) / 2 + 4px); transform: translate(-50%, -50%) rotate(90deg); }
 .pos-right  { width: var(--pw-side); left: calc(100% - var(--ph) / 2 - 4px); transform: translate(-50%, -50%) rotate(-90deg); }
 
-.pbtns { display: flex; gap: 8px; justify-content: center; height: 40px; }
+.pbtns { display: flex; gap: 8px; justify-content: center; height: 44px; flex: none; }
 .ibtn {
-  flex: 0 0 96px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25);
+  flex: 1 1 0; min-width: 0; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25);
   background: rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center;
 }
+.ibtn svg { width: 60px; height: 22px; }
 .ibtn.on { background: var(--accent); border-color: var(--accent); }
 .ibtn.text { font-size: 18px; font-weight: 700; letter-spacing: 2px; }
 .ibtn.text.on { color: #111; }
 .ibtn:active { transform: scale(0.96); }
 
+/* 点数パネルと、その横の点差ボタン */
+.prow-outer { display: flex; gap: 8px; flex: 1; min-height: 0; }
 .panel {
-  flex: 1; background: var(--panel); border-radius: 12px; padding: 6px 10px;
+  flex: 1; min-width: 0; background: var(--panel); border-radius: 12px; padding: 5px 10px;
   display: flex; flex-direction: column; justify-content: space-between;
   border: 2px solid transparent; box-shadow: 0 2px 8px rgba(0,0,0,0.4);
 }
@@ -216,9 +219,11 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .pts { font-size: 34px; font-weight: 700; color: var(--digit); font-variant-numeric: tabular-nums; letter-spacing: 1px; line-height: 1; }
 .pts.neg { color: #ff6b57; }
 .adj {
-  background: #2a2a2a; border: 1px solid #555; border-radius: 8px; color: #ddd;
-  min-width: 48px; min-height: 36px; font-size: 14px;
+  flex: 0 0 52px; align-self: stretch;
+  background: #2a2a2a; border: 1px solid #555; border-radius: 10px; color: #ddd;
+  display: flex; align-items: center; justify-content: center;
 }
+.adj svg { width: 26px; height: 26px; }
 
 .btn-special {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);

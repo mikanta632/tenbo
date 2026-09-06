@@ -4,6 +4,10 @@ import { h, svg } from "./dom.js";
 import { dealerOf, canRiichi } from "../reduce.js";
 import { kyokuName, windName, fmtPoints, fmtDelta, fmtElapsed, seatPositions } from "./format.js";
 
+// 点差表示。プラスとマイナスを重ねた ± 。文字ではなく線画にして、リーチ棒の絵と調子を揃える
+const ICON_DIFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+  <path d="M12 4.5v10M7 9.5h10M7 19h10"/></svg>`;
+
 const ICON_RIICHI = `<svg viewBox="0 0 64 24" width="56" height="21" aria-hidden="true">
   <rect x="1" y="4" width="62" height="16" rx="4" fill="#f4f4f4" stroke="#999"/>
   <circle cx="32" cy="12" r="4.5" fill="#d33"/>
@@ -141,27 +145,27 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions, diff
       delta !== null
         ? h("span", { class: `pts point-diff${delta > 0 ? " ahead" : delta < 0 ? " behind" : " tied"}` }, fmtDelta(delta))
         : h("span", { class: `pts${state.points[seat] < 0 ? " neg" : ""}` }, fmtPoints(state.points[seat])),
-      h(
-        "button",
-        {
-          type: "button",
-          class: `adj${isReference ? " on" : ""}`,
-          "aria-label": "点差表示",
-          "aria-pressed": isReference ? "true" : "false",
-          onclick: (e) => {
-            e.stopPropagation();
-            actions.onDiff(seat);
-          },
-        },
-        "+/−",
-      ),
     ),
+  );
+
+  // 点差表示は点数枠の外、パネルの横に置く。枠の中に入れると点数の行の高さを押し上げ、
+  // 枠を縮めるとボタンも小さくなってしまう。外に出すとパネルの高さいっぱいの的になる
+  const diffBtn = h(
+    "button",
+    {
+      type: "button",
+      class: `adj${isReference ? " on" : ""}`,
+      "aria-label": "点差表示",
+      "aria-pressed": isReference ? "true" : "false",
+      onclick: () => actions.onDiff(seat),
+    },
+    svg(ICON_DIFF),
   );
 
   return h(
     "div",
     { class: `pgroup pos-${position}`, dataset: { seat: String(seat) } },
     h("div", { class: "pbtns" }, riichiBtn, meldBtn),
-    panel,
+    h("div", { class: "prow-outer" }, panel, diffBtn),
   );
 }
