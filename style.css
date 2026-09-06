@@ -203,7 +203,7 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 /* 点数パネルと、その横の点差ボタン */
 .prow-outer { display: flex; gap: 8px; flex: 1; min-height: 0; }
 .panel {
-  flex: 1; min-width: 0; background: var(--panel); border-radius: 12px; padding: 5px 10px;
+  position: relative; flex: 1; min-width: 0; background: var(--panel); border-radius: 12px; padding: 5px 10px;
   display: flex; flex-direction: column; justify-content: space-between;
   border: 2px solid transparent; box-shadow: 0 2px 8px rgba(0,0,0,0.4);
 }
@@ -212,7 +212,13 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .pmeta { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #ddd; white-space: nowrap; overflow: hidden; }
 .wind { font-weight: 700; font-size: 15px; color: var(--ink); }
 .panel.dealer .wind { color: var(--accent); }
-.chiicha { font-size: 11px; color: var(--muted); border: 1px solid var(--muted); border-radius: 4px; padding: 0 4px; }
+/* 起家の印。名前の行に混ぜると埋もれるので、枠の左上から少しはみ出させて赤で置く */
+.chiicha {
+  position: absolute; top: -9px; left: 10px; z-index: 2;
+  font-size: 11px; font-weight: 700; line-height: 1.5;
+  color: #fff; background: var(--danger); border-radius: 5px; padding: 1px 7px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
 .pname { overflow: hidden; text-overflow: ellipsis; }
 .flag { font-size: 11px; background: var(--danger); color: #fff; border-radius: 4px; padding: 1px 5px; }
 .prow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
