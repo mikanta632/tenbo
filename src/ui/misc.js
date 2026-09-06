@@ -3,7 +3,7 @@
 import { h } from "./dom.js";
 
 /**
- * props: { sound: { enabled }, version, gamesCount, metrics(), onSound({enabled}), onTestSound, onExport, onImport(file) }
+ * props: { sound: { enabled }, version, gamesCount, onSound({enabled}), onTestSound, onExport, onImport(file) }
  */
 export function renderMisc(props) {
   const s = props.sound;
@@ -47,10 +47,8 @@ export function renderMisc(props) {
       "section",
       { class: "card" },
       h("h2", null, "アプリ情報"),
-      h("div", { class: "kv" }, h("span", null, "版"), h("b", null, props.version)),
+      h("div", { class: "kv" }, h("span", null, "バージョン"), h("b", null, props.version)),
       updateBlock(props),
-      // 画面の高さが合わないときの切り分け用。値はすべて実測
-      props.metrics ? h("div", { class: "hint metrics" }, props.metrics()) : null,
     ),
   );
 }

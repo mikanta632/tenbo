@@ -245,7 +245,7 @@ export function renderSettings(props) {
           ),
         ),
       ),
-      h("div", { class: "hint" }, `版 ${props.version}`),
+      h("div", { class: "hint" }, `バージョン ${props.version}`),
     );
   }
 

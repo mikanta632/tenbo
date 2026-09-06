@@ -758,7 +758,7 @@ export function openMenu({ version, soundOn, onToggleSound, onTestSound, onAdjus
       h("button", { type: "button", class: "menu-item", onclick: onEndGame }, "対局を終了する（手動終局）"),
       h("button", { type: "button", class: "menu-item", onclick: onBackToStart }, "開始画面へ戻る（対局は保持）"),
     ),
-    h("div", { class: "hint" }, `版 ${version}`),
+    h("div", { class: "hint" }, `バージョン ${version}`),
   );
   return openSheet({ title: "メニュー", body });
 }

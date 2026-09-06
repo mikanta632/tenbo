@@ -324,8 +324,6 @@ function miscContent() {
     onExport: () => exportJson(),
     onImport: (file) => importJson(file),
     onCheckUpdate: (setStatus) => checkForUpdate(setStatus),
-    metrics: () =>
-      `表示 ${document.documentElement.clientHeight} / 内 ${window.innerHeight} / 画面 ${window.screen ? window.screen.height : "?"} / 下余白 ${safeAreaBottom()} / ${isStandalone() ? "ホーム画面" : "ブラウザ"}`,
   });
 }
 
@@ -911,15 +909,6 @@ function viewportHeight() {
   const screenHeight = (window.screen && window.screen.height) || 0;
   const diff = screenHeight - measured;
   return diff > 0 && diff <= 80 ? screenHeight : measured;
-}
-
-/** env(safe-area-inset-bottom) の実測値（px）。診断表示に使う */
-function safeAreaBottom() {
-  const probe = h("div", { style: "position:fixed;bottom:0;left:0;width:1px;height:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none" });
-  document.body.append(probe);
-  const value = Math.round(probe.getBoundingClientRect().height);
-  probe.remove();
-  return value;
 }
 window.addEventListener("resize", applyOrientation);
 window.addEventListener("orientationchange", () => setTimeout(applyOrientation, 50));
