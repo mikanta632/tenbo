@@ -803,15 +803,22 @@ function applyOrientation() {
     rootEl.style.setProperty("--app-w", `${h}px`);
     rootEl.style.setProperty("--app-h", `${w}px`);
   } else {
-    // 縦向きでは CSS の 100dvh に任せる。起動直後の innerHeight はホーム画面起動時に
-    // 実際より小さいことがあり、JS で固定すると下部のタブバーが浮く
     body.classList.remove("rotated");
     body.style.width = "";
     body.style.height = "";
     body.style.transform = "";
     rootEl.style.removeProperty("--app-w");
-    rootEl.style.removeProperty("--app-h");
+    // ホーム画面から起動したとき（standalone）は 100dvh が実際の画面より小さく出て、
+    // 下部のタブバーの下に隙間が残る。ツールバーの伸縮が無いので実測値をそのまま使う。
+    // Safari のタブでは上下のツールバーに追従する必要があるので CSS の 100dvh に任せる。
+    if (isStandalone()) rootEl.style.setProperty("--app-h", `${Math.max(h, rootEl.clientHeight)}px`);
+    else rootEl.style.removeProperty("--app-h");
   }
+}
+
+/** ホーム画面に追加したアイコンから起動したか */
+function isStandalone() {
+  return window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
 }
 window.addEventListener("resize", applyOrientation);
 window.addEventListener("orientationchange", () => setTimeout(applyOrientation, 50));
