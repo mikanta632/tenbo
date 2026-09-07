@@ -66,29 +66,62 @@ export function renderPlayer(props) {
     }
 
     const kv = (k, v) => h("div", { class: "kv" }, h("span", null, k), h("b", null, v));
+    const pts = (x) => (x === null ? "—" : fmtPoints(Math.round(x)));
+    const pc = props.scopePc || 4;
+    const renRate = d.games > 0 ? (d.rankDist[0] + d.rankDist[1]) / d.games : null;
+    const lastRate = d.games > 0 ? d.rankDist[pc - 1] / d.games : null;
+    const card = (title, ...items) => h("section", { class: "card" }, h("h2", null, title), h("div", { class: "kv-grid" }, items));
+
     root.append(
-      h(
-        "section",
-        { class: "card" },
-        h("h2", null, `${props.scopeLabel ? props.scopeLabel + " " : ""}通算（${d.games}対局）`),
-        h(
-          "div",
-          { class: "kv-grid" },
-          kv("平均順位", num(d.avgRank, 2)),
-          kv("順位分布", d.rankDist.slice(0, props.scopePc || d.rankDist.length).join(" / ")),
-          kv("平均素点", fmtPoints(Math.round(d.avgPoints))),
-          kv("通算 pt", signed(Math.round(d.ptSum * 10) / 10)),
-          kv("通算 円", signed(d.yenSum)),
-          kv("有効局", String(d.effective)),
-          kv("和了率", pct(d.agariRate)),
-          kv("放銃率", pct(d.houjuRate)),
-          kv("リーチ率", pct(d.riichiRate)),
-          kv("副露率", pct(d.meldRate)),
-          kv("平均和了", d.avgAgari === null ? "—" : fmtPoints(Math.round(d.avgAgari))),
-          kv("平均放銃", d.avgHouju === null ? "—" : fmtPoints(Math.round(d.avgHouju))),
-        ),
-        h("div", { class: "hint" }, "対局数が少ないうちは率の差に意味はほとんどありません。"),
+      card(
+        `${props.scopeLabel ? props.scopeLabel + " " : ""}通算（${d.games}対局）`,
+        kv("平均順位", num(d.avgRank, 2)),
+        kv("順位分布", d.rankDist.slice(0, pc).join(" / ")),
+        kv("連対率", pct(renRate)),
+        kv("ラス率", pct(lastRate)),
+        kv("トビ率", pct(d.tobiRate)),
+        kv("平均素点", pts(d.avgPoints)),
+        kv("最高素点", pts(d.maxPoints)),
+        kv("通算 pt", signed(Math.round(d.ptSum * 10) / 10)),
+        kv("通算 円", signed(d.yenSum)),
       ),
+      card(
+        `局（有効局 ${d.effective}）`,
+        kv("和了率", pct(d.agariRate)),
+        kv("放銃率", pct(d.houjuRate)),
+        kv("リーチ率", pct(d.riichiRate)),
+        kv("副露率", pct(d.meldRate)),
+        kv("加点率", pct(d.plusRate)),
+        kv("失点率", pct(d.minusRate)),
+      ),
+      card(
+        `和了（${d.agariCount}回）`,
+        kv("ツモ率", pct(d.tsumoRate)),
+        kv("平均打点", pts(d.avgAgari)),
+        kv("リーチ時", pts(d.avgRiichiAgari)),
+        kv("副露時", pts(d.avgMeldAgari)),
+        kv("ダマ時", pts(d.avgDamaAgari)),
+      ),
+      card(
+        `放銃（${d.houjuCount}回）`,
+        kv("平均放銃", pts(d.avgHouju)),
+        kv("リーチ中", pct(d.houjuRiichiRate)),
+        kv("副露中", pct(d.houjuMeldRate)),
+        kv("ダマ", pct(d.houjuDamaRate)),
+      ),
+      card(
+        `リーチ（${d.riichiCount}局）`,
+        kv("和了", pct(d.riichiAgariRate)),
+        kv("放銃", pct(d.riichiHoujuRate)),
+        kv("流局", pct(d.riichiRyuukyokuRate)),
+      ),
+      card(
+        `副露（${d.meldCount}局）`,
+        kv("和了", pct(d.meldAgariRate)),
+        kv("放銃", pct(d.meldHoujuRate)),
+        kv("流局", pct(d.meldRyuukyokuRate)),
+      ),
+      h("section", { class: "card" }, h("div", { class: "hint" }, "対局数が少ないうちは率の差に意味はほとんどありません。")),
     );
 
     const rows = list.map((x) => {

@@ -42,6 +42,32 @@ describe("gameStats", () => {
     assert.equal(seats[2].houjuSum, 3900);
     assert.equal(seats[0].agariSum, 1100); // 子ツモ 30符1翻 300/500 = 1100
   });
+  test("リーチ・副露・ツモの内訳と加点・失点を数える", () => {
+    const g = game(
+      "g1",
+      ["a", "b", "c", "d"],
+      riichi(1), ron(1, 2, 3, 30), // 東1: 1 がリーチ和了、2 がダマで放銃
+      meld(3), tsumo(0, 1, 30), // 東2: 0 がダマツモ、3 は副露のみ
+      riichi(2), meld(3), exhaustive([2, 3]), // 東3: 流局。2 はリーチ、3 は副露
+    );
+    const { seats } = gameStats(g);
+    assert.deepEqual(seats.map((s) => s.riichiAgari), [0, 1, 0, 0]);
+    assert.deepEqual(seats.map((s) => s.damaAgari), [1, 0, 0, 0]);
+    assert.deepEqual(seats.map((s) => s.tsumoAgari), [1, 0, 0, 0]);
+    assert.deepEqual(seats.map((s) => s.damaHouju), [0, 0, 1, 0]);
+    assert.deepEqual(seats.map((s) => s.riichiHouju), [0, 0, 0, 0]);
+    assert.deepEqual(seats.map((s) => s.riichiRyuukyoku), [0, 0, 1, 0]);
+    assert.deepEqual(seats.map((s) => s.meldRyuukyoku), [0, 0, 0, 1]);
+    assert.deepEqual(seats.map((s) => s.meld), [0, 0, 0, 2]);
+    assert.equal(seats[1].riichiAgariSum, seats[1].agariSum);
+    assert.equal(seats[0].damaAgariSum, seats[0].agariSum);
+    // 加点・失点は局末の deltas の符号で数える。0 はどちらでもない
+    // 0: 東1は無関係／東2ツモ／東3ノーテン、1: 和了・ツモられ・ノーテン、
+    // 2: 放銃・ツモられ・テンパイ、3: 無関係・ツモられ・テンパイ
+    assert.deepEqual(seats.map((s) => s.plus), [1, 1, 1, 1]);
+    assert.deepEqual(seats.map((s) => s.minus), [1, 2, 2, 1]);
+    assert.deepEqual(seats.map((s) => s.tobi), [0, 0, 0, 0]);
+  });
   test("順位と pt は精算から取る", () => {
     const g = game("g1", ["a", "b", "c", "d"], ron(0, 1, 5, 30));
     const { seats } = gameStats(g);

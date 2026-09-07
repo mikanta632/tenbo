@@ -28,6 +28,7 @@ function carry(playerId, playerCount) {
     pointsSum: 90000,
     ptSum: -1.5,
     yenSum: -300,
+    maxPoints: 52000,
     effective: 24,
     agari: 6,
     houju: 3,
@@ -35,6 +36,21 @@ function carry(playerId, playerCount) {
     meld: 4,
     agariSum: 48000,
     houjuSum: 27000,
+    tsumoAgari: 3,
+    riichiAgari: 4,
+    meldAgari: 1,
+    damaAgari: 1,
+    riichiAgariSum: 36000,
+    meldAgariSum: 6000,
+    damaAgariSum: 6000,
+    riichiHouju: 1,
+    meldHouju: 1,
+    damaHouju: 1,
+    riichiRyuukyoku: 2,
+    meldRyuukyoku: 1,
+    plus: 8,
+    minus: 13,
+    tobi: 0,
   };
 }
 
@@ -124,6 +140,14 @@ describe("storage", () => {
     const out = migrate({ meta: null, roster: [], current: null, games: [] });
     assert.equal(out.meta.schemaVersion, SCHEMA_VERSION);
     assert.deepEqual(out.carry, []);
+  });
+
+  test("版 2 の carry は増えた項目を 0 で埋めて上げる", () => {
+    const old = { playerId: "a", playerCount: 3, games: 1, rankDist: [1, 0, 0, 0], pointsSum: 40000, ptSum: 10, yenSum: 300, effective: 8, agari: 2, houju: 1, riichi: 3, meld: 1, agariSum: 16000, houjuSum: 8000 };
+    const out = migrate({ meta: { schemaVersion: 2 }, roster: [], current: null, games: [], carry: [old] });
+    assert.equal(out.carry[0].agari, 2); // 元の値は残る
+    assert.equal(out.carry[0].riichiAgari, 0);
+    assert.equal(out.carry[0].maxPoints, null);
   });
 
   test("版 1 のデータに手で足した carry はマイグレーションで消えない", () => {

@@ -4,8 +4,9 @@
 
 import { assertRule } from "./rules.js";
 import { reduce } from "./reduce.js";
+import { COUNTERS } from "./stats.js";
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const KEYS = Object.freeze({
   meta: "mj.meta",
@@ -24,6 +25,15 @@ const MIGRATIONS = {
   0: (data) => data,
   // 1 → 2: 旧アプリからの繰越（§8.5）を空で足す
   1: (data) => ({ ...data, carry: data.carry ?? [] }),
+  // 2 → 3: 繰越に増えた集計項目を 0 で埋める（元の繰越には無かったので不明扱い）
+  2: (data) => ({
+    ...data,
+    carry: (data.carry ?? []).map((c) => ({
+      ...Object.fromEntries(COUNTERS.map((key) => [key, 0])),
+      maxPoints: null,
+      ...c,
+    })),
+  }),
 };
 
 /**
@@ -117,8 +127,9 @@ export function prepareImport(data) {
     check(c.playerCount === 3 || c.playerCount === 4, "carry の playerCount");
     check(Array.isArray(c.rankDist) && c.rankDist.length === 4 && c.rankDist.every(counter), "carry の rankDist");
     check(counter(c.games) && c.games === c.rankDist.reduce((a, b) => a + b, 0), "carry の games と rankDist の不一致");
-    for (const key of ["effective", "agari", "houju", "riichi", "meld"]) check(counter(c[key]), `carry の ${key}`);
-    for (const key of ["pointsSum", "ptSum", "yenSum", "agariSum", "houjuSum"]) check(Number.isFinite(c[key]), `carry の ${key}`);
+    for (const key of COUNTERS) check(key.endsWith("Sum") ? Number.isFinite(c[key]) : counter(c[key]), `carry の ${key}`);
+    for (const key of ["pointsSum", "ptSum", "yenSum"]) check(Number.isFinite(c[key]), `carry の ${key}`);
+    check(c.maxPoints == null || Number.isFinite(c.maxPoints), "carry の maxPoints");
   }
   check(new Set(carry.map((c) => `${c.playerId}/${c.playerCount}`)).size === carry.length, "carry の重複");
   return migrated;
