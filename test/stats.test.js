@@ -3,6 +3,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { gameStats, aggregate, derive, playerGames, combineGames } from "../src/stats.js";
+import { ptSeries } from "../src/ui/player.js";
 import { makeRule } from "../src/rules.js";
 import { appendEvent } from "../src/edit.js";
 
@@ -131,6 +132,16 @@ describe("aggregate / derive", () => {
     const only = derive(aggregate([], [{ ...c, playerId: "z" }]).get("z"));
     assert.equal(only.games, 4);
     assert.equal(only.agariRate, 8 / 32);
+  });
+});
+
+describe("ptSeries", () => {
+  test("新しい順の一覧を古い順に積み上げ、0 から始める", () => {
+    const list = [{ pt: 5 }, { pt: -20 }, { pt: 10 }]; // 新しい順（古い順では 10, −20, 5）
+    assert.deepEqual(ptSeries(list), [0, 10, -10, -5]);
+  });
+  test("対局が無ければ 0 だけ", () => {
+    assert.deepEqual(ptSeries([]), [0]);
   });
 });
 

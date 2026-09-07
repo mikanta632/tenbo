@@ -144,6 +144,7 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .rank-badge.r4 { background: rgba(224,83,60,0.6); }
 .start-screen h2 { font-size: 16px; margin: 0 0 10px; }
 .ver { font-size: 12px; color: var(--muted); font-weight: normal; }
+.pt-chart { display: block; width: 100%; height: auto; }
 .card { background: rgba(0,0,0,0.35); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
 .row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
 .row > span:first-child { min-width: 5.5em; color: var(--muted); font-size: 14px; }

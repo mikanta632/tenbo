@@ -1,12 +1,48 @@
 // プレイヤー個人ページ（docs/design.md §8.5）。通算成績、対局一覧、改名。
 
-import { h, clear } from "./dom.js";
+import { h, clear, svg } from "./dom.js";
 import { aggregate, derive, playerGames } from "../stats.js";
 import { fmtPoints, gameDateTime } from "./format.js";
 
 const pct = (x) => (x === null ? "—" : `${(x * 100).toFixed(1)}%`);
 const num = (x, d = 1) => (x === null ? "—" : x.toFixed(d));
 const signed = (x) => (x > 0 ? `+${x}` : String(x));
+
+/**
+ * 累積 pt の系列。list は新しい順なので古い順に直し、0 から積み上げる。
+ * 繰越（旧アプリ分）は対局単位を持たないので、この系列には入らない。
+ */
+export function ptSeries(list) {
+  const values = [0];
+  let sum = 0;
+  for (const x of [...list].reverse()) values.push((sum += x.pt));
+  return values;
+}
+
+/** 累積 pt の折れ線（§8.5）。SVG を組み立てるだけ */
+function ptChart(list) {
+  const W = 320;
+  const H = 110;
+  const PAD = 10;
+  const values = ptSeries(list);
+  const max = Math.max(...values);
+  const min = Math.min(...values); // 系列は 0 から始まるので 0 は必ず範囲に入る
+  const span = max - min || 1;
+  const px = (i) => PAD + (i * (W - PAD * 2)) / Math.max(values.length - 1, 1);
+  const py = (v) => PAD + ((max - v) * (H - PAD * 2)) / span;
+  const last = values[values.length - 1];
+  const color = last > 0 ? "#7fe3a1" : last < 0 ? "#ff9d8c" : "#b9c9bf";
+  const points = values.map((v, i) => `${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(" ");
+  // 目盛りは最大・最小の2つだけ。終点の丸と重ならないよう左端に置く
+  const label = (v, y) => `<text x="${PAD}" y="${y}" font-size="10" fill="#b9c9bf">${v > 0 ? "+" : ""}${Math.round(v)}</text>`;
+  return svg(`<svg class="pt-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="累積 pt の推移">
+    <line x1="${PAD}" y1="${py(0).toFixed(1)}" x2="${W - PAD}" y2="${py(0).toFixed(1)}" stroke="rgba(255,255,255,0.28)" stroke-width="1" stroke-dasharray="3 3"/>
+    <polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${px(values.length - 1).toFixed(1)}" cy="${py(last).toFixed(1)}" r="3" fill="${color}"/>
+    ${max > 0 ? label(max, PAD + 4) : ""}
+    ${min < 0 ? label(min, H - PAD + 2) : ""}
+  </svg>`);
+}
 
 /**
  * props: { playerId, roster, games, carry, scopeLabel, scopePc, onBack, onOpenResult(gameId), onRename(playerId, name) }
@@ -142,6 +178,9 @@ export function renderPlayer(props) {
         h("span", { class: "menu-sub" }, `${date} ・ ${g.rule.playerCount}人 ・ ${others}`),
       );
     });
+    if (list.length >= 2) {
+      root.append(h("section", { class: "card" }, h("h2", null, `pt の推移（${list.length}対局）`), ptChart(list)));
+    }
     if (rows.length > 0) root.append(h("section", { class: "card" }, h("h2", null, "対局一覧（新しい順）"), h("div", { class: "menu-list" }, rows)));
   }
 
