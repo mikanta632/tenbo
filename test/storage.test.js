@@ -18,6 +18,26 @@ function backup() {
   };
 }
 
+/** 検証を通る最小の Carry */
+function carry(playerId, playerCount) {
+  return {
+    playerId,
+    playerCount,
+    games: 3,
+    rankDist: [1, 1, 1, 0],
+    pointsSum: 90000,
+    ptSum: -1.5,
+    yenSum: -300,
+    effective: 24,
+    agari: 6,
+    houju: 3,
+    riichi: 7,
+    meld: 4,
+    agariSum: 48000,
+    houjuSum: 27000,
+  };
+}
+
 function make() {
   const ls = memoryStorage();
   let tick = 0;
@@ -103,6 +123,17 @@ describe("storage", () => {
   test("migrate は版 0 のデータを最新版に上げる", () => {
     const out = migrate({ meta: null, roster: [], current: null, games: [] });
     assert.equal(out.meta.schemaVersion, SCHEMA_VERSION);
+    assert.deepEqual(out.carry, []);
+  });
+
+  test("carry を含めて export / import できる", () => {
+    const { st } = make();
+    st.init();
+    const data = backup();
+    data.carry = [carry("a", 3)];
+    st.importAll(data);
+    assert.deepEqual(st.loadCarry(), data.carry);
+    assert.deepEqual(st.exportAll().carry, data.carry);
   });
 
   test("export / import の往復", () => {
@@ -132,6 +163,14 @@ describe("storage", () => {
       (d) => { d.games[0].settlement = {}; },
       (d) => { d.meta.schemaVersion = SCHEMA_VERSION + 1; },
       (d) => { d.meta.schemaVersion = "1"; },
+      (d) => { d.carry = [null]; },
+      (d) => { d.carry = [{ ...carry("a", 3), playerCount: 2 }]; },
+      (d) => { d.carry = [{ ...carry("a", 3), playerId: "" }]; },
+      (d) => { d.carry = [{ ...carry("a", 3), rankDist: [1, 0, 0] }]; },
+      (d) => { d.carry = [{ ...carry("a", 3), games: 5 }]; }, // rankDist の合計と合わない
+      (d) => { d.carry = [{ ...carry("a", 3), agari: 1.5 }]; },
+      (d) => { d.carry = [{ ...carry("a", 3), ptSum: null }]; },
+      (d) => { d.carry = [carry("a", 3), carry("a", 3)]; },
     ];
     for (const corrupt of invalid) {
       const { st } = make();
@@ -147,7 +186,7 @@ describe("storage", () => {
   });
 
   test("インポートの各書き込みが容量不足で失敗したら元のデータへ戻す", () => {
-    for (const failedKey of [KEYS.roster, KEYS.current, KEYS.games, KEYS.meta]) {
+    for (const failedKey of [KEYS.roster, KEYS.current, KEYS.games, KEYS.carry, KEYS.meta]) {
       const ls = memoryStorage();
       ls.setItem("mj.prefs", '{"sound":"off"}');
       const original = createStorage(ls);

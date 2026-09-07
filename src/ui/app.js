@@ -212,6 +212,7 @@ function statsContent() {
   return renderStats({
     games: storage.loadGames(),
     roster: storage.loadRoster(),
+    carry: storage.loadCarry(),
     onBack: null,
     initialTab: statsTab,
     onTab: (key) => (statsTab = key),
@@ -293,6 +294,7 @@ function renderPlayerScreen() {
       playerId,
       roster: storage.loadRoster(),
       games: storage.loadGames().filter((g) => g.rule.playerCount === statsPc),
+      carry: storage.loadCarry().filter((c) => c.playerCount === statsPc),
       scopeLabel: `${statsPc}人麻雀`,
       scopePc: statsPc,
       onBack: () => show("stats"),

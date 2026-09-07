@@ -9,8 +9,8 @@ const num = (x, d = 1) => (x === null ? "—" : x.toFixed(d));
 const signed = (x) => (x > 0 ? `+${x}` : String(x));
 
 /**
- * props: { playerId, roster, games, scopeLabel, scopePc, onBack, onOpenResult(gameId), onRename(playerId, name) }
- * games は戦績タブで選んだ人数（4人／3人）に絞ったもの。scopeLabel はその見出し。
+ * props: { playerId, roster, games, carry, scopeLabel, scopePc, onBack, onOpenResult(gameId), onRename(playerId, name) }
+ * games は戦績タブで選んだ人数（4人／3人）に絞ったもの。carry も同じ人数に絞る。scopeLabel はその見出し。
  */
 export function renderPlayer(props) {
   const root = h("div", { class: "plain-screen player-screen" });
@@ -20,7 +20,7 @@ export function renderPlayer(props) {
     clear(root);
     const player = props.roster.find((p) => p.id === props.playerId) || { id: props.playerId, name: "?" };
     const nameOf = (id) => (props.roster.find((p) => p.id === id) || { name: "?" }).name;
-    const acc = aggregate(props.games).get(props.playerId);
+    const acc = aggregate(props.games, props.carry || []).get(props.playerId);
     const d = acc ? derive(acc) : null;
     const list = playerGames(props.games, props.playerId);
 
@@ -109,7 +109,7 @@ export function renderPlayer(props) {
         h("span", { class: "menu-sub" }, `${date} ・ ${g.rule.playerCount}人 ・ ${others}`),
       );
     });
-    root.append(h("section", { class: "card" }, h("h2", null, "対局一覧（新しい順）"), h("div", { class: "menu-list" }, rows)));
+    if (rows.length > 0) root.append(h("section", { class: "card" }, h("h2", null, "対局一覧（新しい順）"), h("div", { class: "menu-list" }, rows)));
   }
 
   render();

@@ -5,13 +5,14 @@
 import { assertRule } from "./rules.js";
 import { reduce } from "./reduce.js";
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const KEYS = Object.freeze({
   meta: "mj.meta",
   roster: "mj.roster",
   current: "mj.current",
   games: "mj.games",
+  carry: "mj.carry",
 });
 
 /**
@@ -21,10 +22,12 @@ export const KEYS = Object.freeze({
 const MIGRATIONS = {
   // 0 → 1: 初版。何もしない
   0: (data) => data,
+  // 1 → 2: 旧アプリからの繰越（§8.5）を空で足す
+  1: (data) => ({ ...data, carry: [] }),
 };
 
 /**
- * 保存データ全体 { meta, roster, current, games } を最新の schemaVersion に上げる。
+ * 保存データ全体 { meta, roster, current, games, carry } を最新の schemaVersion に上げる。
  */
 export function migrate(data) {
   if (!isObject(data)) throw new Error("バックアップはオブジェクトである必要があります");
@@ -106,6 +109,18 @@ export function prepareImport(data) {
     }
   }
   check(new Set(migrated.games.map((g) => g.id)).size === migrated.games.length, "games の ID 重複");
+  const carry = migrated.carry ?? [];
+  check(Array.isArray(carry), "carry");
+  const counter = (value) => Number.isInteger(value) && value >= 0;
+  for (const c of carry) {
+    check(isObject(c) && id(c.playerId), "carry の playerId");
+    check(c.playerCount === 3 || c.playerCount === 4, "carry の playerCount");
+    check(Array.isArray(c.rankDist) && c.rankDist.length === 4 && c.rankDist.every(counter), "carry の rankDist");
+    check(counter(c.games) && c.games === c.rankDist.reduce((a, b) => a + b, 0), "carry の games と rankDist の不一致");
+    for (const key of ["effective", "agari", "houju", "riichi", "meld"]) check(counter(c[key]), `carry の ${key}`);
+    for (const key of ["pointsSum", "ptSum", "yenSum", "agariSum", "houjuSum"]) check(Number.isFinite(c[key]), `carry の ${key}`);
+  }
+  check(new Set(carry.map((c) => `${c.playerId}/${c.playerCount}`)).size === carry.length, "carry の重複");
   return migrated;
 }
 
@@ -135,6 +150,7 @@ export function createStorage(ls = globalThis.localStorage, now = () => new Date
         roster: read(KEYS.roster, []),
         current: read(KEYS.current, null),
         games: read(KEYS.games, []),
+        carry: read(KEYS.carry, []),
       };
       const version = (data.meta && data.meta.schemaVersion) || 0;
       if (version < SCHEMA_VERSION) {
@@ -142,6 +158,7 @@ export function createStorage(ls = globalThis.localStorage, now = () => new Date
         ls.setItem(KEYS.roster, JSON.stringify(migrated.roster));
         ls.setItem(KEYS.current, JSON.stringify(migrated.current));
         ls.setItem(KEYS.games, JSON.stringify(migrated.games));
+        ls.setItem(KEYS.carry, JSON.stringify(migrated.carry ?? []));
         ls.setItem(KEYS.meta, JSON.stringify({ schemaVersion: SCHEMA_VERSION, updatedAt: now() }));
       }
     },
@@ -217,6 +234,14 @@ export function createStorage(ls = globalThis.localStorage, now = () => new Date
       return this.loadGames().find((g) => g.id === id) || null;
     },
 
+    // --- carry（旧アプリからの繰越。§8.5） ---
+    loadCarry() {
+      return read(KEYS.carry, []);
+    },
+    saveCarry(carry) {
+      write(KEYS.carry, carry);
+    },
+
     // --- エクスポート／インポート（§9.4） ---
     exportAll() {
       return {
@@ -224,6 +249,7 @@ export function createStorage(ls = globalThis.localStorage, now = () => new Date
         roster: this.loadRoster(),
         current: this.loadCurrent(),
         games: this.loadGames(),
+        carry: this.loadCarry(),
       };
     },
     importAll(data) {
@@ -232,6 +258,7 @@ export function createStorage(ls = globalThis.localStorage, now = () => new Date
         [KEYS.roster, migrated.roster],
         [KEYS.current, migrated.current ?? null],
         [KEYS.games, migrated.games],
+        [KEYS.carry, migrated.carry ?? []],
         [KEYS.meta, { schemaVersion: SCHEMA_VERSION, updatedAt: now() }],
       ].map(([key, value]) => [key, JSON.stringify(value), ls.getItem(key)]);
       const written = [];

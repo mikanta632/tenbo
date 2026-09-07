@@ -23,7 +23,7 @@ const FILTERS = [
 
 /**
  * props: {
- *   games, roster, onBack, initialTab, onTab(key), initialPc, onPc(n),
+ *   games, roster, carry, onBack, initialTab, onTab(key), initialPc, onPc(n),
  *   onPlayer(playerId), onPickGame(gameId), onSettle(gameIds), initialListState, onListState(state), now
  * }
  */
@@ -262,7 +262,7 @@ export function renderStats(props) {
 
     // 記録が無くても、登録してあるプレイヤーは名前を直せるように一覧へ出す。
     // roster から消えたが対局には残っている ID も落とさない。
-    const map = aggregate(target);
+    const map = aggregate(target, (props.carry || []).filter((c) => c.playerCount === pc));
     const ids = [...new Set([...roster.map((p) => p.id), ...map.keys()])];
     const rows = ids.map((id) => ({ id, name: nameOf(id), d: map.has(id) ? derive(map.get(id)) : null }));
     // 記録のある人を通算 pt の多い順に。記録の無い人はその後ろへ roster の順で並べる

@@ -84,8 +84,11 @@ export function gameStats(game) {
 
 /**
  * 複数対局をプレイヤーごとに合算する。Map<playerId, acc>
+ *
+ * carry は旧アプリからの繰越（§8.5）。対局単位の記録を持たないので、集計値のまま足し込む。
+ * 呼び出し側で人数（playerCount）を games と揃えておくこと。
  */
-export function aggregate(games) {
+export function aggregate(games, carry = []) {
   const map = new Map();
   for (const game of games) {
     const { seats } = gameStats(game);
@@ -106,6 +109,16 @@ export function aggregate(games) {
       a.agariSum += s.agariSum;
       a.houjuSum += s.houjuSum;
     }
+  }
+  for (const c of carry) {
+    if (!map.has(c.playerId)) map.set(c.playerId, emptyAcc());
+    const a = map.get(c.playerId);
+    a.games += c.games;
+    c.rankDist.forEach((count, rank) => {
+      a.rankDist[rank] += count;
+      a.rankSum += (rank + 1) * count;
+    });
+    for (const key of ["pointsSum", "ptSum", "yenSum", "effective", "agari", "houju", "riichi", "meld", "agariSum", "houjuSum"]) a[key] += c[key];
   }
   return map;
 }

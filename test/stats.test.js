@@ -74,6 +74,38 @@ describe("aggregate / derive", () => {
   test("対局が無ければ空", () => {
     assert.equal(aggregate([]).size, 0);
   });
+  test("旧アプリからの繰越を集計値のまま足す", () => {
+    const g = game("g1", ["a", "b", "c", "d"], ron(0, 1, 5, 30));
+    const c = {
+      playerId: "a",
+      playerCount: 4,
+      games: 4,
+      rankDist: [2, 1, 1, 0],
+      pointsSum: 120000,
+      ptSum: 30,
+      yenSum: 900,
+      effective: 32,
+      agari: 8,
+      houju: 4,
+      riichi: 10,
+      meld: 5,
+      agariSum: 64000,
+      houjuSum: 32000,
+    };
+    const withCarry = derive(aggregate([g], [c]).get("a"));
+    const without = derive(aggregate([g]).get("a"));
+    assert.equal(withCarry.games, without.games + 4);
+    assert.deepEqual(withCarry.rankDist, [without.rankDist[0] + 2, without.rankDist[1] + 1, without.rankDist[2] + 1, without.rankDist[3]]);
+    assert.equal(withCarry.avgRank, (1 + 1 * 2 + 2 + 3) / 5); // 繰越の順位分布も平均順位に効く
+    assert.equal(withCarry.effective, without.effective + 32);
+    assert.equal(withCarry.ptSum, without.ptSum + 30);
+    assert.equal(withCarry.yenSum, without.yenSum + 900);
+    assert.equal(withCarry.avgAgari, (without.avgAgari * 1 + 64000) / 9);
+    // 繰越だけのプレイヤーも集計に出る
+    const only = derive(aggregate([], [{ ...c, playerId: "z" }]).get("z"));
+    assert.equal(only.games, 4);
+    assert.equal(only.agariRate, 8 / 32);
+  });
 });
 
 describe("playerGames", () => {
