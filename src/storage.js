@@ -23,7 +23,7 @@ const MIGRATIONS = {
   // 0 → 1: 初版。何もしない
   0: (data) => data,
   // 1 → 2: 旧アプリからの繰越（§8.5）を空で足す
-  1: (data) => ({ ...data, carry: [] }),
+  1: (data) => ({ ...data, carry: data.carry ?? [] }),
 };
 
 /**

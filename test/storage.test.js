@@ -126,6 +126,11 @@ describe("storage", () => {
     assert.deepEqual(out.carry, []);
   });
 
+  test("版 1 のデータに手で足した carry はマイグレーションで消えない", () => {
+    const out = migrate({ meta: { schemaVersion: 1 }, roster: [], current: null, games: [], carry: [carry("a", 3)] });
+    assert.deepEqual(out.carry, [carry("a", 3)]);
+  });
+
   test("carry を含めて export / import できる", () => {
     const { st } = make();
     st.init();
