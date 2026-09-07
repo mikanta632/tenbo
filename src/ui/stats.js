@@ -277,7 +277,7 @@ export function renderStats(props) {
       h(
         "section",
         { class: "card" },
-        h("h2", null, `${pc}人麻雀（${target.length}対局）`),
+        h("h2", null, `${pc}人麻雀`),
         h(
           "table",
           { class: "rtable" },
