@@ -109,7 +109,7 @@ export function renderPlayer(props) {
 
     root.append(
       h("header", { class: "plain-top" }, h("button", { type: "button", class: "btn-flat", onclick: props.onBack }, "戻る"), h("div", { class: "plain-title" }, "プレイヤー")),
-      h("section", { class: "card" }, nameBlock, h("div", { class: "hint" }, "名前を変えても過去の対局は同じプレイヤーとして扱われます（ID で参照しています）")),
+      h("section", { class: "card" }, nameBlock),
     );
 
     if (!d) {
@@ -174,7 +174,6 @@ export function renderPlayer(props) {
         sub(`副露（${d.meldCount}局）`),
         grid(kv("和了", pct(d.meldAgariRate)), kv("放銃", pct(d.meldHoujuRate)), kv("流局", pct(d.meldRyuukyokuRate))),
       ),
-      h("section", { class: "card" }, h("div", { class: "hint" }, "対局数が少ないうちは率の差に意味はほとんどありません。")),
     );
 
     const rows = list.map((x) => {

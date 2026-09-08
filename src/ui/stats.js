@@ -267,7 +267,7 @@ export function renderStats(props) {
     rows.sort((x, y) => (x.d ? 0 : 1) - (y.d ? 0 : 1) || (x.d && y.d ? y.d.ptSum - x.d.ptSum : 0));
 
     if (rows.length === 0) {
-      root.append(h("section", { class: "card" }, h("div", { class: "hint" }, "プレイヤーがいません。対局タブで名前を追加してください。")));
+      root.append(h("section", { class: "card" }, h("div", { class: "hint" }, "プレイヤーがいません")));
       return;
     }
 

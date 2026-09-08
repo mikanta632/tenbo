@@ -3,7 +3,7 @@
 // ウマは全順位をまとめて保存し、その他の変更はその場で保存する（mj.prefs.rules）。
 // 仕様が決まっていない項目（西入・チップ・同点の扱い）は表示だけして無効にする。
 
-import { h, clear } from "./dom.js";
+import { h, clear, append } from "./dom.js";
 import { validateRule } from "../rules.js";
 
 /**
@@ -69,7 +69,6 @@ export function renderSettings(props) {
       reset.disabled = !dirty;
     };
     const editor = h("div", { class: "uma-editor" },
-      h("div", { class: "label" }, "ウマ"),
       h("div", { class: "uma-row" }, umaDraft.map((value, i) => h("label", null, `${i + 1}位`, h("input", {
         type: "number", step: "any", inputmode: "decimal", value, "aria-label": `${i + 1}位のウマ`,
         oninput: (e) => { umaDraft[i] = e.target.value; update(); },
@@ -124,7 +123,8 @@ export function renderSettings(props) {
       h("label", { class: "row" }, h("span", null, label), control, note ? h("span", { class: "row-note" }, note) : null);
     const section = (title, ...rows) => h("section", { class: "card" }, h("h2", null, title), ...rows);
 
-    root.append(
+    append(
+      root,
       h("header", { class: "plain-top" }, h("div", { class: "plain-title" }, "設定")),
       h(
         "div",
@@ -147,7 +147,7 @@ export function renderSettings(props) {
           ),
         ),
       ),
-      h("div", { class: "hint" }, `${n}人麻雀${props.isCustom(pc) ? "（標準から変更あり）" : "の標準ルール"}。ウマは「ウマを保存」、その他は変更時に保存され、次の対局から使われます。`),
+      props.isCustom(pc) ? h("div", { class: "hint" }, "標準から変更あり") : null,
       msg,
     );
 
@@ -184,10 +184,10 @@ export function renderSettings(props) {
       ),
     );
 
-    // ---- 結果関連 ----
+    // ---- ウマ ----
     root.append(
       section(
-        "結果関連",
+        "ウマ",
         umaEditor(),
         row("端数処理", selectInput("ptRounding", [["round5", "五捨六入"], ["none", "小数のまま"]])),
         row("同点の扱い", selectInput("tieBreak", [["chiicha", "起家に近い方が上位"]], { disabled: true }), "これのみ"),
@@ -223,7 +223,6 @@ export function renderSettings(props) {
     root.append(
       section(
         "リセット",
-        h("div", { class: "hint" }, `${n}人麻雀のルールをプリセットの値に戻します。`),
         h(
           "div",
           { class: "sheet-actions" },

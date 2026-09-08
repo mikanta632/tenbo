@@ -184,7 +184,6 @@ export function renderStart(props) {
 
     // 配置図: 上 / 左 右 / 下
     sec.append(
-      h("div", { class: "label" }, n === 3 ? "座っている位置で選ぶ。空いている席は「空席」にする" : "座っている位置で選ぶ（画面はこの向きで置く）"),
       h(
         "div",
         { class: "seat-grid" },

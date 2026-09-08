@@ -43,7 +43,6 @@ export function renderResult({ game, names, settlement: s, title, onBack, onLog,
     s.kyotakuToTop > 0 ? h("div", { class: "kv" }, h("span", null, "残り供託"), h("b", null, `${fmtPoints(s.kyotakuToTop)} をトップに加算`)) : null,
     s.kyotakuRemain > 0 ? h("div", { class: "kv" }, h("span", null, "残り供託"), h("b", null, `${s.kyotakuRemain}本（場に残す）`)) : null,
     h("div", { class: "kv" }, h("span", null, "卓外差額（手動修正の合計）"), h("b", null, fmtDelta(s.outsideDiff))),
-    rule.ptRounding === "none" ? null : h("div", { class: "hint" }, "pt は五捨六入。端数とオカはトップが引き受けます。"),
   ];
 
   return h(
@@ -64,7 +63,6 @@ export function renderResult({ game, names, settlement: s, title, onBack, onLog,
           "section",
           { class: "card" },
           h("h2", null, "バックアップ"),
-          h("div", { class: "hint" }, "データは端末内だけにあります。終局ごとにエクスポートしておくと安全です。"),
           h("div", { class: "sheet-actions" }, h("button", { type: "button", class: "btn-secondary", onclick: onExport }, "JSON をエクスポート")),
         )
       : null,

@@ -27,14 +27,13 @@ export function renderMisc(props) {
       { class: "card" },
       h("h2", null, "効果音"),
       h("label", { class: "row" }, h("span", null, "効果音"), h("input", { type: "checkbox", checked: s.enabled, onchange: (e) => props.onSound({ enabled: e.target.checked }) })),
-      h("div", { class: "hint" }, "本体の消音スイッチが入っていると鳴りません。"),
       h("div", { class: "sheet-actions" }, h("button", { type: "button", class: "btn-secondary", disabled: !s.enabled, onclick: props.onTestSound }, "試しに鳴らす")),
     ),
     h(
       "section",
       { class: "card" },
       h("h2", null, "バックアップ"),
-      h("div", { class: "hint" }, `データは端末内だけにあります（終了した対局 ${props.gamesCount}件）。ホーム画面から削除すると消えるので、JSON を書き出して「ファイル」に残してください。復元は「インポート」で、今のデータをすべて置き換えます。`),
+      h("div", { class: "hint" }, `終了した対局 ${props.gamesCount}件。データは端末内だけにあります。`),
       h(
         "div",
         { class: "sheet-actions two" },
@@ -55,7 +54,7 @@ export function renderMisc(props) {
 
 /** 「更新を確認」。onCheckUpdate(setStatus) を呼び、進み具合を文で出す */
 function updateBlock(props) {
-  const status = h("div", { class: "hint", "aria-live": "polite" }, "更新は通常、次にホーム画面から起動し直したときに反映されます。今すぐ確認するにはボタンを押してください。");
+  const status = h("div", { class: "hint", "aria-live": "polite" });
   const btn = h(
     "button",
     {

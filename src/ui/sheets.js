@@ -419,7 +419,6 @@ export function openMultiRonSheet({ state, rule, names, onConfirm, initial = nul
       }
     }
     if (!rule.multiRon && forms.size > 1) {
-      append(body, h("div", { class: "hint" }, "ルールは頭ハネです。放銃者に最も近い1人だけが和了します"));
     }
     if (valid()) {
       const ev = buildEvent();
@@ -730,7 +729,6 @@ export function openAdjustSheet({ state, rule, names, onAdjust }) {
       ),
       h("div", { class: "label" }, "実際の点数（物理点棒の額をそのまま入力）"),
       h("div", { class: "row-inline" }, input, h("span", { class: "inline-label" }, "差分"), deltaEl),
-      h("div", { class: "hint" }, "相手方は指定しません。差分は精算時に卓外差額として表示されます"),
       h("div", { class: "sheet-actions" }, confirmBtn),
     );
   }
@@ -800,7 +798,7 @@ export function openAgariYameDialog({ dealerName, onYame, onContinue }) {
   const body = h("div", { class: "sheet-body" });
   append(body,
     h("div", { class: "summary" }, `オーラスで親（${dealerName}）がトップです`),
-    h("div", { class: "hint" }, "アガリやめにしますか？ 続ける場合はそのまま次局へ進みます。"),
+    h("div", { class: "hint" }, "アガリやめにしますか？"),
     h(
       "div",
       { class: "sheet-actions two" },
@@ -848,7 +846,6 @@ export function openCombinedSettlement({ count, players, transfers }) {
   const label = (i) => (i === null ? "卓外" : players[i].name);
   const body = h("div", { class: "sheet-body" });
   append(body,
-    h("div", { class: "hint" }, `選んだ ${count}対局の合計です。`),
     h(
       "table",
       { class: "rtable" },
@@ -873,7 +870,7 @@ export function openCombinedSettlement({ count, players, transfers }) {
       ? transfers.map((t) => h("div", { class: "transfer" }, h("span", null, `${label(t.from)} → ${label(t.to)}`), h("span", { class: "amt" }, `${t.amount.toLocaleString("ja-JP")}円`)))
       : h("div", { class: "hint" }, "支払いはありません"),
   );
-  return openSheet({ title: "まとめて精算", body });
+  return openSheet({ title: `まとめて精算（${count}対局）`, body });
 }
 
 /** 選択肢だけのシート（ログ画面の行操作など）。items: [{ label, sub?, onPick, danger? }] */
