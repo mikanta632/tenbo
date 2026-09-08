@@ -28,11 +28,33 @@ export function fmtDelta(n) {
   return "±0";
 }
 
-/** 経過時間。「12m」「1h05m」 */
+/**
+ * pt。符号付き・3桁区切り。端数があれば小数1桁まで。単位は付けない。
+ *   2789 → "+2,789" / −12.5 → "−12.5" / 0 → "0"
+ */
+export function fmtPt(p) {
+  const abs = Math.abs(p);
+  const s = Number.isInteger(abs) ? abs.toLocaleString("ja-JP") : abs.toLocaleString("ja-JP", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return p > 0 ? `+${s}` : p < 0 ? `−${s}` : "0";
+}
+
+/** 金額。符号付き・3桁区切り。単位（円）は見出しに置くのでここでは付けない。 */
+export function fmtYen(y) {
+  const s = Math.abs(y).toLocaleString("ja-JP");
+  return y > 0 ? `+${s}` : y < 0 ? `−${s}` : "0";
+}
+
+/** 順位バッジの class。トップは金、ラス（人数によって3位か4位）は赤にする */
+export function rankBadgeClass(rank, playerCount) {
+  return `rank-badge r${rank + 1}${rank === playerCount - 1 ? " last" : ""}`;
+}
+
+/** 経過時間。「12m」「1h05m」「2日3h」。対局を閉じ忘れても桁が伸びない */
 export function fmtElapsed(ms) {
   const min = Math.max(0, Math.floor(ms / 60000));
   if (min < 60) return `${min}m`;
   const hh = Math.floor(min / 60);
+  if (hh >= 24) return `${Math.floor(hh / 24)}日${hh % 24}h`;
   const mm = String(min % 60).padStart(2, "0");
   return `${hh}h${mm}m`;
 }

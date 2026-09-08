@@ -7,7 +7,7 @@
 import { h, clear, append } from "./dom.js";
 import { applyEvent, dealerOf, ranksOf } from "../reduce.js";
 import { withDeltas } from "../edit.js";
-import { fmtPoints, fmtDelta, hanName, windName, ABORTIVE_KIND_NAMES } from "./format.js";
+import { fmtPoints, fmtDelta, fmtPt, fmtYen, hanName, windName, ABORTIVE_KIND_NAMES } from "./format.js";
 
 // ---- 共通のシート枠 -----------------------------------------------------
 
@@ -845,7 +845,6 @@ export function openConfirm({ title, message, okLabel = "OK", onOk }) {
  * transfers の from / to は players の添字。null は卓外。
  */
 export function openCombinedSettlement({ count, players, transfers }) {
-  const signed = (x) => (x > 0 ? `+${x}` : String(x));
   const label = (i) => (i === null ? "卓外" : players[i].name);
   const body = h("div", { class: "sheet-body" });
   append(body,
@@ -853,7 +852,7 @@ export function openCombinedSettlement({ count, players, transfers }) {
     h(
       "table",
       { class: "rtable" },
-      h("thead", null, h("tr", null, h("th", null, "名前"), h("th", null, "対局"), h("th", null, "pt"), h("th", null, "収支"))),
+      h("thead", null, h("tr", null, h("th", null, "名前"), h("th", null, "対局"), h("th", null, "pt"), h("th", null, "収支（円）"))),
       h(
         "tbody",
         null,
@@ -863,8 +862,8 @@ export function openCombinedSettlement({ count, players, transfers }) {
             null,
             h("td", { class: "name" }, p.name),
             h("td", null, String(p.games)),
-            h("td", null, signed(Math.round(p.pt * 10) / 10)),
-            h("td", { class: p.yen > 0 ? "plus" : p.yen < 0 ? "minus" : "" }, `${signed(p.yen)}円`),
+            h("td", null, fmtPt(Math.round(p.pt * 10) / 10)),
+            h("td", { class: p.yen > 0 ? "plus" : p.yen < 0 ? "minus" : "" }, fmtYen(p.yen)),
           ),
         ),
       ),

@@ -8,11 +8,9 @@
 
 import { h, clear } from "./dom.js";
 import { aggregate, derive, gameStats } from "../stats.js";
-import { fmtPoints, fmtDate, gameDateTime } from "./format.js";
+import { fmtPoints, fmtDate, gameDateTime, fmtPt, fmtYen, rankBadgeClass } from "./format.js";
 
 const num = (x, d = 1) => (x === null ? "—" : x.toFixed(d));
-const signed = (x) => (x > 0 ? `+${x}` : String(x));
-const yen = (x) => `${signed(x)}円`;
 const signClass = (x) => (x > 0 ? "plus" : x < 0 ? "minus" : "");
 
 const FILTERS = [
@@ -209,7 +207,7 @@ export function renderStats(props) {
       h(
         "table",
         { class: "rtable game-rtable" },
-        h("thead", null, h("tr", null, h("th", null, "順位"), h("th", null, "名前"), h("th", null, "素点"), h("th", null, "pt"), h("th", null, "収支"))),
+        h("thead", null, h("tr", null, h("th", null, "順位"), h("th", null, "名前"), h("th", null, "素点"), h("th", null, "pt"), h("th", null, "収支（円）"))),
         h(
           "tbody",
           null,
@@ -217,11 +215,11 @@ export function renderStats(props) {
             h(
               "tr",
               null,
-              h("td", { class: "rank" }, h("span", { class: `rank-badge r${s.rank + 1}` }, `${s.rank + 1}位`)),
+              h("td", { class: "rank" }, h("span", { class: rankBadgeClass(s.rank, n) }, `${s.rank + 1}位`)),
               h("td", { class: "name" }, nameOf(s.playerId)),
               h("td", null, fmtPoints(s.points)),
-              h("td", null, signed(Math.round(s.pt * 10) / 10)),
-              h("td", { class: signClass(s.yen) }, yen(s.yen)),
+              h("td", null, fmtPt(s.pt)),
+              h("td", { class: signClass(s.yen) }, fmtYen(s.yen)),
             ),
           ),
         ),
@@ -281,7 +279,7 @@ export function renderStats(props) {
         h(
           "table",
           { class: "rtable" },
-          h("thead", null, h("tr", null, h("th", null, "名前"), h("th", null, "対局"), h("th", null, "平均順位"), h("th", null, "通算pt"), h("th", null, "収支"))),
+          h("thead", null, h("tr", null, h("th", null, "名前"), h("th", null, "対局"), h("th", null, "平均順位"), h("th", null, "通算pt"), h("th", null, "収支（円）"))),
           h(
             "tbody",
             null,
@@ -292,8 +290,8 @@ export function renderStats(props) {
                 h("td", { class: "name" }, h("button", { type: "button", class: "link-btn", onclick: () => props.onPlayer(r.id) }, r.name, " ›")),
                 h("td", null, r.d ? String(r.d.games) : "0"),
                 h("td", null, r.d ? num(r.d.avgRank, 2) : "—"),
-                h("td", { class: "pt" }, r.d ? signed(Math.round(r.d.ptSum * 10) / 10) : "—"),
-                h("td", { class: r.d ? signClass(r.d.yenSum) : "" }, r.d ? yen(r.d.yenSum) : "—"),
+                h("td", { class: "pt" }, r.d ? fmtPt(Math.round(r.d.ptSum * 10) / 10) : "—"),
+                h("td", { class: r.d ? signClass(r.d.yenSum) : "" }, r.d ? fmtYen(r.d.yenSum) : "—"),
               ),
             ),
           ),

@@ -2,11 +2,10 @@
 
 import { h, clear, svg } from "./dom.js";
 import { aggregate, derive, playerGames } from "../stats.js";
-import { fmtPoints, gameDateTime } from "./format.js";
+import { fmtPoints, gameDateTime, fmtPt, fmtYen, rankBadgeClass } from "./format.js";
 
 const pct = (x) => (x === null ? "—" : `${(x * 100).toFixed(1)}%`);
 const num = (x, d = 1) => (x === null ? "—" : x.toFixed(d));
-const signed = (x) => (x > 0 ? `+${x}` : String(x));
 
 /**
  * 累積 pt の系列。list は新しい順なので古い順に直し、0 から積み上げる。
@@ -17,6 +16,23 @@ export function ptSeries(list) {
   let sum = 0;
   for (const x of [...list].reverse()) values.push((sum += x.pt));
   return values;
+}
+
+/** 順位分布の帯グラフ（§8.5）。ラス（人数によって3位か4位）だけ赤にする */
+function rankBar(rankDist, pc, games) {
+  if (!games) return null;
+  const dist = rankDist.slice(0, pc);
+  const cls = (i) => `r${i + 1}${i === pc - 1 ? " last" : ""}`;
+  return h(
+    "div",
+    { class: "rank-bar-wrap" },
+    h("div", { class: "rank-bar" }, dist.map((count, i) => h("span", { class: `rank-seg ${cls(i)}`, style: `flex: ${count} 0 0` }))),
+    h(
+      "div",
+      { class: "rank-legend" },
+      dist.map((count, i) => h("span", { class: "rank-legend-item" }, h("i", { class: `rank-dot ${cls(i)}` }), `${i + 1}位 ${count}`)),
+    ),
+  );
 }
 
 /** 累積 pt の折れ線（§8.5）。SVG を組み立てるだけ */
@@ -106,56 +122,57 @@ export function renderPlayer(props) {
     const pc = props.scopePc || 4;
     const renRate = d.games > 0 ? (d.rankDist[0] + d.rankDist[1]) / d.games : null;
     const lastRate = d.games > 0 ? d.rankDist[pc - 1] / d.games : null;
-    const card = (title, ...items) => h("section", { class: "card" }, h("h2", null, title), h("div", { class: "kv-grid" }, items));
+    const grid = (...items) => h("div", { class: "kv-grid" }, items);
+    const card = (title, ...body) => h("section", { class: "card" }, h("h2", null, title), body);
+    const sub = (title) => h("h3", null, title);
 
     root.append(
       card(
         `${props.scopeLabel ? props.scopeLabel + " " : ""}通算（${d.games}対局）`,
-        kv("平均順位", num(d.avgRank, 2)),
-        kv("順位分布", d.rankDist.slice(0, pc).join(" / ")),
-        kv("連対率", pct(renRate)),
-        kv("ラス率", pct(lastRate)),
-        kv("トビ率", pct(d.tobiRate)),
-        kv("平均素点", pts(d.avgPoints)),
-        kv("最高素点", pts(d.maxPoints)),
-        kv("通算 pt", signed(Math.round(d.ptSum * 10) / 10)),
-        kv("通算 円", signed(d.yenSum)),
+        grid(
+          kv("平均順位", num(d.avgRank, 2)),
+          kv("連対率", pct(renRate)),
+          kv("ラス率", pct(lastRate)),
+          kv("トビ率", pct(d.tobiRate)),
+          kv("平均素点", pts(d.avgPoints)),
+          kv("最高素点", pts(d.maxPoints)),
+          kv("通算 pt", fmtPt(Math.round(d.ptSum * 10) / 10)),
+          kv("通算 円", fmtYen(d.yenSum)),
+        ),
+        rankBar(d.rankDist, pc, d.games),
       ),
       card(
         `局（有効局 ${d.effective}）`,
-        kv("和了率", pct(d.agariRate)),
-        kv("放銃率", pct(d.houjuRate)),
-        kv("リーチ率", pct(d.riichiRate)),
-        kv("副露率", pct(d.meldRate)),
-        kv("加点率", pct(d.plusRate)),
-        kv("失点率", pct(d.minusRate)),
+        grid(
+          kv("和了率", pct(d.agariRate)),
+          kv("放銃率", pct(d.houjuRate)),
+          kv("リーチ率", pct(d.riichiRate)),
+          kv("副露率", pct(d.meldRate)),
+          kv("加点率", pct(d.plusRate)),
+          kv("失点率", pct(d.minusRate)),
+        ),
       ),
       card(
-        `和了（${d.agariCount}回）`,
-        kv("ツモ率", pct(d.tsumoRate)),
-        kv("平均打点", pts(d.avgAgari)),
-        kv("リーチ時", pts(d.avgRiichiAgari)),
-        kv("副露時", pts(d.avgMeldAgari)),
-        kv("ダマ時", pts(d.avgDamaAgari)),
-      ),
-      card(
-        `放銃（${d.houjuCount}回）`,
-        kv("平均放銃", pts(d.avgHouju)),
-        kv("リーチ中", pct(d.houjuRiichiRate)),
-        kv("副露中", pct(d.houjuMeldRate)),
-        kv("ダマ", pct(d.houjuDamaRate)),
-      ),
-      card(
-        `リーチ（${d.riichiCount}局）`,
-        kv("和了", pct(d.riichiAgariRate)),
-        kv("放銃", pct(d.riichiHoujuRate)),
-        kv("流局", pct(d.riichiRyuukyokuRate)),
-      ),
-      card(
-        `副露（${d.meldCount}局）`,
-        kv("和了", pct(d.meldAgariRate)),
-        kv("放銃", pct(d.meldHoujuRate)),
-        kv("流局", pct(d.meldRyuukyokuRate)),
+        "内訳",
+        sub(`和了（${d.agariCount}回）`),
+        grid(
+          kv("ツモ率", pct(d.tsumoRate)),
+          kv("平均打点", pts(d.avgAgari)),
+          kv("リーチ時", pts(d.avgRiichiAgari)),
+          kv("副露時", pts(d.avgMeldAgari)),
+          kv("ダマ時", pts(d.avgDamaAgari)),
+        ),
+        sub(`放銃（${d.houjuCount}回）`),
+        grid(
+          kv("平均放銃", pts(d.avgHouju)),
+          kv("リーチ中", pct(d.houjuRiichiRate)),
+          kv("副露中", pct(d.houjuMeldRate)),
+          kv("ダマ", pct(d.houjuDamaRate)),
+        ),
+        sub(`リーチ（${d.riichiCount}局）`),
+        grid(kv("和了", pct(d.riichiAgariRate)), kv("放銃", pct(d.riichiHoujuRate)), kv("流局", pct(d.riichiRyuukyokuRate))),
+        sub(`副露（${d.meldCount}局）`),
+        grid(kv("和了", pct(d.meldAgariRate)), kv("放銃", pct(d.meldHoujuRate)), kv("流局", pct(d.meldRyuukyokuRate))),
       ),
       h("section", { class: "card" }, h("div", { class: "hint" }, "対局数が少ないうちは率の差に意味はほとんどありません。")),
     );
@@ -170,14 +187,15 @@ export function renderPlayer(props) {
         h(
           "span",
           { class: "game-row-main" },
-          h("span", { class: `rank-badge r${x.rank + 1}` }, `${x.rank + 1}位`),
+          h("span", { class: rankBadgeClass(x.rank, g.rule.playerCount) }, `${x.rank + 1}位`),
           h("span", null, fmtPoints(x.points)),
-          h("span", { class: x.pt > 0 ? "plus" : x.pt < 0 ? "minus" : "" }, `${signed(x.pt)}pt`),
-          h("span", { class: x.yen > 0 ? "plus" : x.yen < 0 ? "minus" : "" }, `${signed(x.yen)}円`),
+          h("span", { class: x.pt > 0 ? "plus" : x.pt < 0 ? "minus" : "" }, `${fmtPt(x.pt)}pt`),
+          h("span", { class: x.yen > 0 ? "plus" : x.yen < 0 ? "minus" : "" }, `${fmtYen(x.yen)}円`),
         ),
         h("span", { class: "menu-sub" }, `${date} ・ ${g.rule.playerCount}人 ・ ${others}`),
       );
     });
+
     if (list.length >= 2) {
       root.append(h("section", { class: "card" }, h("h2", null, `pt の推移（${list.length}対局）`), ptChart(list)));
     }

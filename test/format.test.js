@@ -2,7 +2,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { seatPositions, positionsFor, kyokuName, windName, fmtPoints, fmtDelta, hanName, fmtDateTime, fmtDate, gameDateTime } from "../src/ui/format.js";
+import { seatPositions, positionsFor, kyokuName, windName, fmtPoints, fmtDelta, fmtPt, fmtYen, fmtElapsed, rankBadgeClass, hanName, fmtDateTime, fmtDate, gameDateTime } from "../src/ui/format.js";
 import { buildGame, seatsFromPositions } from "../src/ui/start.js";
 import { makeRule } from "../src/rules.js";
 import { createStorage, memoryStorage } from "../src/storage.js";
@@ -80,6 +80,38 @@ describe("表示名", () => {
     assert.equal(hanName(11), "三倍満");
     assert.equal(hanName(13), "数え役満");
     assert.equal(hanName(3), "3翻");
+  });
+});
+
+describe("pt・金額・経過時間・順位バッジ", () => {
+  test("pt は 3桁区切りで符号を付け、端数だけ小数1桁にする", () => {
+    assert.equal(fmtPt(2789), "+2,789");
+    assert.equal(fmtPt(-1847), "−1,847");
+    assert.equal(fmtPt(12.5), "+12.5");
+    assert.equal(fmtPt(0), "0");
+  });
+  test("金額は 3桁区切りで符号を付け、単位は付けない", () => {
+    assert.equal(fmtYen(68920), "+68,920");
+    assert.equal(fmtYen(-51970), "−51,970");
+    assert.equal(fmtYen(0), "0");
+  });
+  test("マイナス記号は fmtPoints と同じ（U+2212）", () => {
+    assert.equal(fmtPt(-1)[0], fmtPoints(-1)[0]);
+    assert.equal(fmtYen(-1)[0], fmtPoints(-1)[0]);
+  });
+  test("経過時間は 24時間を超えたら日で出す", () => {
+    const m = (min) => fmtElapsed(min * 60000);
+    assert.equal(m(12), "12m");
+    assert.equal(m(65), "1h05m");
+    assert.equal(m(23 * 60 + 59), "23h59m");
+    assert.equal(m(24 * 60), "1日0h");
+    assert.equal(m(38 * 60 + 9), "1日14h");
+  });
+  test("ラスの印は人数によって 3位／4位に付く", () => {
+    assert.equal(rankBadgeClass(0, 4), "rank-badge r1");
+    assert.equal(rankBadgeClass(3, 4), "rank-badge r4 last");
+    assert.equal(rankBadgeClass(2, 3), "rank-badge r3 last");
+    assert.equal(rankBadgeClass(2, 4), "rank-badge r3");
   });
 });
 

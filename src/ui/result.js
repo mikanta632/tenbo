@@ -1,16 +1,7 @@
 // 結果画面（docs/design.md §7, §8.1）。順位・素点・pt・金額・支払い経路・卓外差額。
 
 import { h } from "./dom.js";
-import { fmtPoints, fmtDelta } from "./format.js";
-
-function fmtPt(p) {
-  const s = Number.isInteger(p) ? String(Math.abs(p)) : Math.abs(p).toFixed(1);
-  return p > 0 ? `+${s}` : p < 0 ? `−${s}` : "0";
-}
-function fmtYen(y) {
-  const s = Math.abs(y).toLocaleString("ja-JP");
-  return y > 0 ? `+${s}円` : y < 0 ? `−${s}円` : "0円";
-}
+import { fmtPoints, fmtDelta, fmtPt, fmtYen } from "./format.js";
 
 /**
  * props: { game, names, settlement, title, onBack, onLog, onExport }
@@ -23,7 +14,7 @@ export function renderResult({ game, names, settlement: s, title, onBack, onLog,
   const table = h(
     "table",
     { class: "rtable" },
-    h("thead", null, h("tr", null, h("th", null, "順位"), h("th", null, "素点"), h("th", null, "pt"), h("th", null, "金額"))),
+    h("thead", null, h("tr", null, h("th", null, "順位"), h("th", null, "素点"), h("th", null, "pt"), h("th", null, "金額（円）"))),
     h(
       "tbody",
       null,
