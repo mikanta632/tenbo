@@ -100,12 +100,15 @@ export function playNextKyoku() {
   tone(1319, 0.3, 0.26, { type: "triangle" });
 }
 
-/** 局が終わり親が続く（連荘・チョンボ）: 上がらずに同じ音を3つ */
+/** 局が終わり親が続く（連荘・チョンボ）: 「テッテレー」。3音刻んで最後を伸ばす、大当たり風のファンファーレ */
 export function playRenchan() {
   if (!soundEnabled()) return;
-  tone(1047, 0.12, 0, { type: "triangle" });
-  tone(1047, 0.12, 0.13, { type: "triangle" });
-  tone(1047, 0.3, 0.26, { type: "triangle" });
+  const sq = { type: "square", gain: 0.13 }; // 矩形波は大きく聞こえるので控えめに
+  tone(784, 0.1, 0, sq);
+  tone(880, 0.1, 0.11, sq);
+  tone(988, 0.1, 0.22, sq);
+  tone(1319, 0.45, 0.36, { type: "square", gain: 0.14 });
+  tone(1319, 0.45, 0.36, { type: "triangle", gain: 0.2 }); // 矩形波だけだと痩せるので三角波を重ねる
 }
 
 /** 終局: 長めの2音 */
