@@ -4,8 +4,9 @@
 //  左（D）  右（B）
 //     下（A）
 //
-// 各位置の席をタップし、シートから既存のプレイヤーを選ぶか、その場で新しい名前を入れる。
+// 各位置の席をタップすると iOS の選択肢（ドラムロール）が開き、既存のプレイヤーを選ぶか、その場で新しい名前を入れる。
 // すでに他の席にいる人を選んだときは席を入れ替える。
+// 3人麻雀は先にどこかを「空席」にしないと、ほかの席を選べない。
 // 終了した対局の一覧は戦績タブに置く（§8.5）。
 // 3人麻雀は 4席のうち 1つを「空席」にする（どの位置でもよい）。起家は配置とは別に選ぶ。
 // 画面上の配置はここで決めた位置がそのまま使われる。
@@ -16,6 +17,8 @@ import { reduce } from "../reduce.js";
 import { kyokuName, gameId, positionsFor, POSITION_ORDER } from "./format.js";
 
 const POS_LABEL = { bottom: "下", right: "右", top: "上", left: "左" };
+const NEW_PLAYER = "__new__";
+const EMPTY = "__empty__";
 
 /**
  * Game を作る。seats は起家順、bottomSeat は「使う位置の先頭（通常は下）」に置く席、
@@ -47,7 +50,7 @@ export function seatsFromPositions({ posPlayers, chiichaPos }) {
 
 /**
  * 対局タブを描画する。
- * props: { storage, current, rulesFor(pc), onResume(), onStart(game), onDiscard(), openActions({ title, items }) }
+ * props: { storage, current, rulesFor(pc), onResume(), onStart(game), onDiscard() }
  */
 export function renderStart(props) {
   const { storage, current } = props;
@@ -55,7 +58,7 @@ export function renderStart(props) {
 
   let pc = 4;
   const posPlayers = { bottom: null, right: null, top: null, left: null }; // 画面位置 → playerId
-  let emptyPosition = "left"; // 3人麻雀の空席
+  let emptyPosition = null; // 3人麻雀の空席。決まるまで他の席は選べない
   let chiichaKey = "bottom";
   let editingPos = null; // 新しい名前を入力中の位置
 
@@ -78,8 +81,9 @@ export function renderStart(props) {
     const roster = storage.loadRoster();
     const nameOf = (id) => (roster.find((p) => p.id === id) || { name: "?" }).name;
     const n = pc;
-    const order = positionsFor(n, emptyPosition);
-    if (!order.includes(chiichaKey)) chiichaKey = order[0];
+    const ready = n === 4 || emptyPosition !== null; // 3人麻雀は空席が決まってから
+    const order = ready ? positionsFor(n, emptyPosition) : [];
+    if (ready && !order.includes(chiichaKey)) chiichaKey = order[0];
 
     root.append(h("header", { class: "plain-top" }, h("div", { class: "plain-title" }, "対局")));
 
@@ -116,6 +120,7 @@ export function renderStart(props) {
               class: `chip${pc === k ? " on" : ""}`,
               onclick: () => {
                 pc = k;
+                if (k === 3) emptyPosition = null; // 空席を選び直してもらう
                 editingPos = null;
                 render();
               },
@@ -126,26 +131,15 @@ export function renderStart(props) {
       ),
     );
 
-    // 席をタップしたときの選択肢。他の席にいる人を選んだら入れ替える
-    const pickSeat = (key) => {
-      const isEmpty = n === 3 && key === emptyPosition;
-      const here = isEmpty ? null : posPlayers[key];
-      const place = (id) => {
-        const from = Object.keys(posPlayers).find((k) => posPlayers[k] === id && k !== key);
-        if (from) posPlayers[from] = here;
-        posPlayers[key] = id;
-        render();
-      };
-      const items = roster
-        .filter((p) => p.id !== here)
-        .map((p) => ({ label: p.name, onPick: () => place(p.id) }));
-      items.push({ label: "＋ 新しい名前", onPick: () => { editingPos = key; render(); } });
-      if (n === 3 && !isEmpty) items.push({ label: "空席にする", onPick: () => { emptyPosition = key; render(); } });
-      if (here) items.push({ label: "外す", danger: true, onPick: () => { posPlayers[key] = null; render(); } });
-      props.openActions({ title: `${POS_LABEL[key]}の席`, items });
+    // 他の席にいる人を選んだら入れ替える
+    const place = (key, id) => {
+      const here = posPlayers[key];
+      const from = Object.keys(posPlayers).find((k) => posPlayers[k] === id && k !== key);
+      if (from) posPlayers[from] = here;
+      posPlayers[key] = id;
     };
 
-    // 位置ごとの席（タップで選ぶ）
+    // 位置ごとの席。見た目は黒い板、タップすると透明に重ねた select が開く
     const seatControl = (key) => {
       const isEmpty = n === 3 && key === emptyPosition;
       if (editingPos === key) {
@@ -173,18 +167,36 @@ export function renderStart(props) {
         return el;
       }
       const pid = isEmpty ? null : posPlayers[key];
-      const isChiicha = chiichaKey === key && !isEmpty;
-      return h(
-        "button",
+      const isChiicha = ready && chiichaKey === key && !isEmpty;
+      const sel = h(
+        "select",
         {
-          type: "button",
-          class: `seat-slot${isChiicha ? " chiicha" : ""}${isEmpty ? " empty" : ""}${!pid && !isEmpty ? " unset" : ""}`,
+          class: "seat-select",
           "aria-label": `${POS_LABEL[key]}の席`,
-          onclick: () => pickSeat(key),
+          onchange: (e) => {
+            const v = e.target.value;
+            if (v === NEW_PLAYER) editingPos = key;
+            else if (v === EMPTY) emptyPosition = key; // 空席は1つだけ。前の空席は「—」に戻る
+            else {
+              if (isEmpty) emptyPosition = null; // 空席に人を入れたら、空席を選び直してもらう
+              if (v) place(key, v);
+              else posPlayers[key] = null;
+            }
+            render();
+          },
         },
+        h("option", { value: "", selected: !isEmpty && pid === null }, "—"),
+        n === 3 ? h("option", { value: EMPTY, selected: isEmpty }, "空席") : null,
+        // 3人麻雀で空席が未定なら「空席」しか選べない
+        ...(ready ? [roster.map((p) => h("option", { value: p.id, selected: !isEmpty && pid === p.id }, p.name)), h("option", { value: NEW_PLAYER }, "＋ 新しい名前")] : []),
+      );
+      return h(
+        "div",
+        { class: `seat-slot${isChiicha ? " chiicha" : ""}${isEmpty ? " empty" : ""}${!pid && !isEmpty ? " unset" : ""}${!ready && !isEmpty ? " locked" : ""}` },
         h("span", { class: "seat-pos" }, POS_LABEL[key]),
         h("span", { class: "seat-name" }, isEmpty ? "空席" : pid ? nameOf(pid) : "—"),
         isChiicha ? h("span", { class: "seat-tag" }, "起家") : null,
+        sel,
       );
     };
 
@@ -201,8 +213,8 @@ export function renderStart(props) {
       ),
     );
 
-    // 起家（空席は除く）
-    sec.append(
+    // 起家（空席は除く）。3人麻雀で空席が未定なら出さない
+    if (ready) sec.append(
       h("div", { class: "label" }, "起家"),
       h(
         "div",
@@ -234,6 +246,7 @@ export function renderStart(props) {
           {
             type: "button",
             class: "btn-primary",
+            disabled: !ready,
             onclick: () => {
               const rule = props.rulesFor(pc);
               const errors = validateRule(rule);

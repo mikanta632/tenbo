@@ -94,7 +94,7 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
   grid-template-rows: repeat(3, minmax(0, 1fr));
   gap: 8px;
   grid-template-areas: ". top ." "left center right" ". bottom .";
-  margin: 4px 0 8px;
+  margin: 16px 0 8px;
 }
 .seat-cell { display: flex; min-width: 0; }
 .seat-cell > .seat-slot { flex: 1; min-width: 0; }
@@ -116,7 +116,10 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
   background: var(--panel); border-radius: 12px; border: 2px solid transparent; box-shadow: 0 2px 8px rgba(0,0,0,0.4);
   font: inherit; color: var(--ink);
 }
-button.seat-slot:active { background: #1c1c1c; }
+.seat-slot:active { background: #1c1c1c; }
+/* 席いっぱいに透明な select を重ねる。タップで iOS のドラムロールが開く */
+.seat-slot .seat-select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; -webkit-appearance: none; appearance: none; font-size: 16px; }
+.seat-slot.locked { opacity: 0.45; }
 .seat-slot .seat-name { font-size: 19px; font-weight: 700; color: var(--digit); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .seat-slot.unset .seat-name { color: rgba(255,255,255,0.35); font-weight: 400; }
 .seat-slot.chiicha { border-color: var(--accent); }

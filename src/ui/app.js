@@ -163,10 +163,6 @@ function gameTabContent() {
     storage,
     current: game,
     rulesFor,
-    openActions: (spec) => {
-      closeSheet();
-      openSheetHandle = openActionSheet(spec);
-    },
     onResume: () => show("table"),
     onDiscard: () => {
       openSheetHandle = openConfirm({
