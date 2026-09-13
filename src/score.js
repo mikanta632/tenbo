@@ -2,6 +2,9 @@
 //
 // すべての公開関数は deltas（席ごとの点数移動の配列、長さ = playerCount）を返す。
 // deltas に供託の回収は含めない（供託は reduce.js の §5.2 手順2 で扱う）。
+//
+// 支払いは「単価」（ロンの額、ツモの各支払者の額）に抽象化し、3人麻雀の点数方式（§6.3）は
+// 単価の作り方だけが違う。和了・流し満貫・チョンボの満貫払いはすべて同じ単価を使う。
 
 /** 100点単位に切り上げ */
 export function ceil100(x) {
@@ -39,16 +42,95 @@ export function basePoints(winner, rule) {
   return base;
 }
 
-/** ロン時に放銃者が払う額（本場を含まない） */
-function ronAmount(base, winnerIsDealer) {
-  return ceil100(base * (winnerIsDealer ? 6 : 4));
+// ---- 支払い単価（§6.2, §6.3） ------------------------------------------------
+
+/** 4人麻雀と 3人麻雀ツモ損あり。ロン 親6倍・子4倍、ツモ 親2倍オール・子は親2倍/子1倍 */
+function standardUnit(base) {
+  return {
+    ron: (isDealer) => ceil100(base * (isDealer ? 6 : 4)),
+    tsumo: (isDealer, payerIsDealer) => (isDealer ? ceil100(base * 2) : ceil100(base * (payerIsDealer ? 2 : 1))),
+  };
 }
 
-/** ツモ時に 1人の支払者が払う額（本場を含まない） */
-function tsumoAmount(base, winnerIsDealer, payerIsDealer) {
-  if (winnerIsDealer) return ceil100(base * 2);
-  return ceil100(base * (payerIsDealer ? 2 : 1));
+/** 3人麻雀ツモ損なし。北家分（子1人分）を、子ツモなら親が、親ツモなら子2人で折半（切り上げ）して負担する */
+function noTsumoLossUnit(base) {
+  const ko = ceil100(base);
+  const oya = ceil100(base * 2);
+  return {
+    ron: (isDealer) => ceil100(base * (isDealer ? 6 : 4)),
+    tsumo: (isDealer, payerIsDealer) => (isDealer ? oya + ceil100(oya / 2) : payerIsDealer ? oya + ko : ko),
+  };
 }
+
+/**
+ * 関西式の点数表（§6.3）。行は 1翻・2翻・3翻・満貫・跳満・倍満・三倍満・役満。
+ * 列は [親ロン, 親ツモ（オール）, 子ロン, 子ツモの子の支払い, 子ツモの親の支払い]
+ */
+export const KANSAI_TABLE = Object.freeze([
+  [2000, 1000, 1000, 1000, 1000],
+  [3000, 2000, 2000, 1000, 1000],
+  [6000, 3000, 4000, 1000, 3000],
+  [12000, 6000, 8000, 3000, 5000],
+  [18000, 9000, 12000, 4000, 8000],
+  [24000, 12000, 16000, 6000, 10000],
+  [36000, 18000, 24000, 8000, 16000],
+  [48000, 24000, 32000, 12000, 20000],
+]);
+const KANSAI_MANGAN = 3;
+const KANSAI_SANBAIMAN = 6;
+const KANSAI_YAKUMAN = 7;
+
+/** 関西式の行番号。符は見ない。 */
+function kansaiRow(han, rule) {
+  if (han >= 13) return rule.kazoeYakuman === "yakuman" ? KANSAI_YAKUMAN : KANSAI_SANBAIMAN;
+  if (han >= 11) return KANSAI_SANBAIMAN;
+  if (han >= 8) return 5;
+  if (han >= 6) return 4;
+  if (han >= 4) return KANSAI_MANGAN;
+  return Math.max(1, han) - 1;
+}
+
+function kansaiUnit(row, mult = 1) {
+  const r = KANSAI_TABLE[row];
+  return {
+    ron: (isDealer) => (isDealer ? r[0] : r[2]) * mult,
+    tsumo: (isDealer, payerIsDealer) => (isDealer ? r[1] : payerIsDealer ? r[4] : r[3]) * mult,
+  };
+}
+
+const ZERO_UNIT = Object.freeze({ ron: () => 0, tsumo: () => 0 });
+
+function scoringMode(rule) {
+  return rule.playerCount === 3 ? rule.sanmaScoring || "standard" : "standard";
+}
+
+/** 役満 m 個分の単価（m は doubleYakuman を考慮した後の個数）。0 なら支払い無し */
+function unitOfYakuman(m, rule) {
+  if (m <= 0) return ZERO_UNIT;
+  const mode = scoringMode(rule);
+  if (mode === "kansai") return kansaiUnit(KANSAI_YAKUMAN, m);
+  return mode === "noTsumoLoss" ? noTsumoLossUnit(8000 * m) : standardUnit(8000 * m);
+}
+
+/**
+ * 1手の支払い単価（§6.2, §6.3）。winner: { han, fu, yakumanCount }
+ * 戻り値 { ron(isDealer), tsumo(isDealer, payerIsDealer) }
+ */
+export function scoreUnit(winner, rule) {
+  const yakumanCount = winner.yakumanCount || 0;
+  if (yakumanCount > 0) return unitOfYakuman(rule.doubleYakuman ? yakumanCount : 1, rule);
+  const mode = scoringMode(rule);
+  if (mode === "kansai") return kansaiUnit(kansaiRow(winner.han, rule));
+  const base = basePoints(winner, rule);
+  return mode === "noTsumoLoss" ? noTsumoLossUnit(base) : standardUnit(base);
+}
+
+/** 満貫ツモの単価（流し満貫・チョンボの満貫払い） */
+function manganUnit(rule) {
+  return scoreUnit({ han: 5, fu: 30, yakumanCount: 0 }, rule);
+}
+
+// ---- 和了 ----------------------------------------------------------------
 
 /** 放銃者から反時計回りに最も近い和了者 */
 export function nearestWinner(winners, from, n) {
@@ -89,20 +171,24 @@ export function winnerDeltas({ rule, dealer, honba, tsumo, from, winner }) {
   const who = winner.who;
   const isDealer = who === dealer;
   const deltas = zeros(n);
-  const base = basePoints(winner, rule);
 
-  // 責任払い（§6.5）。役満手でのみ有効。
+  // 責任払い（§6.5）。役満手でのみ有効。責任分と非責任分を役満の個数で分ける
+  const yakumanCount = winner.yakumanCount || 0;
   const sekinin =
-    rule.sekinin &&
-    (winner.yakumanCount || 0) > 0 &&
-    winner.sekinin &&
-    winner.sekinin.who !== who &&
-    winner.sekinin.yakumanCount > 0
+    rule.sekinin && yakumanCount > 0 && winner.sekinin && winner.sekinin.who !== who && winner.sekinin.yakumanCount > 0
       ? winner.sekinin
       : null;
-  // 責任分は基本点を超えない（doubleYakuman が偽のときの保険）
-  const sekininBase = sekinin ? Math.min(8000 * sekinin.yakumanCount, base) : 0;
-  const normalBase = base - sekininBase;
+  let unitNormal;
+  let unitResp = ZERO_UNIT;
+  if (sekinin) {
+    const effectiveCount = rule.doubleYakuman ? yakumanCount : 1;
+    // 責任分は役満全体を超えない（doubleYakuman が偽のときの保険）
+    const respCount = Math.min(sekinin.yakumanCount, effectiveCount);
+    unitResp = unitOfYakuman(respCount, rule);
+    unitNormal = unitOfYakuman(effectiveCount - respCount, rule);
+  } else {
+    unitNormal = scoreUnit(winner, rule);
+  }
   // 本場（§6.2）: ロンは放銃者が honbaPoints × 本場、ツモは各支払者がその 1/3 ずつ。0 なら加算なし
   const honbaRon = rule.honbaPoints ?? 300;
   const honbaTsumo = honbaRon / 3;
@@ -111,22 +197,22 @@ export function winnerDeltas({ rule, dealer, honba, tsumo, from, winner }) {
     // 非責任分は通常のツモ配分。本場は各支払者が負担する
     for (let s = 0; s < n; s++) {
       if (s === who) continue;
-      const pay = tsumoAmount(normalBase, isDealer, s === dealer) + honbaTsumo * honba;
+      const pay = unitNormal.tsumo(isDealer, s === dealer) + honbaTsumo * honba;
       deltas[s] -= pay;
       deltas[who] += pay;
     }
     // 責任分は責任者が全額（ロン相当額）を負担
-    if (sekininBase > 0) {
-      const amt = ronAmount(sekininBase, isDealer);
+    const amt = unitResp.ron(isDealer);
+    if (amt > 0) {
       deltas[sekinin.who] -= amt;
       deltas[who] += amt;
     }
   } else {
-    const normal = ronAmount(normalBase, isDealer) + honbaRon * honba;
+    const normal = unitNormal.ron(isDealer) + honbaRon * honba;
     deltas[from] -= normal;
     deltas[who] += normal;
-    if (sekininBase > 0) {
-      const amt = ronAmount(sekininBase, isDealer);
+    const amt = unitResp.ron(isDealer);
+    if (amt > 0) {
       // "half": 折半。責任者側を切り上げ、放銃者側を残余とする
       const byResp = rule.sekininRon === "full" ? amt : ceil100(amt / 2);
       const byFrom = amt - byResp;
@@ -175,6 +261,33 @@ export function agariDeltas({ rule, dealer, honba, tsumo, from, winners }) {
 }
 
 /**
+ * 和了時のチップの移動（枚。§5.2 手順6）。rule.chips が偽なら全て 0。
+ * 各和了者は winner.chips を、ツモなら和了者以外の全員から、ロンなら放銃者から受け取る。
+ */
+export function agariChips({ rule, tsumo, from, winners }) {
+  const n = rule.playerCount;
+  const chips = zeros(n);
+  if (!rule.chips) return chips;
+  for (const w of effectiveWinners(winners, { tsumo, from, rule })) {
+    const c = w.chips || 0;
+    if (c <= 0) continue;
+    if (tsumo) {
+      for (let s = 0; s < n; s++) {
+        if (s === w.who) continue;
+        chips[s] -= c;
+        chips[w.who] += c;
+      }
+    } else {
+      chips[from] -= c;
+      chips[w.who] += c;
+    }
+  }
+  return chips;
+}
+
+// ---- 流局 ----------------------------------------------------------------
+
+/**
  * テンパイ料（§6.4）。exhaustive のみ。
  * @param {number[]} p.tenpai テンパイ者の seatIndex
  */
@@ -193,17 +306,18 @@ export function tenpaiDeltas({ rule, tenpai }) {
 
 /**
  * 流し満貫（§5.3 nagashi）。成立者それぞれが独立に満貫（ツモ扱い）を受け取る。
- * テンパイ料・本場は発生させない。
+ * テンパイ料・本場は発生させない。3人麻雀は点数方式の満貫ツモの額に従う。
  * @param {number[]} p.nagashiBy 成立者の seatIndex
  */
 export function nagashiDeltas({ rule, dealer, nagashiBy }) {
   const n = rule.playerCount;
   const deltas = zeros(n);
+  const unit = manganUnit(rule);
   for (const who of nagashiBy) {
     const isDealer = who === dealer;
     for (let s = 0; s < n; s++) {
       if (s === who) continue;
-      const pay = tsumoAmount(2000, isDealer, s === dealer);
+      const pay = unit.tsumo(isDealer, s === dealer);
       deltas[s] -= pay;
       deltas[who] += pay;
     }
@@ -211,11 +325,14 @@ export function nagashiDeltas({ rule, dealer, nagashiBy }) {
   return deltas;
 }
 
+// ---- チョンボ --------------------------------------------------------------
+
 /**
  * チョンボ（§6.7）。
- * "mangan": 満貫払い。親なら各子に 4000、子なら親に 4000・各子に 2000。
- *           3人麻雀は支払先が 1人減るだけ（北家分を差し引く）。
- * "manual": 渡された deltas をそのまま使う。
+ * "mangan": 満貫払い。満貫ツモの支払いを逆向きに払う（親なら各子に 4000、子なら親に 4000・各子に 2000）。
+ *           3人麻雀は点数方式の満貫ツモの額に従う。
+ * "fixed":  定額。他の各人に rule.chomboPoints ずつ払う。
+ * "manual": 廃止。過去の対局の rule に残っていれば、渡された deltas をそのまま使う。
  */
 export function chomboDeltas({ rule, dealer, who, deltas: manual }) {
   const n = rule.playerCount;
@@ -227,9 +344,11 @@ export function chomboDeltas({ rule, dealer, who, deltas: manual }) {
   }
   const deltas = zeros(n);
   const isDealer = who === dealer;
+  const unit = manganUnit(rule);
+  const fixed = rule.chomboPoints ?? 2000;
   for (let s = 0; s < n; s++) {
     if (s === who) continue;
-    const amt = isDealer || s === dealer ? 4000 : 2000;
+    const amt = rule.chomboRule === "fixed" ? fixed : unit.tsumo(isDealer, s === dealer);
     deltas[s] += amt;
     deltas[who] -= amt;
   }

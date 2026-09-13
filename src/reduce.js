@@ -4,7 +4,7 @@
 // 引数の State を書き換えない。イベントの deltas はキャッシュとして信用する
 // （再計算は edit.js の責務）。
 
-import { effectiveWinners, nearestWinner } from "./score.js";
+import { effectiveWinners, nearestWinner, agariChips } from "./score.js";
 
 /** 局末イベントの種別 */
 export const END_OF_KYOKU = new Set(["agari", "ryuukyoku", "chombo"]);
@@ -64,6 +64,7 @@ export function initialState(rule) {
     honba: 0,
     kyotaku: 0,
     over: false,
+    chips: new Array(n).fill(0),
     round: emptyRound(n),
   };
 }
@@ -75,6 +76,7 @@ function cloneState(state) {
     honba: state.honba,
     kyotaku: state.kyotaku,
     over: state.over,
+    chips: (state.chips || new Array(state.points.length).fill(0)).slice(),
     round: {
       riichi: state.round.riichi.slice(),
       melded: state.round.melded.slice(),
@@ -91,10 +93,52 @@ function addDeltas(points, deltas) {
   for (let i = 0; i < points.length; i++) points[i] += deltas[i];
 }
 
+function addChips(chips, deltas) {
+  if (!deltas) return;
+  if (deltas.length !== chips.length) {
+    throw new Error(`chips の長さが不正: ${deltas.length} !== ${chips.length}`);
+  }
+  for (let i = 0; i < chips.length; i++) chips[i] += deltas[i];
+}
+
+/**
+ * トビ賞（§5.2 手順6）。局末の points で tobiLine を割った各人が、各 winner に rule.tobiPrize 枚を払う。
+ * rule.chips が偽か tobiPrize が 0 なら空。
+ */
+export function tobiPrizeChips(points, winnerSeats, rule) {
+  const n = points.length;
+  const chips = new Array(n).fill(0);
+  const prize = rule.tobiPrize ?? 0;
+  if (!rule.chips || prize <= 0 || !isTobi(points, rule)) return chips;
+  for (let s = 0; s < n; s++) {
+    if (points[s] >= (rule.tobiLine ?? 0)) continue;
+    for (const w of winnerSeats) {
+      if (w === s) continue;
+      chips[s] -= prize;
+      chips[w] += prize;
+    }
+  }
+  return chips;
+}
+
+/** トビ（§5.6）。rule.tobi が真で tobiLine 未満の者がいる */
+export function isTobi(points, rule) {
+  return !!rule.tobi && points.some((p) => p < (rule.tobiLine ?? 0));
+}
+
+/** 延長戦に入っているか（§5.6）。規定局数を超えた局にいる */
+export function inExtension(kyoku, rule) {
+  return !!rule.extension && kyoku >= rule.length;
+}
+
 /** 終局判定（§5.6）。局末イベントの適用後に呼ぶ。アガリやめは自動では終局させない。 */
 function judgeOver(next, rule) {
-  if (next.kyoku >= rule.length) return true;
-  if (rule.tobi && next.points.some((p) => p < rule.tobiLine)) return true;
+  if (isTobi(next.points, rule)) return true;
+  if (next.kyoku < rule.length) return false;
+  if (!rule.extension) return true;
+  // 延長戦: 誰かが返す点に届いたら終局。延長は 1 場まで
+  if (Math.max(...next.points) >= rule.returnPoints) return true;
+  if (next.kyoku >= rule.length + rule.playerCount) return true;
   return false;
 }
 
@@ -115,6 +159,8 @@ export function agariYameAvailable(prev, next, rule) {
   const last = rule.length - 1;
   if (prev.kyoku !== last || next.kyoku !== last) return false;
   if (next.over) return false;
+  // 延長戦が有効でトップが返す点に届いていなければ、やめても延長に入るべき状況なので出さない
+  if (rule.extension && Math.max(...next.points) < rule.returnPoints) return false;
   const dealer = dealerOf(next.kyoku, rule.playerCount);
   return ranksOf(next.points)[dealer] === 0;
 }
@@ -201,6 +247,9 @@ export function applyEvent(state, event, rule) {
       next.round = emptyRound(n);
       // 5. 終局判定（アガリやめは agariYameAvailable で別途判定し、end イベントで終局する）
       next.over = judgeOver(next, rule);
+      // 6. チップ: 和了時の枚数と、トビで終局したときのトビ賞
+      addChips(next.chips, agariChips({ rule, tsumo: event.tsumo, from: event.from, winners: event.winners }));
+      addChips(next.chips, tobiPrizeChips(next.points, winners.map((w) => w.who), rule));
       return next;
     }
 
@@ -220,6 +269,8 @@ export function applyEvent(state, event, rule) {
       }
       next.round = emptyRound(n);
       next.over = judgeOver(next, rule);
+      // 流し満貫で飛んだら成立者を和了者とみなしてトビ賞（§5.3）
+      if (type === "nagashi") addChips(next.chips, tobiPrizeChips(next.points, event.nagashiBy || [], rule));
       return next;
     }
 
@@ -238,9 +289,10 @@ export function applyEvent(state, event, rule) {
       return next;
     }
 
-    // --- 手動修正（§5.5） ---
+    // --- 手動修正（§5.5）。chips があればチップ枚数の補正 ---
     case "adjust":
       addDeltas(next.points, event.deltas);
+      if (event.chips) addChips(next.chips, event.chips);
       return next;
 
     // --- 手動終局 ---

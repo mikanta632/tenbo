@@ -13,16 +13,15 @@ export const DEFAULT_RULE = Object.freeze({
   renchan: "tenpai",
   agariYame: true,
   tobi: true,
-  tobiLine: 0,
-  nishiIri: false, // 西入。未実装（設定の記録のみ）
+  tobiLine: 0, // 0 = マイナスで終局、1 = 0点ちょうどでも終局（§5.6）
+  extension: false, // 延長戦（半荘は西入、東風は南入。§5.6）
   honbaPoints: 300, // 1本場あたりの加算（ロンで放銃者が払う額）。ツモは各支払者が 1/3 ずつ。0 も可
-  abortiveRyuukyoku: ["kyuushu", "suufon", "suucha_riichi", "suukaikan", "sanchaho"],
-  nagashiMangan: true,
+  nagashiMangan: true, // 偽なら特殊終局の入口に流し満貫を出さない
   riichiUnderThousand: false,
 
   // 点数
-  kuitan: true,
-  akaDora: 3,
+  kuitan: true, // 記録のみ。計算には影響しない
+  akaDora: 3, // 同上
   kiriageMangan: true,
   kazoeYakuman: "yakuman",
   doubleYakuman: true,
@@ -32,39 +31,75 @@ export const DEFAULT_RULE = Object.freeze({
   sekinin: true,
   sekininRon: "half",
   ryuukyokuTenpaiTotal: 3000,
-  chomboRule: "mangan",
-
-  // 3人麻雀のツモ損ありは固定。設定項目を持たない。空席の位置は Game.bottomSeat で表す（対局画面の「回転」）
+  chomboRule: "mangan", // mangan | fixed（§6.7）
+  chomboPoints: 2000, // fixed のとき、他の各人に払う額
+  sanmaScoring: "standard", // standard | noTsumoLoss | kansai（3人麻雀のみ。§6.3）
 
   // 終局
   finalKyotaku: "top",
 
   // 精算
   rate: 50,
-  rateBase: "point",
   ptRounding: "round5", // 五捨六入。"none" なら小数のまま
-  tieBreak: "chiicha", // 同点の扱い。起家に近い方が上位（これのみ実装）
+  tieBreak: "chiicha", // chiicha | split（同点の扱い。§7）
+
+  // 祝儀（単位はチップ枚数。§7）
+  chips: false,
+  chipRate: 100,
+  tobiPrize: 0,
+  yakitori: 0,
+  yakitoriNagashi: true,
 });
 
-/**
- * プリセット。具体値は §11 で未決のため暫定値。
- * 3人麻雀は playerCount / length / 持ち点 / uma のみ既定から変える。
- */
+/** 選択肢を持つ項目の取りうる値。設定画面と検証で使う。 */
+export const RULE_CHOICES = Object.freeze({
+  renchan: ["tenpai", "agari"],
+  kazoeYakuman: ["yakuman", "sanbaiman"],
+  multiRonKyotaku: ["shimocha", "split"],
+  multiRonHonba: ["shimocha", "each"],
+  sekininRon: ["half", "full"],
+  chomboRule: ["mangan", "fixed", "manual"], // manual は廃止。過去の対局の rule にだけ残る
+  sanmaScoring: ["standard", "noTsumoLoss", "kansai"],
+  finalKyotaku: ["top", "remain"],
+  ptRounding: ["round5", "none"],
+  tieBreak: ["chiicha", "split"],
+});
+
+const SANMA_BASE = Object.freeze({
+  ...DEFAULT_RULE,
+  playerCount: 3,
+  length: 6,
+  startPoints: 35000,
+  returnPoints: 40000,
+  uma: [30, -10, -20],
+});
+
+/** 組み込みのプリセット（§7）。 */
 export const PRESETS = Object.freeze({
   "4人標準": DEFAULT_RULE,
-  "3人標準": Object.freeze({
-    ...DEFAULT_RULE,
-    playerCount: 3,
-    length: 6,
-    startPoints: 35000,
-    returnPoints: 40000,
-    uma: [30, -10, -20],
-  }),
+  "3人標準": SANMA_BASE,
+  関西三麻: Object.freeze({ ...SANMA_BASE, sanmaScoring: "kansai" }),
 });
+
+/** その人数の標準プリセット。 */
+export function presetFor(playerCount) {
+  return playerCount === 3 ? PRESETS["3人標準"] : PRESETS["4人標準"];
+}
 
 /** 既定値に部分指定を重ねて Rule を作る。 */
 export function makeRule(overrides = {}) {
   return { ...DEFAULT_RULE, ...overrides };
+}
+
+/**
+ * 保存済みのルールに不足があれば、その人数の標準プリセットで埋める（§7）。
+ * 項目が増えたときに古いカスタムルールをそのまま使えるようにする。廃止した項目は落とす。
+ */
+export function normalizeRule(rule) {
+  const base = presetFor(rule && rule.playerCount === 3 ? 3 : 4);
+  const merged = { ...base };
+  for (const key of Object.keys(base)) if (rule && rule[key] !== undefined) merged[key] = rule[key];
+  return merged;
 }
 
 /**
@@ -76,9 +111,12 @@ export function validateRule(rule) {
   for (const key of ["startPoints", "returnPoints", "rate", "ryuukyokuTenpaiTotal"]) {
     if (!Number.isFinite(rule[key])) errors.push(`${key} は有限の数値`);
   }
-  // 古いルールでは本場の設定が無く、計算側の既定値を使う。
-  for (const key of ["honbaPoints", "tobiLine"]) {
+  // 古いルールでは無い項目。あれば数値であること（計算側は既定値で補う）
+  for (const key of ["honbaPoints", "tobiLine", "chomboPoints", "chipRate", "tobiPrize", "yakitori", "akaDora"]) {
     if (rule[key] !== undefined && !Number.isFinite(rule[key])) errors.push(`${key} は有限の数値`);
+  }
+  for (const [key, values] of Object.entries(RULE_CHOICES)) {
+    if (rule[key] !== undefined && !values.includes(rule[key])) errors.push(`${key} は ${values.join(" | ")}: ${rule[key]}`);
   }
   const n = rule.playerCount;
   if (n !== 3 && n !== 4) errors.push(`playerCount は 3 か 4: ${n}`);

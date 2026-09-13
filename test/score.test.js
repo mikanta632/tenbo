@@ -12,6 +12,9 @@ import {
   nagashiDeltas,
   chomboDeltas,
   effectiveWinners,
+  agariChips,
+  scoreUnit,
+  KANSAI_TABLE,
 } from "../src/score.js";
 import { makeRule } from "../src/rules.js";
 
@@ -603,5 +606,146 @@ describe("不変条件", () => {
     const b = agariDeltas({ rule: R4, dealer: 0, honba: 1, tsumo: false, from: 2, winners: [w(1, 3, 40)] });
     assert.deepEqual(a, b);
     assert.equal(ronPay(a, 1, 2), 5500);
+  });
+});
+
+// ---- 3人麻雀の点数方式（§6.3） -------------------------------------------------
+// 期待値は式から生成せず、設計書 §6.3 の表と「4人麻雀のツモ総額」から独立に書き下す。
+
+const R3N = makeRule({ playerCount: 3, length: 6, uma: [20, 0, -20], sanmaScoring: "noTsumoLoss" });
+const R3K = makeRule({ playerCount: 3, length: 6, uma: [20, 0, -20], sanmaScoring: "kansai" });
+
+describe("三麻 ツモ損なし", () => {
+  test("子ツモ: 北家分を親が負担し、総額は 4人麻雀と同じ", () => {
+    assert.deepEqual(tsumo(w(1, 5, 30), { rule: R3N }), [-6000, 8000, -2000]); // 満貫 2000/4000 + 北家分 2000 を親
+    assert.deepEqual(tsumo(w(2, 1, 30), { rule: R3N }), [-800, -300, 1100]); // 300/500 + 300 を親
+    assert.deepEqual(tsumo(w(1, 3, 40), { rule: R3N }), [-3900, 5200, -1300]); // 1300/2600 + 1300
+    assert.deepEqual(tsumo(yakuman(1), { rule: R3N }), [-24000, 32000, -8000]);
+  });
+  test("親ツモ: 北家分を子 2人で折半、100点未満は切り上げ", () => {
+    assert.deepEqual(tsumo(w(0, 5, 30), { rule: R3N }), [12000, -6000, -6000]); // 4000 + 2000
+    assert.deepEqual(tsumo(w(0, 1, 30), { rule: R3N }), [1600, -800, -800]); // 500 + ceil(250) = 800
+    assert.deepEqual(tsumo(w(0, 2, 30), { rule: R3N }), [3000, -1500, -1500]); // 1000 + 500
+    assert.deepEqual(tsumo(w(0, 3, 30), { rule: R3N }), [6000, -3000, -3000]); // 2000 + 1000
+    assert.deepEqual(tsumo(yakuman(0), { rule: R3N }), [48000, -24000, -24000]);
+  });
+  test("ロンは変わらない", () => {
+    assert.deepEqual(ron(w(1, 3, 30), 2, { rule: R3N }), [0, 3900, -3900]);
+    assert.deepEqual(ron(w(0, 5, 30), 2, { rule: R3N }), [12000, 0, -12000]);
+  });
+  test("本場はツモの各支払者が 100 ずつ", () => {
+    assert.deepEqual(tsumo(w(1, 5, 30), { rule: R3N, honba: 2 }), [-6200, 8400, -2200]);
+  });
+  test("流し満貫とチョンボの満貫払いも同じ額", () => {
+    assert.deepEqual(nagashiDeltas({ rule: R3N, dealer: 0, nagashiBy: [1] }), [-6000, 8000, -2000]);
+    assert.deepEqual(nagashiDeltas({ rule: R3N, dealer: 0, nagashiBy: [0] }), [12000, -6000, -6000]);
+    assert.deepEqual(chomboDeltas({ rule: R3N, dealer: 0, who: 1 }), [6000, -8000, 2000]);
+    assert.deepEqual(chomboDeltas({ rule: R3N, dealer: 0, who: 0 }), [-12000, 6000, 6000]);
+  });
+  test("4人麻雀には影響しない", () => {
+    const r = makeRule({ sanmaScoring: "noTsumoLoss" });
+    assert.deepEqual(tsumo(w(1, 5, 30), { rule: r }), [-4000, 8000, -2000, -2000]);
+  });
+});
+
+describe("三麻 関西式", () => {
+  test("点数表は設計書 §6.3 のとおり", () => {
+    assert.deepEqual(KANSAI_TABLE.map((r) => r[0]), [2000, 3000, 6000, 12000, 18000, 24000, 36000, 48000]);
+    assert.deepEqual(KANSAI_TABLE.map((r) => r[2]), [1000, 2000, 4000, 8000, 12000, 16000, 24000, 32000]);
+  });
+  test("子ロンは翻数だけで決まり、符と切り上げ満貫は見ない", () => {
+    const expect = { 1: 1000, 2: 2000, 3: 4000, 4: 8000, 5: 8000, 6: 12000, 7: 12000, 8: 16000, 10: 16000, 11: 24000, 12: 24000, 13: 32000 };
+    for (const [han, amount] of Object.entries(expect)) {
+      for (const fu of [20, 30, 110]) assert.deepEqual(ron(w(1, Number(han), fu), 2, { rule: R3K }), [0, amount, -amount], `${han}翻${fu}符`);
+    }
+    assert.deepEqual(ron(w(1, 4, 30), 2, { rule: { ...R3K, kiriageMangan: false } }), [0, 8000, -8000]);
+  });
+  test("親ロン", () => {
+    const expect = { 1: 2000, 2: 3000, 3: 6000, 4: 12000, 6: 18000, 8: 24000, 11: 36000, 13: 48000 };
+    for (const [han, amount] of Object.entries(expect)) assert.deepEqual(ron(w(0, Number(han), 30), 1, { rule: R3K }), [amount, -amount, 0]);
+    assert.deepEqual(ron(yakuman(0), 1, { rule: R3K }), [48000, -48000, 0]);
+  });
+  test("子ツモは子から／親からの額が段ごとに違う", () => {
+    assert.deepEqual(tsumo(w(1, 1, 30), { rule: R3K }), [-1000, 2000, -1000]);
+    assert.deepEqual(tsumo(w(1, 2, 30), { rule: R3K }), [-1000, 2000, -1000]);
+    assert.deepEqual(tsumo(w(1, 3, 30), { rule: R3K }), [-3000, 4000, -1000]);
+    assert.deepEqual(tsumo(w(1, 5, 30), { rule: R3K }), [-5000, 8000, -3000]);
+    assert.deepEqual(tsumo(w(1, 6, 30), { rule: R3K }), [-8000, 12000, -4000]);
+    assert.deepEqual(tsumo(w(1, 8, 30), { rule: R3K }), [-10000, 16000, -6000]);
+    assert.deepEqual(tsumo(w(1, 11, 30), { rule: R3K }), [-16000, 24000, -8000]);
+    assert.deepEqual(tsumo(yakuman(1), { rule: R3K }), [-20000, 32000, -12000]);
+  });
+  test("親ツモはオール", () => {
+    assert.deepEqual(tsumo(w(0, 1, 30), { rule: R3K }), [2000, -1000, -1000]);
+    assert.deepEqual(tsumo(w(0, 3, 30), { rule: R3K }), [6000, -3000, -3000]);
+    assert.deepEqual(tsumo(w(0, 5, 30), { rule: R3K }), [12000, -6000, -6000]);
+    assert.deepEqual(tsumo(yakuman(0), { rule: R3K }), [48000, -24000, -24000]);
+  });
+  test("ダブル役満・数え役満の設定に従う", () => {
+    assert.deepEqual(ron(yakuman(1, 2), 2, { rule: R3K }), [0, 64000, -64000]);
+    assert.deepEqual(ron(yakuman(1, 2), 2, { rule: { ...R3K, doubleYakuman: false } }), [0, 32000, -32000]);
+    assert.deepEqual(ron(w(1, 13, 30), 2, { rule: { ...R3K, kazoeYakuman: "sanbaiman" } }), [0, 24000, -24000]);
+    assert.deepEqual(tsumo(yakuman(0, 2), { rule: R3K }), [96000, -48000, -48000]);
+  });
+  test("本場は 4人麻雀と同じ", () => {
+    assert.deepEqual(ron(w(1, 1, 30), 2, { rule: R3K, honba: 2 }), [0, 1600, -1600]);
+    assert.deepEqual(tsumo(w(1, 1, 30), { rule: R3K, honba: 1 }), [-1100, 2200, -1100]);
+  });
+  test("責任払いは役満の行を責任分と非責任分に分ける", () => {
+    // 子のロン、責任者は親。折半
+    assert.deepEqual(ron(yakuman(1, 1, { who: 0, yakumanCount: 1 }), 2, { rule: R3K }), [-16000, 32000, -16000]);
+    // 子のツモ、責任者は親。責任分は責任者が全額（ロン相当）
+    assert.deepEqual(tsumo(yakuman(1, 1, { who: 0, yakumanCount: 1 }), { rule: R3K }), [-32000, 32000, 0]);
+    // ダブル役満のうち 1つだけ包: 非責任分はツモ配分、責任分は責任者
+    assert.deepEqual(tsumo(yakuman(1, 2, { who: 0, yakumanCount: 1 }), { rule: R3K }), [-52000, 64000, -12000]);
+  });
+  test("流し満貫とチョンボの満貫払いは満貫ツモの行", () => {
+    assert.deepEqual(nagashiDeltas({ rule: R3K, dealer: 0, nagashiBy: [1] }), [-5000, 8000, -3000]);
+    assert.deepEqual(nagashiDeltas({ rule: R3K, dealer: 0, nagashiBy: [0] }), [12000, -6000, -6000]);
+    assert.deepEqual(chomboDeltas({ rule: R3K, dealer: 0, who: 1 }), [5000, -8000, 3000]);
+    assert.deepEqual(chomboDeltas({ rule: R3K, dealer: 0, who: 0 }), [-12000, 6000, 6000]);
+  });
+  test("4人麻雀には影響しない", () => {
+    const r = makeRule({ sanmaScoring: "kansai" });
+    assert.deepEqual(ron(w(1, 3, 30), 2, { rule: r }), [0, 3900, -3900, 0]);
+    assert.equal(scoreUnit(w(1, 3, 30), r).ron(false), 3900);
+  });
+  test("ゼロサムで 100点単位", () => {
+    for (let han = 1; han <= 13; han++) {
+      for (let dealer = 0; dealer < 3; dealer++) {
+        for (let who = 0; who < 3; who++) {
+          for (const t of [true, false]) {
+            const d = agariDeltas({ rule: R3K, dealer, honba: 1, tsumo: t, from: t ? null : (who + 1) % 3, winners: [w(who, han, 30)] });
+            assert.equal(d.reduce((a, b) => a + b, 0), 0);
+            assert.ok(d.every((x) => x % 100 === 0));
+          }
+        }
+      }
+    }
+  });
+});
+
+describe("チョンボ 定額", () => {
+  test("他の各人に chomboPoints ずつ払う", () => {
+    assert.deepEqual(chomboDeltas({ rule: makeRule({ chomboRule: "fixed" }), dealer: 0, who: 1 }), [2000, -6000, 2000, 2000]);
+    assert.deepEqual(chomboDeltas({ rule: makeRule({ chomboRule: "fixed", chomboPoints: 3000 }), dealer: 0, who: 0 }), [-9000, 3000, 3000, 3000]);
+    assert.deepEqual(chomboDeltas({ rule: { ...R3K, chomboRule: "fixed", chomboPoints: 1000 }, dealer: 0, who: 2 }), [1000, 1000, -2000]);
+  });
+});
+
+describe("チップ（agariChips）", () => {
+  const rule = makeRule({ chips: true });
+  test("ツモは各人から、ロンは放銃者から winner.chips 枚", () => {
+    assert.deepEqual(agariChips({ rule, tsumo: true, from: null, winners: [w(1, 3, 30, { chips: 2 })] }), [-2, 6, -2, -2]);
+    assert.deepEqual(agariChips({ rule, tsumo: false, from: 2, winners: [w(1, 3, 30, { chips: 1 })] }), [0, 1, -1, 0]);
+    assert.deepEqual(agariChips({ rule, tsumo: false, from: 2, winners: [w(1, 3, 30)] }), [0, 0, 0, 0]);
+  });
+  test("rule.chips が偽なら常に 0", () => {
+    assert.deepEqual(agariChips({ rule: R4, tsumo: true, from: null, winners: [w(1, 3, 30, { chips: 2 })] }), [0, 0, 0, 0]);
+  });
+  test("複数和了は和了者ごと。頭ハネなら絞った後の和了者だけ", () => {
+    const winners = [w(1, 3, 30, { chips: 1 }), w(3, 3, 30, { chips: 2 })];
+    assert.deepEqual(agariChips({ rule, tsumo: false, from: 2, winners }), [0, 1, -3, 2]);
+    assert.deepEqual(agariChips({ rule: { ...rule, multiRon: false }, tsumo: false, from: 2, winners }), [0, 0, -2, 2]);
   });
 });

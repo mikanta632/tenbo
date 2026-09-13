@@ -31,6 +31,7 @@ import {
   withEvents,
 } from "../src/edit.js";
 import { makeRule } from "../src/rules.js";
+import { kyokuName } from "../src/ui/format.js";
 
 const R4 = makeRule();
 const R3 = makeRule({ playerCount: 3, length: 6, startPoints: 35000, returnPoints: 40000, uma: [20, 0, -20] });
@@ -99,6 +100,7 @@ describe("初期状態", () => {
       honba: 0,
       kyotaku: 0,
       over: false,
+      chips: [0, 0, 0, 0],
       round: { riichi: [false, false, false, false], melded: [false, false, false, false], kita: [0, 0, 0, 0] },
     });
   });
@@ -648,5 +650,145 @@ describe("reduceAll", () => {
     assert.equal(states[1].kyotaku, 0);
     assert.equal(states[1].kyoku, 1);
     assert.equal(states[2].kyoku, 2);
+  });
+});
+
+// ---- 延長戦（§5.6） --------------------------------------------------------------
+
+describe("延長戦", () => {
+  const EXT = makeRule({ extension: true });
+  /** 東1〜南4 を親流れで消化する 8局（誰も 30000 に届かない） */
+  const eight = () => Array.from({ length: 8 }, (_, i) => ron((i + 1) % 4, (i + 2) % 4, 1, 30));
+  test("規定局数を終えてトップが返す点未満なら西入する", () => {
+    const s = run(EXT, ...eight());
+    assert.ok(Math.max(...s.points) < 30000);
+    assert.equal(s.kyoku, 8);
+    assert.equal(s.over, false);
+    // 延長戦が無効なら終局
+    assert.equal(run(R4, ...eight()).over, true);
+  });
+  test("トップが返す点以上なら通常どおり終局する", () => {
+    const s = run(EXT, adjust([10000, 0, 0, -10000]), ...eight());
+    assert.equal(s.over, true);
+  });
+  test("延長中は誰かが返す点に届いた局末で終局する（連荘でも）", () => {
+    const base = build(EXT, ...eight());
+    // 西1局（親 0）で 1 が 1翻ツモ → 届かないので続行
+    const s1 = reduce(appendEvent(base, tsumo(1, 1, 30), EXT), EXT);
+    assert.equal(s1.kyoku, 9);
+    assert.equal(s1.over, false);
+    // 西2局（親 1）で親が跳満ツモして 30000 以上 → 連荘だが終局
+    const s2 = reduce(appendEvent(appendEvent(base, tsumo(1, 1, 30), EXT), tsumo(1, 6, 30), EXT), EXT);
+    assert.equal(s2.kyoku, 9);
+    assert.ok(s2.points[1] >= 30000);
+    assert.equal(s2.over, true);
+  });
+  test("延長は 1 場まで。西4 を終えたら点数に関わらず終局", () => {
+    const events = [...eight(), ...Array.from({ length: 4 }, () => exhaustive([]))];
+    const states = reduceAll(build(EXT, ...events), EXT);
+    assert.equal(states[10].over, false);
+    assert.equal(states[11].kyoku, 12);
+    assert.equal(states[11].over, true);
+  });
+  test("東風は南入し、南4 まで", () => {
+    const rule = makeRule({ extension: true, length: 4 });
+    const four = Array.from({ length: 4 }, (_, i) => ron((i + 1) % 4, (i + 2) % 4, 1, 30));
+    const s = run(rule, ...four);
+    assert.equal(s.kyoku, 4);
+    assert.equal(s.over, false);
+    const s2 = run(rule, ...four, ...Array.from({ length: 4 }, () => exhaustive([])));
+    assert.equal(s2.over, true);
+    // 3人麻雀は西3 まで
+    const r3 = { ...R3, extension: true };
+    const six = Array.from({ length: 6 }, (_, i) => ron((i + 1) % 3, (i + 2) % 3, 1, 30));
+    const s3 = run(r3, ...six, exhaustive([]), exhaustive([]), exhaustive([]));
+    assert.equal(s3.kyoku, 9);
+    assert.equal(s3.over, true);
+    assert.equal(run(r3, ...six, exhaustive([]), exhaustive([])).over, false);
+  });
+  test("トビは延長中も優先する", () => {
+    const s = run(EXT, ...eight(), adjust([0, 0, -20000, 0]), ron(3, 2, 5, 30));
+    assert.equal(s.over, true);
+  });
+  test("オーラスで親がトップでも返す点未満ならアガリやめを出さない", () => {
+    const seven = Array.from({ length: 7 }, (_, i) => ron((i + 1) % 4, (i + 2) % 4, 1, 30));
+    const built = build(EXT, ...seven, ron(3, 0, 1, 30));
+    const s = reduce(built, EXT);
+    assert.equal(ranksOf(s.points)[3], 0);
+    assert.ok(s.points[3] < 30000);
+    assert.equal(agariYameAvailableAfter(built, EXT), false);
+    assert.equal(agariYameAvailableAfter(build(R4, ...seven, ron(3, 0, 1, 30)), R4), true);
+    // 届いていれば選べる
+    const built2 = build(EXT, ...seven, ron(3, 0, 5, 30));
+    assert.ok(reduce(built2, EXT).points[3] >= 30000);
+    assert.equal(agariYameAvailableAfter(built2, EXT), true);
+  });
+  test("延長中は西・北場の局名になる", () => {
+    assert.equal(kyokuName(8, 4), "西1局");
+    assert.equal(kyokuName(11, 4), "西4局");
+    assert.equal(kyokuName(4, 4), "南1局");
+    assert.equal(kyokuName(6, 3), "西1局");
+  });
+});
+
+// ---- トビの基準（§5.6） -------------------------------------------------------
+
+describe("トビの基準", () => {
+  test("tobiLine 1 なら 0点ちょうどでも終局", () => {
+    const rule = makeRule({ tobiLine: 1 });
+    const s = run(rule, adjust([0, 0, -17000, 17000]), ron(3, 2, 5, 30));
+    assert.equal(s.points[2], 0);
+    assert.equal(s.over, true);
+    assert.equal(run(R4, adjust([0, 0, -17000, 17000]), ron(3, 2, 5, 30)).over, false);
+  });
+});
+
+// ---- チップ（§5.2 手順6、§5.5） -----------------------------------------------------
+
+describe("チップ", () => {
+  const CH = makeRule({ chips: true, tobiPrize: 2 });
+  const wc = (who, han, fu, chips) => ({ who, han, fu, yakumanCount: 0, sekinin: null, chips });
+  test("初期値は 0。和了の chips をツモは各人から、ロンは放銃者から受け取る", () => {
+    assert.deepEqual(initialState(CH).chips, [0, 0, 0, 0]);
+    const s = run(CH, { t: "agari", tsumo: true, from: null, winners: [wc(1, 3, 30, 1)] }, { t: "agari", tsumo: false, from: 0, winners: [wc(2, 1, 30, 2)] });
+    assert.deepEqual(s.chips, [-3, 3, 1, -1]);
+  });
+  test("rule.chips が偽なら和了に chips があっても動かない", () => {
+    const s = run(R4, { t: "agari", tsumo: true, from: null, winners: [wc(1, 3, 30, 1)] });
+    assert.deepEqual(s.chips, [0, 0, 0, 0]);
+  });
+  test("トビ賞: 飛んだ人が各和了者に tobiPrize 枚。チョンボ・手動修正・テンパイ料では出ない", () => {
+    // 2 が 3 に放銃して飛ぶ
+    const s = run(CH, adjust([0, 0, -20000, 20000]), { t: "agari", tsumo: false, from: 2, winners: [wc(3, 5, 30, 0)] });
+    assert.equal(s.over, true);
+    assert.deepEqual(s.chips, [0, 0, -2, 2]);
+    // ツモで 2人同時に飛ぶ
+    const s2 = run(CH, adjust([0, 0, -24000, 24000]), adjust([-23500, 23500, 0, 0]), { t: "agari", tsumo: true, from: null, winners: [wc(1, 5, 30, 0)] });
+    assert.deepEqual(s2.chips, [-2, 4, -2, 0]);
+    // 流し満貫でも成立者が受け取る
+    const s3 = run(CH, adjust([0, 0, -24000, 24000]), nagashi([1], []));
+    assert.equal(s3.over, true);
+    assert.deepEqual(s3.chips, [0, 2, -2, 0]);
+    // テンパイ料で飛んでも和了者がいない
+    const s4 = run(CH, adjust([0, 0, -24500, 24500]), exhaustive([0, 1, 3]));
+    assert.equal(s4.over, true);
+    assert.deepEqual(s4.chips, [0, 0, 0, 0]);
+    // tobiPrize が 0 なら無し
+    const s5 = run({ ...CH, tobiPrize: 0 }, adjust([0, 0, -20000, 20000]), { t: "agari", tsumo: false, from: 2, winners: [wc(3, 5, 30, 0)] });
+    assert.deepEqual(s5.chips, [0, 0, 0, 0]);
+  });
+  test("複数和了のトビ賞は各和了者に", () => {
+    const s = run(CH, adjust([0, 0, -20000, 20000]), { t: "agari", tsumo: false, from: 2, winners: [wc(1, 5, 30, 0), wc(3, 1, 30, 0)] });
+    assert.deepEqual(s.chips, [0, 2, -4, 2]);
+  });
+  test("adjust の chips で枚数を補正できる。点数は動かない", () => {
+    const s = run(CH, { t: "adjust", note: "", deltas: [0, 0, 0, 0], chips: [1, -1, 0, 0] });
+    assert.deepEqual(s.chips, [1, -1, 0, 0]);
+    assert.deepEqual(s.points, [25000, 25000, 25000, 25000]);
+  });
+  test("編集後の再計算でも chips は意味情報から導出される", () => {
+    const events = build(CH, { t: "agari", tsumo: true, from: null, winners: [wc(1, 3, 30, 1)] }, { t: "agari", tsumo: false, from: 0, winners: [wc(2, 1, 30, 2)] });
+    const edited = replaceEvent(events, 0, { t: "agari", tsumo: false, from: 3, winners: [wc(1, 3, 30, 3)] }, CH);
+    assert.deepEqual(reduce(edited, CH).chips, [-2, 3, 2, -3]);
   });
 });
