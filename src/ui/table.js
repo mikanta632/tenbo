@@ -136,6 +136,8 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions, diff
       isReference ? h("span", { class: "diff-label" }, "基準") : null,
       riichiOn ? h("span", { class: "flag" }, "リーチ") : null,
       melded ? h("span", { class: "flag" }, "副露") : null,
+      // チップの収支（§8.2）。0 なら出さない
+      rule.chips && state.chips && state.chips[seat] ? h("span", { class: "tag chipcount" }, `${fmtDelta(state.chips[seat])}枚`) : null,
     ),
     h(
       "div",

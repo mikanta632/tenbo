@@ -143,8 +143,9 @@ const FU_ITEMS = [20, 25, 30, 40, 50, 60, 70, 80, 90, 100, 110].map((v) => ({ va
 
 /** Winner（イベント）→ フォーム状態 */
 function winnerState(who, w = null) {
-  const s = { who, han: 1, fu: 30, yakuman: false, yakumanCount: 1, sekininWho: null, sekininCount: 1 };
+  const s = { who, han: 1, fu: 30, yakuman: false, yakumanCount: 1, sekininWho: null, sekininCount: 1, chips: 0 };
   if (w) {
+    s.chips = w.chips || 0;
     if (w.yakumanCount > 0) {
       s.yakuman = true;
       s.yakumanCount = w.yakumanCount;
@@ -171,14 +172,20 @@ function winnerFromState(s, rule) {
       s.yakuman && rule.sekinin && s.sekininWho !== null
         ? { who: s.sekininWho, yakumanCount: Math.min(s.sekininCount, s.yakumanCount) }
         : null,
-    chips: 0,
+    chips: rule.chips ? s.chips || 0 : 0,
   };
 }
 
-function winnerSummary(s) {
-  if (s.yakuman) return ["役満", "ダブル役満", "トリプル役満"][s.yakumanCount - 1];
-  if (s.han >= 5) return hanName(s.han);
-  return `${s.fu}符${s.han}翻`;
+/** 関西式（§6.3）か。符を使わない */
+function isKansai(rule) {
+  return rule.playerCount === 3 && rule.sanmaScoring === "kansai";
+}
+
+function winnerSummary(s, rule = null) {
+  const chips = s.chips > 0 ? ` チップ${s.chips}枚` : "";
+  if (s.yakuman) return ["役満", "ダブル役満", "トリプル役満"][s.yakumanCount - 1] + chips;
+  if (s.han >= 5 || (rule && isKansai(rule))) return hanName(s.han) + chips;
+  return `${s.fu}符${s.han}翻${chips}`;
 }
 
 /**
@@ -210,9 +217,10 @@ function winnerForm({ s, state, rule, names, onChange }) {
 
   const slot = h("div", { class: "slot-detail" });
   if (!s.yakuman) {
-    const fuDim = s.han >= 5;
+    const kansai = isKansai(rule);
+    const fuDim = s.han >= 5 || kansai;
     append(slot,
-      h("div", { class: "label" }, fuDim ? `符（${hanName(s.han)}のため不要）` : "符"),
+      h("div", { class: "label" }, kansai ? "符（関西式のため不要）" : fuDim ? `符（${hanName(s.han)}のため不要）` : "符"),
       choice(
         FU_ITEMS.map((it) => ({ ...it, disabled: fuDim })),
         fuDim ? undefined : s.fu,
@@ -270,6 +278,20 @@ function winnerForm({ s, state, rule, names, onChange }) {
     );
   }
   frag.append(slot);
+  if (rule.chips) {
+    append(frag,
+      h("div", { class: "label" }, "チップ（枚）"),
+      choice(
+        [0, 1, 2, 3, 4, 5].map((v) => ({ value: v, label: String(v) })),
+        s.chips,
+        (v) => {
+          s.chips = v;
+          onChange();
+        },
+        { class: "grid6" },
+      ),
+    );
+  }
   return frag;
 }
 
@@ -343,13 +365,13 @@ export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = 
       const pv = previewTable({ state, event: ev, rule, names });
       const gain = pv.next.points[seat] - state.points[seat];
       append(body,
-        h("div", { class: "summary" }, winnerSummary(s), h("span", { class: "summary-gain" }, ` ${fmtDelta(gain)}`)),
+        h("div", { class: "summary" }, winnerSummary(s, rule), h("span", { class: "summary-gain" }, ` ${fmtDelta(gain)}`)),
         pv.el,
         confirmRow(() => onConfirm(ev)),
       );
     } else {
       append(body,
-        h("div", { class: "summary" }, winnerSummary(s), h("span", { class: "summary-gain dim" }, " 放銃者を選んでください")),
+        h("div", { class: "summary" }, winnerSummary(s, rule), h("span", { class: "summary-gain dim" }, " 放銃者を選んでください")),
         placeholderPreview({ state, names }),
         confirmRow(null, false),
       );
@@ -411,7 +433,7 @@ export function openMultiRonSheet({ state, rule, names, onConfirm, initial = nul
             },
           },
           seatLabel(i, state, names),
-          on ? h("span", { class: "chip-sub" }, ` ${winnerSummary(forms.get(i))}`) : null,
+          on ? h("span", { class: "chip-sub" }, ` ${winnerSummary(forms.get(i), rule)}`) : null,
         ),
       );
       if (on) {
@@ -635,7 +657,7 @@ export function openSpecialMenu({ rule, onPick, title = "特殊終局", withAdju
     withAgari ? ["agari", "和了（1人）", "ツモ・ロン"] : null,
     ["ryuukyoku", "流局", "テンパイ料と連荘"],
     ["abortive", "途中流局", "九種九牌・四風連打など"],
-    ["nagashi", "流し満貫", "成立者に満貫"],
+    rule && rule.nagashiMangan === false ? null : ["nagashi", "流し満貫", "成立者に満貫"],
     ["multiRon", "複数和了", "ダブロン・トリロン"],
     ["chombo", "チョンボ", "罰符を払って局をやり直す"],
     withAdjust ? ["adjust", "手動修正", "点棒とのズレを直す"] : null,
@@ -675,12 +697,16 @@ export function openEventEditor({ event, state, rule, names, onConfirm }) {
 
 /**
  * 対象者を選び、実際の持ち点を直接入力する。差分を adjust イベントとして発行する。onAdjust(seat, delta)
+ * チップを使うルールでは「点数／チップ」を切り替えられ、チップは実際の枚数を入れて onAdjust(seat, delta, "chips")。
  */
 export function openAdjustSheet({ state, rule, names, onAdjust }) {
   const n = rule.playerCount;
   let seat = null;
   let text = "";
+  let mode = "points"; // points | chips
   const body = h("div", { class: "sheet-body" });
+  const current = (i) => (mode === "chips" ? (state.chips ? state.chips[i] : 0) : state.points[i]);
+  const fmt = (v) => (mode === "chips" ? `${fmtDelta(v)}枚` : fmtPoints(v));
 
   function parsed() {
     const normalized = String(text).replace(/[,，\s]/g, "");
@@ -692,42 +718,65 @@ export function openAdjustSheet({ state, rule, names, onAdjust }) {
   function render() {
     clear(body);
     const v = parsed();
-    const delta = seat !== null && v !== null ? v - state.points[seat] : null;
+    const delta = seat !== null && v !== null ? v - current(seat) : null;
     const input = h("input", {
       type: "text",
       inputmode: "numeric",
       class: "points-input",
-      placeholder: seat === null ? "先に対象者を選ぶ" : "実際の点数",
+      placeholder: seat === null ? "先に対象者を選ぶ" : mode === "chips" ? "実際の枚数" : "実際の点数",
       value: text,
       disabled: seat === null,
       oninput: (e) => {
         text = e.target.value;
         // 再描画せずに差分表示だけ更新する（入力中のキーボードを閉じない）
         const p = parsed();
-        deltaEl.textContent = p === null ? "—" : fmtDelta(p - state.points[seat]);
-        confirmBtn.disabled = p === null || p === state.points[seat];
+        deltaEl.textContent = p === null ? "—" : fmtDelta(p - current(seat));
+        confirmBtn.disabled = p === null || p === current(seat);
       },
     });
     const deltaEl = h("span", { class: "inline-value" }, delta === null ? "—" : fmtDelta(delta));
     const confirmBtn = h(
       "button",
-      { type: "button", class: "btn-primary", disabled: delta === null || delta === 0, onclick: () => onAdjust(seat, parsed() - state.points[seat]) },
+      {
+        type: "button",
+        class: "btn-primary",
+        disabled: delta === null || delta === 0,
+        onclick: () => (mode === "chips" ? onAdjust(seat, parsed() - current(seat), "chips") : onAdjust(seat, parsed() - current(seat))),
+      },
       "確定",
     );
+    if (rule.chips) {
+      append(body,
+        choice(
+          [
+            { value: "points", label: "点数" },
+            { value: "chips", label: "チップ" },
+          ],
+          mode,
+          (m) => {
+            mode = m;
+            seat = null;
+            text = "";
+            render();
+          },
+          { class: "segmented" },
+        ),
+      );
+    }
     append(body,
       h("div", { class: "label" }, "対象者"),
       choice(
-        Array.from({ length: n }, (_, i) => ({ value: i, label: `${seatLabel(i, state, names)} ${fmtPoints(state.points[i])}` })),
+        Array.from({ length: n }, (_, i) => ({ value: i, label: `${seatLabel(i, state, names)} ${fmt(current(i))}` })),
         seat,
         (s) => {
           seat = s;
-          text = String(state.points[s]);
+          text = String(current(s));
           render();
           body.querySelector(".points-input")?.select();
         },
         { class: "grid2" },
       ),
-      h("div", { class: "label" }, "実際の点数（物理点棒の額をそのまま入力）"),
+      h("div", { class: "label" }, mode === "chips" ? "実際の枚数（手元のチップの収支をそのまま入力）" : "実際の点数（物理点棒の額をそのまま入力）"),
       h("div", { class: "row-inline" }, input, h("span", { class: "inline-label" }, "差分"), deltaEl),
       h("div", { class: "sheet-actions" }, confirmBtn),
     );
@@ -777,7 +826,13 @@ export function openOverDialog({ state, rule, names, reason, onSave, onDiscard }
       "div",
       { class: "preview" },
       order.map((i) =>
-        h("div", { class: "prow-line" }, h("span", { class: "pv-name" }, `${ranks[i] + 1}位 ${names[i]}`), h("span", { class: "pv-after" }, fmtPoints(state.points[i]))),
+        h(
+          "div",
+          { class: "prow-line" },
+          h("span", { class: "pv-name" }, `${ranks[i] + 1}位 ${names[i]}`),
+          rule.chips ? h("span", { class: "pv-chips" }, `${fmtDelta(state.chips ? state.chips[i] : 0)}枚`) : null,
+          h("span", { class: "pv-after" }, fmtPoints(state.points[i])),
+        ),
       ),
     ),
     state.kyotaku > 0 ? h("div", { class: "hint" }, `供託 ${state.kyotaku}本が残っています（${rule.finalKyotaku === "remain" ? "場に残します" : "トップに加算します"}）`) : null,
@@ -844,12 +899,13 @@ export function openConfirm({ title, message, okLabel = "OK", onOk }) {
  */
 export function openCombinedSettlement({ count, players, transfers }) {
   const label = (i) => (i === null ? "卓外" : players[i].name);
+  const withChips = players.some((p) => p.chips);
   const body = h("div", { class: "sheet-body" });
   append(body,
     h(
       "table",
       { class: "rtable" },
-      h("thead", null, h("tr", null, h("th", null, "名前"), h("th", null, "対局"), h("th", null, "pt"), h("th", null, "収支（円）"))),
+      h("thead", null, h("tr", null, h("th", null, "名前"), h("th", null, "対局"), h("th", null, "pt"), withChips ? h("th", null, "チップ") : null, h("th", null, "収支（円）"))),
       h(
         "tbody",
         null,
@@ -860,6 +916,7 @@ export function openCombinedSettlement({ count, players, transfers }) {
             h("td", { class: "name" }, p.name),
             h("td", null, String(p.games)),
             h("td", null, fmtPt(Math.round(p.pt * 10) / 10)),
+            withChips ? h("td", null, fmtDelta(p.chips || 0)) : null,
             h("td", { class: p.yen > 0 ? "plus" : p.yen < 0 ? "minus" : "" }, fmtYen(p.yen)),
           ),
         ),

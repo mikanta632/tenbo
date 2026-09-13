@@ -160,9 +160,13 @@ export function computeSettlement(game) {
   const yen = pt.map((p, i) => p * rule.rate + chipYen[i]);
   const rounded = yen.map((y) => Math.round(y));
 
+  // 卓外差額（点とチップ）。adjust は非ゼロサムを許すので、合計を明示する
   let outsideDiff = 0;
+  let outsideChips = 0;
   for (const e of game.events) {
-    if (e.t === "adjust" && e.deltas) outsideDiff += e.deltas.reduce((a, b) => a + b, 0);
+    if (e.t !== "adjust") continue;
+    if (e.deltas) outsideDiff += e.deltas.reduce((a, b) => a + b, 0);
+    if (e.chips) outsideChips += e.chips.reduce((a, b) => a + b, 0);
   }
 
   return {
@@ -178,6 +182,7 @@ export function computeSettlement(game) {
     kyotakuToTop,
     kyotakuRemain,
     outsideDiff,
+    outsideChips,
     transfers: settleTransfers(rounded),
   };
 }

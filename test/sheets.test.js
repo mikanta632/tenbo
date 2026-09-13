@@ -78,3 +78,119 @@ test("メニュー・終局画面に直前操作の取り消しを置かない",
     assert.equal(button(box, "直前の操作を取り消す"), undefined);
   }
 });
+
+// ---- v0.31 のオプションルール（§8.3, §8.9） ---------------------------------------
+
+import { openAgariSheet, openSpecialMenu } from "../src/ui/sheets.js";
+import { renderTable } from "../src/ui/table.js";
+
+test("設定: プリセットを読み込むと人数ごとのカスタムルールとして保存され、名前を付けて保存・削除できる", (t) => {
+  mockDom(t);
+  const saved = [];
+  let presets = [];
+  const root = renderSettings({
+    presets: PRESETS,
+    userPresets: presets,
+    rulesFor: (pc) => (pc === 3 ? PRESETS["3人標準"] : makeRule()),
+    isCustom: () => false,
+    onChange: (...args) => saved.push(args),
+    onSavePreset: (name, rule) => (presets = [...presets, { id: "r1", name, rule }]),
+    onDeletePreset: (id) => (presets = presets.filter((p) => p.id !== id)),
+    version: "test",
+  });
+  // 組み込みの関西三麻を読み込む → 3人麻雀に切り替わり、関西式で保存される
+  const kansaiRow = root.find((el) => el.matches(".preset-row") && el.textContent.includes("関西三麻"));
+  button(kansaiRow, "読み込む").handlers.click();
+  assert.equal(saved.at(-1)[0], 3);
+  assert.equal(saved.at(-1)[1].sanmaScoring, "kansai");
+  assert.match(root.textContent, /点数方式/);
+  assert.match(root.textContent, /読み込みました/);
+  // 名前を付けて保存
+  const nameInput = root.find((el) => el.tag === "input" && el.type === "text");
+  assert.equal(button(root, "今の設定を保存").disabled, true);
+  nameInput.handlers.input({ target: { value: "うちの三麻" } });
+  button(root, "今の設定を保存").handlers.click();
+  assert.equal(presets.length, 1);
+  assert.equal(presets[0].rule.sanmaScoring, "kansai");
+  assert.match(root.textContent, /うちの三麻/);
+  // 削除
+  const row = root.find((el) => el.matches(".preset-row") && el.textContent.includes("うちの三麻"));
+  button(row, "削除").handlers.click();
+  assert.equal(presets.length, 0);
+  assert.equal(root.find((el) => el.matches(".preset-row") && el.textContent.includes("うちの三麻")), undefined);
+});
+
+test("設定: 東風なら延長戦は「南入」、下位項目は親がオフなら無効", (t) => {
+  mockDom(t);
+  const root = renderSettings({ rulesFor: () => makeRule({ length: 4, sekinin: false, multiRon: false, chips: false, chomboRule: "mangan" }), isCustom: () => false, onChange: () => {}, version: "test" });
+  const text = root.textContent;
+  assert.match(text, /南入/);
+  assert.ok(!text.includes("西入"));
+  assert.ok(!text.includes("未実装"), "未実装の表示が残っている");
+  const rowOf = (label) => root.find((el) => el.matches(".row") && el.children[0]?.textContent === label);
+  for (const label of ["ロン時の負担", "供託の帰属", "本場の帰属", "定額の点", "チップ単価（円/枚）", "トビ賞（枚）"]) {
+    const control = rowOf(label).find((el) => el.tag === "select" || el.tag === "input");
+    assert.equal(control.disabled, true, label);
+  }
+  assert.equal(rowOf("トビの基準").find((el) => el.tag === "select").disabled, false);
+  assert.equal(root.find((el) => el.matches(".row") && el.children[0]?.textContent === "点数方式"), undefined, "4人麻雀に3人の項目が出ている");
+});
+
+test("和了入力: チップを使うルールでは枚数の行を出し、Winner.chips に入る。関西式では符を無効にする", (t) => {
+  mockDom(t);
+  const events = [];
+  const rule = makeRule({ chips: true });
+  const { box } = openAgariSheet({ state: initialState(rule), rule, names: ["A", "B", "C", "D"], seat: 1, onConfirm: (ev) => events.push(ev) });
+  assert.match(box.textContent, /チップ（枚）/);
+  const chipRow = box.find((el) => el.matches(".grid6"));
+  chipRow.find((el) => el.tag === "button" && el.textContent === "2").handlers.click();
+  button(box, "確定").handlers.click();
+  assert.equal(events[0].winners[0].chips, 2);
+  assert.match(box.textContent, /チップ2枚/);
+
+  const plain = openAgariSheet({ state: initialState(makeRule()), rule: makeRule(), names: ["A", "B", "C", "D"], seat: 1, onConfirm: () => {} });
+  assert.ok(!plain.box.textContent.includes("チップ"));
+
+  const kansai = makeRule({ playerCount: 3, length: 6, uma: [30, -10, -20], sanmaScoring: "kansai" });
+  const k = openAgariSheet({ state: initialState(kansai), rule: kansai, names: ["A", "B", "C"], seat: 1, onConfirm: () => {} });
+  assert.match(k.box.textContent, /関西式のため不要/);
+  const fuButtons = k.box.find((el) => el.matches(".grid4")).findAll((el) => el.tag === "button");
+  assert.ok(fuButtons.length > 0 && fuButtons.every((b) => b.disabled));
+});
+
+test("特殊終局: 流し満貫をオフにすると入口から消える", (t) => {
+  mockDom(t);
+  const on = openSpecialMenu({ rule: makeRule(), onPick: () => {} });
+  assert.ok(button(on.box, "流し満貫成立者に満貫"));
+  const off = openSpecialMenu({ rule: makeRule({ nagashiMangan: false }), onPick: () => {} });
+  assert.equal(button(off.box, "流し満貫成立者に満貫"), undefined);
+});
+
+test("手動修正: チップの枚数を補正すると kind \"chips\" で差分を渡す", (t) => {
+  mockDom(t);
+  const changes = [];
+  const rule = makeRule({ chips: true });
+  const state = { ...initialState(rule), chips: [2, -1, -1, 0] };
+  const { box } = openAdjustSheet({ state, rule, names: ["A", "B", "C", "D"], onAdjust: (...args) => changes.push(args) });
+  box.find((el) => el.tag === "button" && el.textContent === "チップ").handlers.click();
+  box.find((el) => el.tag === "button" && el.children[0] === "東 A +2枚").handlers.click();
+  const input = box.querySelector(".points-input");
+  input.handlers.input({ target: { value: "3" } });
+  box.find((el) => el.tag === "button" && el.children[0] === "確定").handlers.click();
+  assert.deepEqual(changes.at(-1), [0, 1, "chips"]);
+  // 点数モードは従来どおり 2 引数
+  const plain = openAdjustSheet({ state: initialState(makeRule()), rule: makeRule(), names: ["A", "B", "C", "D"], onAdjust: (...args) => changes.push(args) });
+  assert.equal(plain.box.find((el) => el.tag === "button" && el.textContent === "チップ"), undefined);
+});
+
+test("対局画面: チップの収支を名前の行に出す（0 は出さない）", (t) => {
+  mockDom(t);
+  const rule = makeRule({ chips: true });
+  const state = { ...initialState(rule), chips: [3, 0, -2, -1] };
+  const game = { rule, events: [], startedAt: "2026-09-06T00:00:00Z", bottomSeat: 0 };
+  const root = renderTable({ game, state, names: ["A", "B", "C", "D"], actions: {}, diffSeat: null });
+  const tagOf = (seat) => root.find((el) => el.dataset.seat === String(seat)).querySelector(".chipcount");
+  assert.equal(tagOf(0).textContent, "+3枚");
+  assert.equal(tagOf(1), undefined);
+  assert.equal(tagOf(2).textContent, "−2枚");
+});

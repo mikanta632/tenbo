@@ -4,7 +4,7 @@
 // 画面: 初期画面はタブ（対局・設定・戦績・その他）。対局中・ログ・結果・個人ページはタブ無しの全画面。
 
 import { createStorage, prepareImport } from "../storage.js";
-import { PRESETS, validateRule } from "../rules.js";
+import { PRESETS, validateRule, normalizeRule, presetFor } from "../rules.js";
 import { reduce, isEndOfKyoku, agariYameAvailableAfter, dealerOf, kyokuGroups } from "../reduce.js";
 import { appendEvent, removeEvent, replaceEvent, insertEvent, deleteKyoku, withEvents } from "../edit.js";
 import { computeSettlement } from "../settlement.js";
@@ -37,7 +37,7 @@ import {
   openCombinedSettlement,
 } from "./sheets.js";
 import { fmtElapsed, kyokuName, gameDateTime } from "./format.js";
-import { customRules, saveCustomRule } from "./prefs.js";
+import { customRules, saveCustomRule, loadPresets, savePreset, deletePreset } from "./prefs.js";
 import {
   soundEnabled,
   setSoundEnabled,
@@ -73,14 +73,17 @@ let elapsedTimer = null;
 let diffSeat = null; // 点差を表示中の席
 let diffTimer = null;
 
-/** 新しい対局に使うルール。設定タブで変更していればそれ、なければプリセット */
+/** 新しい対局に使うルール。設定タブで変更していればそれ（不足はプリセットで埋める）、なければプリセット */
 function rulesFor(pc) {
   const custom = customRules()[String(pc)];
-  if (custom) return custom;
-  return Object.values(PRESETS).find((r) => r.playerCount === pc);
+  if (custom) return normalizeRule({ ...custom, playerCount: pc });
+  return presetFor(pc);
 }
+/** 標準プリセットと違う設定になっているか */
 function isCustomRule(pc) {
-  return !!customRules()[String(pc)];
+  const custom = customRules()[String(pc)];
+  if (!custom) return false;
+  return JSON.stringify(rulesFor(pc)) !== JSON.stringify(presetFor(pc));
 }
 
 // ---- 効果音: すべてのボタン操作 ---------------------------------------------
@@ -195,6 +198,7 @@ function gameTabContent() {
 function settingsContent() {
   return renderSettings({
     presets: PRESETS,
+    userPresets: loadPresets(),
     rulesFor,
     isCustom: isCustomRule,
     initialPc: settingsPc,
@@ -203,6 +207,8 @@ function settingsContent() {
       settingsPc = pc;
       saveCustomRule(pc, rule);
     },
+    onSavePreset: (name, rule) => savePreset(name, rule),
+    onDeletePreset: (id) => deletePreset(id),
   });
 }
 
@@ -448,10 +454,17 @@ function renderTableScreen() {
     closeSheet();
     emit(ev);
   };
-  const adjustAndEmit = (seat, delta) => {
+  // 手動修正。kind が "chips" ならチップ枚数の補正（点数は動かさない）
+  const adjustAndEmit = (seat, delta, kind = "points") => {
     const deltas = new Array(rule.playerCount).fill(0);
-    deltas[seat] = delta;
     closeSheet();
+    if (kind === "chips") {
+      const chips = new Array(rule.playerCount).fill(0);
+      chips[seat] = delta;
+      emit({ t: "adjust", note: "チップ修正", deltas, chips });
+      return;
+    }
+    deltas[seat] = delta;
     emit({ t: "adjust", note: "手動修正", deltas });
   };
 
@@ -584,8 +597,11 @@ function showOver(state, names) {
   const rule = game.rule;
   let reason = "規定局数を終えました";
   const last = game.events[game.events.length - 1];
-  if (rule.tobi && state.points.some((p) => p < rule.tobiLine)) reason = "トビで終局";
+  if (rule.tobi && state.points.some((p) => p < (rule.tobiLine ?? 0))) reason = "トビで終局";
   else if (last && last.t === "end") reason = "終局（アガリやめ／手動）";
+  else if (rule.extension && state.kyoku >= rule.length) {
+    reason = Math.max(...state.points) >= rule.returnPoints ? "延長戦で返す点に到達" : "延長戦を終えました";
+  }
   closeSheet();
   openSheetHandle = openOverDialog({
     state,

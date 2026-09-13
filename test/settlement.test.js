@@ -212,5 +212,6 @@ describe("チップの精算", () => {
     const s = computeSettlement(g);
     assert.deepEqual(s.chips, [1, 0, 0, 0]);
     assert.equal(s.yen[0], s.pt[0] * 50 + 100);
+    assert.equal(s.outsideChips, 1);
   });
 });

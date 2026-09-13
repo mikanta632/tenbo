@@ -32,7 +32,7 @@ export function mockDom(t) {
     }
   });
   globalThis.Node = Element;
-  globalThis.document = { createElement: (tag) => new Element(tag), body: new Element("body") };
+  globalThis.document = { createElement: (tag) => new Element(tag), createDocumentFragment: () => new Element("fragment"), body: new Element("body") };
 }
 
 export const button = (root, text) => root.find((el) => el.tag === "button" && el.textContent === text);

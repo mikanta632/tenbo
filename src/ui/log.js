@@ -9,9 +9,10 @@ import { kyokuName, fmtPoints, fmtDelta, hanName, ABORTIVE_KIND_NAMES } from "./
 import { openActionSheet } from "./sheets.js";
 
 function winnerText(w) {
-  if (w.yakumanCount > 0) return ["役満", "ダブル役満", "トリプル役満"][w.yakumanCount - 1] + (w.sekinin ? "（包）" : "");
-  if (w.han >= 5) return hanName(w.han);
-  return `${w.fu}符${w.han}翻`;
+  const chips = w.chips > 0 ? ` チップ${w.chips}枚` : "";
+  if (w.yakumanCount > 0) return ["役満", "ダブル役満", "トリプル役満"][w.yakumanCount - 1] + (w.sekinin ? "（包）" : "") + chips;
+  if (w.han >= 5) return hanName(w.han) + chips;
+  return `${w.fu}符${w.han}翻${chips}`;
 }
 
 /** 局末イベントの1行説明 */
@@ -27,7 +28,11 @@ export function describeEvent(e, names) {
     return `流局（テンパイ: ${t}）`;
   }
   if (e.t === "chombo") return `チョンボ ${names[e.who]}`;
-  if (e.t === "adjust") return `修正 ${e.deltas.map((d, i) => (d ? `${names[i]} ${fmtDelta(d)}` : null)).filter(Boolean).join(" ")}`;
+  if (e.t === "adjust") {
+    const points = e.deltas.map((d, i) => (d ? `${names[i]} ${fmtDelta(d)}` : null)).filter(Boolean);
+    const chips = (e.chips || []).map((d, i) => (d ? `${names[i]} ${fmtDelta(d)}枚` : null)).filter(Boolean);
+    return `修正 ${[...points, ...(chips.length ? [`チップ ${chips.join(" ")}`] : [])].join(" ")}`;
+  }
   if (e.t === "riichi") return `リーチ ${names[e.who]}`;
   if (e.t === "meld") return `${e.value ? "副露" : "副露解除"} ${names[e.who]}`;
   if (e.t === "kita") return `北 ${names[e.who]} ${e.delta > 0 ? "+" : ""}${e.delta}`;

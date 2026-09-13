@@ -436,3 +436,14 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
   text-align: left; min-height: 52px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2);
   background: rgba(255,255,255,0.06); padding: 0 14px; font-size: 16px;
 }
+
+/* 設定: プリセットの行と保存欄（§8.9） */
+.preset-row > span:first-child { flex: 1; color: var(--ink); font-size: 15px; }
+.preset-row .row-note { min-width: 0; }
+.preset-row .btn-secondary, .preset-row .btn-flat { flex: 0 0 auto; padding: 8px 12px; }
+.preset-save input[type="text"] { flex: 1; min-width: 0; }
+.btn-flat.danger { color: #ff9d8c; }
+/* チップの枚数（対局画面のパネル・終局・結果） */
+.tag.chipcount { background: rgba(255, 214, 102, 0.22); color: #ffd666; }
+.pv-chips { min-width: 3.5em; text-align: right; color: #ffd666; font-variant-numeric: tabular-nums; }
+.choice.grid6 .chip { padding: 6px 2px; font-size: 15px; }

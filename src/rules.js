@@ -99,6 +99,7 @@ export function normalizeRule(rule) {
   const base = presetFor(rule && rule.playerCount === 3 ? 3 : 4);
   const merged = { ...base };
   for (const key of Object.keys(base)) if (rule && rule[key] !== undefined) merged[key] = rule[key];
+  if (merged.chomboRule === "manual") merged.chomboRule = "mangan"; // 廃止（§6.7）
   return merged;
 }
 

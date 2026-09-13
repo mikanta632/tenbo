@@ -2,7 +2,7 @@
 
 import { h, clear, svg } from "./dom.js";
 import { aggregate, derive, playerGames } from "../stats.js";
-import { fmtPoints, gameDateTime, fmtPt, fmtYen, rankBadgeClass } from "./format.js";
+import { fmtPoints, fmtDelta, gameDateTime, fmtPt, fmtYen, rankBadgeClass } from "./format.js";
 
 const pct = (x) => (x === null ? "—" : `${(x * 100).toFixed(1)}%`);
 const num = (x, d = 1) => (x === null ? "—" : x.toFixed(d));
@@ -138,6 +138,7 @@ export function renderPlayer(props) {
           kv("最高素点", pts(d.maxPoints)),
           kv("通算 pt", fmtPt(Math.round(d.ptSum * 10) / 10)),
           kv("通算 円", fmtYen(d.yenSum)),
+          kv("通算チップ", `${fmtDelta(d.chipSum || 0)}枚`),
         ),
         rankBar(d.rankDist, pc, d.games),
       ),
