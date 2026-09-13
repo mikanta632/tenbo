@@ -195,3 +195,37 @@ describe("combineGames", () => {
     assert.deepEqual(combineGames([]), { players: [], transfers: [] });
   });
 });
+
+// ---- チップ収支（§8.5 通算チップ） ------------------------------------------------
+
+describe("チップ収支", () => {
+  const CH = makeRule({ chips: true, chipRate: 100 });
+  const wc = (who, han, fu, chips) => ({ who, han, fu, yakumanCount: 0, sekinin: null, chips });
+  function chipGame(id, seats, ...events) {
+    let list = [];
+    for (const e of events) list = appendEvent(list, e, CH);
+    return { id, rule: CH, seats, events: list, settlement: null };
+  }
+  test("gameStats は精算のチップ枚数を席ごとに持つ", () => {
+    const g = chipGame("g1", ["a", "b", "c", "d"], { t: "agari", tsumo: true, from: null, winners: [wc(1, 3, 30, 1)] });
+    const { seats } = gameStats(g);
+    assert.deepEqual(seats.map((s) => s.chipSum), [-1, 3, -1, -1]);
+    // チップ無しのルールでは 0
+    assert.deepEqual(gameStats(game("g2", ["a", "b", "c", "d"], tsumo(1, 3, 30))).seats.map((s) => s.chipSum), [0, 0, 0, 0]);
+  });
+  test("aggregate は対局と繰越のチップを足し込む", () => {
+    const g1 = chipGame("g1", ["a", "b", "c", "d"], { t: "agari", tsumo: true, from: null, winners: [wc(1, 3, 30, 1)] });
+    const g2 = chipGame("g2", ["b", "a", "c", "d"], { t: "agari", tsumo: false, from: 2, winners: [wc(0, 3, 30, 2)] });
+    const carry = [{ playerId: "a", playerCount: 4, games: 1, rankDist: [1, 0, 0, 0], pointsSum: 0, ptSum: 0, yenSum: 0, chipSum: 5 }];
+    const m = aggregate([g1, g2], carry);
+    assert.equal(derive(m.get("a")).chipSum, -1 + 0 + 5);
+    assert.equal(derive(m.get("b")).chipSum, 3 + 2);
+    assert.equal(derive(m.get("c")).chipSum, -1 - 2);
+  });
+  test("combineGames はチップも合算する", () => {
+    const g1 = chipGame("g1", ["a", "b", "c", "d"], { t: "agari", tsumo: true, from: null, winners: [wc(1, 3, 30, 1)] }, { t: "end" });
+    const { players } = combineGames([g1]);
+    const byId = Object.fromEntries(players.map((p) => [p.playerId, p.chips]));
+    assert.deepEqual(byId, { a: -1, b: 3, c: -1, d: -1 });
+  });
+});

@@ -6,7 +6,7 @@ import { assertRule } from "./rules.js";
 import { reduce } from "./reduce.js";
 import { COUNTERS } from "./stats.js";
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const KEYS = Object.freeze({
   meta: "mj.meta",
@@ -33,6 +33,11 @@ const MIGRATIONS = {
       maxPoints: null,
       ...c,
     })),
+  }),
+  // 3 → 4: 繰越にチップ収支を足す（旧アプリにチップは無いので 0）
+  3: (data) => ({
+    ...data,
+    carry: (data.carry ?? []).map((c) => ({ chipSum: 0, ...c })),
   }),
 };
 
@@ -94,6 +99,7 @@ export function prepareImport(data) {
       if (event.t === "meld") check(typeof event.value === "boolean", "meld.value");
       if (event.t === "kita") check(event.delta === 1 || event.delta === -1, "kita.delta");
       if (["agari", "ryuukyoku", "chombo", "adjust"].includes(event.t)) check(numbers(event.deltas), "Event.deltas");
+      if (event.t === "adjust") check(event.chips == null || numbers(event.chips), "adjust.chips");
       if (event.t === "agari") {
         check(typeof event.tsumo === "boolean" && (event.tsumo ? event.from === null : seat(event.from)), "agari.from / tsumo");
         check(Array.isArray(event.winners) && event.winners.length > 0 && event.winners.every(isObject), "agari.winners");
@@ -101,6 +107,7 @@ export function prepareImport(data) {
         for (const winner of event.winners) {
           check(event.tsumo || winner.who !== event.from, "和了者と放銃者の重複");
           check(winner.yakumanCount == null || (Number.isInteger(winner.yakumanCount) && winner.yakumanCount >= 0 && winner.yakumanCount <= 3), "yakumanCount");
+          check(winner.chips == null || (Number.isInteger(winner.chips) && winner.chips >= 0), "winner.chips");
           if (!winner.yakumanCount) check(Number.isFinite(winner.han) && winner.han > 0 && Number.isFinite(winner.fu) && winner.fu > 0, "han / fu");
           if (winner.sekinin != null) check(isObject(winner.sekinin) && seat(winner.sekinin.who) && Number.isInteger(winner.sekinin.yakumanCount) && winner.sekinin.yakumanCount > 0, "sekinin");
         }
@@ -115,6 +122,7 @@ export function prepareImport(data) {
     if (game.settlement != null) {
       const s = game.settlement;
       check(isObject(s) && [s.points, s.ranks, s.pt, s.yen].every(numbers), "settlement");
+      check(s.chips == null || numbers(s.chips), "settlement.chips");
       check(Array.isArray(s.transfers) && s.transfers.every((v) => isObject(v) && (v.from === null || seat(v.from)) && (v.to === null || seat(v.to)) && Number.isFinite(v.amount)), "settlement.transfers");
     }
   }

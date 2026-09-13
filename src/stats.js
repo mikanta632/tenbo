@@ -12,7 +12,7 @@ export const COUNTERS = Object.freeze([
   "effective", "agari", "houju", "riichi", "meld", "agariSum", "houjuSum",
   "tsumoAgari", "riichiAgari", "meldAgari", "damaAgari", "riichiAgariSum", "meldAgariSum", "damaAgariSum",
   "riichiHouju", "meldHouju", "damaHouju", "riichiRyuukyoku", "meldRyuukyoku",
-  "plus", "minus", "tobi",
+  "plus", "minus", "tobi", "chipSum",
 ]);
 
 function emptyAcc() {
@@ -49,7 +49,9 @@ export function gameStats(game) {
     yen: settlement.yen[i],
     // トビ（飛んだ対局を1と数える）。トビ無しルールでは常に 0
     tobi: rule.tobi && settlement.points[i] < (rule.tobiLine ?? 0) ? 1 : 0,
-    ...Object.fromEntries(COUNTERS.filter((k) => k !== "tobi").map((k) => [k, 0])),
+    // チップ収支（枚）。チップ無しルールや古い精算では 0
+    chipSum: (settlement.chips && settlement.chips[i]) || 0,
+    ...Object.fromEntries(COUNTERS.filter((k) => k !== "tobi" && k !== "chipSum").map((k) => [k, 0])),
   }));
 
   for (const g of kyokuGroups(events)) {
@@ -183,12 +185,13 @@ export function combineGames(games) {
   const map = new Map();
   for (const game of games) {
     for (const s of gameStats(game).seats) {
-      if (!map.has(s.playerId)) map.set(s.playerId, { playerId: s.playerId, games: 0, points: 0, pt: 0, yen: 0 });
+      if (!map.has(s.playerId)) map.set(s.playerId, { playerId: s.playerId, games: 0, points: 0, pt: 0, yen: 0, chips: 0 });
       const a = map.get(s.playerId);
       a.games++;
       a.points += s.points;
       a.pt += s.pt;
       a.yen += s.yen;
+      a.chips += s.chipSum;
     }
   }
   const players = [...map.values()].sort((a, b) => b.yen - a.yen);
@@ -205,6 +208,7 @@ export function derive(a) {
     avgPoints: div(a.pointsSum, a.games),
     ptSum: a.ptSum,
     yenSum: a.yenSum,
+    chipSum: a.chipSum,
     effective: a.effective,
     agariCount: a.agari,
     houjuCount: a.houju,

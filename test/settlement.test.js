@@ -130,3 +130,87 @@ describe("computeSettlement", () => {
     assert.equal(s.oka, 15);
   });
 });
+
+// ---- 同点の等分（§7 tieBreak: split） --------------------------------------------
+
+describe("同点の等分", () => {
+  const SPLIT = makeRule({ tieBreak: "split" });
+  test("同点の 2人でウマ（トップならオカも）を等分する", () => {
+    const g = game(SPLIT, adjust([5000, 5000, -5000, -5000]));
+    const s = computeSettlement(g);
+    assert.deepEqual(s.points, [30000, 30000, 20000, 20000]);
+    // 表示上の順位は起家優先のまま
+    assert.deepEqual(s.ranks, [0, 1, 2, 3]);
+    // 上位組: (20 + 10 + オカ 20) / 2 = 25、下位組: −10 + (−10 − 20) / 2 = −25
+    assert.deepEqual(s.pt, [25, 25, -25, -25]);
+    // 起家優先ならトップが端数とオカを引き受ける
+    assert.deepEqual(computeSettlement(game(R4, adjust([5000, 5000, -5000, -5000]))).pt, [40, 10, -20, -30]);
+  });
+  test("小数保持でも同じ", () => {
+    const g = game({ ...SPLIT, ptRounding: "none" }, adjust([5000, 5000, -5000, -5000]));
+    assert.deepEqual(computeSettlement(g).pt, [25, 25, -25, -25]);
+  });
+  test("全員同点なら全員 0", () => {
+    assert.deepEqual(computeSettlement(game(SPLIT)).pt, [0, 0, 0, 0]);
+    assert.deepEqual(computeSettlement(game({ ...SPLIT, ptRounding: "none" })).pt, [0, 0, 0, 0]);
+  });
+  test("五捨六入の端数はトップの組で等分する", () => {
+    // 0 と 1 が 30,000 で並び、2 は 22,600、3 は 17,400
+    const g = game(SPLIT, adjust([5000, 5000, -2400, -7600]));
+    const s = computeSettlement(g);
+    // 2: −7.4 → −7 −10 = −17、3: −12.6 → −13 −20 = −33、残り 50 を 2人で
+    assert.deepEqual(s.pt, [25, 25, -17, -33]);
+    assert.equal(s.pt.reduce((a, b) => a + b, 0), 0);
+  });
+});
+
+// ---- 祝儀（§7） -----------------------------------------------------------------
+
+describe("チップの精算", () => {
+  const CH = makeRule({ chips: true, chipRate: 100 });
+  const wc = (who, han, fu, chips) => ({ who, han, fu, yakumanCount: 0, sekinin: null, chips });
+  test("円は pt × レート + チップ × 単価", () => {
+    const g = game(CH, { t: "agari", tsumo: true, from: null, winners: [wc(1, 5, 30, 2)] });
+    const s = computeSettlement(g);
+    assert.deepEqual(s.points, [21000, 33000, 23000, 23000]);
+    assert.deepEqual(s.chips, [-2, 6, -2, -2]);
+    assert.deepEqual(s.chipYen, [-200, 600, -200, -200]);
+    assert.deepEqual(s.pt, [-29, 43, 3, -17]);
+    assert.deepEqual(s.yen, [-1650, 2750, -50, -1050]);
+    assert.equal(s.yen.reduce((a, b) => a + b, 0), 0);
+  });
+  test("rule.chips が偽なら和了に枚数があっても 0", () => {
+    const g = game(R4, { t: "agari", tsumo: true, from: null, winners: [wc(1, 5, 30, 2)] });
+    const s = computeSettlement(g);
+    assert.deepEqual(s.chips, [0, 0, 0, 0]);
+    assert.deepEqual(s.yen, s.pt.map((p) => p * 50));
+  });
+  test("焼き鳥: 和了ゼロの人が他の各人に払う。流し満貫は設定で数える", () => {
+    const rule = { ...CH, yakitori: 1 };
+    const g = game(rule, ron(1, 2, 1, 30), { t: "end" });
+    const s = computeSettlement(g);
+    assert.deepEqual(s.yakitoriSeats, [0, 2, 3]);
+    assert.deepEqual(s.chips, [-1, 3, -1, -1]);
+    const nagashi = { t: "ryuukyoku", type: "nagashi", abortiveKind: null, tenpai: [], nagashiBy: [2] };
+    assert.deepEqual(computeSettlement(game(rule, nagashi, { t: "end" })).yakitoriSeats, [0, 1, 3]);
+    assert.deepEqual(computeSettlement(game({ ...rule, yakitoriNagashi: false }, nagashi, { t: "end" })).yakitoriSeats, [0, 1, 2, 3]);
+    // チョンボで流れた局の和了は数えない（そもそも和了イベントにならない）
+    assert.deepEqual(computeSettlement(game(rule, { t: "chombo", who: 1 }, { t: "end" })).yakitoriSeats, [0, 1, 2, 3]);
+    // yakitori が 0 なら無し
+    assert.deepEqual(computeSettlement(game(CH, ron(1, 2, 1, 30), { t: "end" })).yakitoriSeats, []);
+  });
+  test("トビ賞は畳み込みで動いた枚数に含まれ、飛んだ席を返す", () => {
+    const rule = { ...CH, tobiPrize: 2 };
+    const g = game(rule, adjust([0, 0, -20000, 20000]), { t: "agari", tsumo: false, from: 2, winners: [wc(3, 5, 30, 0)] });
+    const s = computeSettlement(g);
+    assert.deepEqual(s.tobiSeats, [2]);
+    assert.deepEqual(s.chips, [0, 0, -2, 2]);
+    assert.deepEqual(computeSettlement(game(CH, adjust([0, 0, -20000, 20000]), ron(3, 2, 5, 30))).tobiSeats, []);
+  });
+  test("adjust の chips は精算に入る（合計が 0 でなくてもよい）", () => {
+    const g = game(CH, { t: "adjust", note: "", deltas: [0, 0, 0, 0], chips: [1, 0, 0, 0] });
+    const s = computeSettlement(g);
+    assert.deepEqual(s.chips, [1, 0, 0, 0]);
+    assert.equal(s.yen[0], s.pt[0] * 50 + 100);
+  });
+});

@@ -2,7 +2,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { createStorage, memoryStorage, migrate, SCHEMA_VERSION, KEYS } from "../src/storage.js";
+import { createStorage, memoryStorage, migrate, prepareImport, SCHEMA_VERSION, KEYS } from "../src/storage.js";
 import { makeRule } from "../src/rules.js";
 import { appendEvent } from "../src/edit.js";
 import { computeSettlement } from "../src/settlement.js";
@@ -51,6 +51,7 @@ function carry(playerId, playerCount) {
     plus: 8,
     minus: 13,
     tobi: 0,
+    chipSum: 0,
   };
 }
 
@@ -267,5 +268,51 @@ describe("storage", () => {
       assert.deepEqual(st.loadGames(), data.games);
       assert.deepEqual(data, before);
     }
+  });
+});
+
+// ---- schemaVersion 4（チップ） ---------------------------------------------------
+
+describe("チップの保存", () => {
+  test("版 3 の繰越には chipSum: 0 を足す", () => {
+    const old = { ...carry("a", 4) };
+    delete old.chipSum;
+    const out = migrate({ meta: { schemaVersion: 3 }, roster: [], current: null, games: [], carry: [old] });
+    assert.equal(out.meta.schemaVersion, 4);
+    assert.equal(out.carry[0].chipSum, 0);
+    assert.equal(out.carry[0].agari, 6);
+  });
+  test("和了の chips と adjust.chips を検証し、往復できる", () => {
+    const rule = makeRule({ chips: true, chipRate: 100, tobiPrize: 1, yakitori: 1 });
+    const data = backup();
+    const g = data.games[0];
+    g.rule = rule;
+    const events = [
+      { t: "agari", tsumo: true, from: null, winners: [{ who: 0, han: 3, fu: 30, yakumanCount: 0, sekinin: null, chips: 2 }] },
+      { t: "adjust", note: "チップ", deltas: [0, 0, 0, 0], chips: [1, -1, 0, 0] },
+      { t: "end" },
+    ];
+    g.events = events.reduce((list, event) => appendEvent(list, event, rule), []);
+    g.settlement = computeSettlement(g);
+    // ツモで 2枚ずつ受け取り、adjust で +1/−1、焼き鳥は 1・2・3 が他の各人に 1枚
+    assert.deepEqual(g.settlement.chips, [6 + 1 + 3, -2 - 1 - 1, -2 - 1, -2 - 1]);
+    const { st } = make();
+    st.importAll(data);
+    assert.deepEqual(st.loadGames(), data.games);
+
+    const bad1 = structuredClone(data);
+    bad1.games[0].events[0].winners[0].chips = -1;
+    assert.throws(() => prepareImport(bad1), /winner.chips/);
+    const bad2 = structuredClone(data);
+    bad2.games[0].events[1].chips = [1, 0];
+    assert.throws(() => prepareImport(bad2), /adjust.chips/);
+  });
+  test("廃止した項目や新しい選択肢の不正値は検証で落とす", () => {
+    const data = backup();
+    data.games[0].rule = { ...data.games[0].rule, sanmaScoring: "unknown" };
+    assert.throws(() => prepareImport(data), /sanmaScoring/);
+    const ok = backup();
+    ok.games[0].rule = { ...ok.games[0].rule, nishiIri: true, rateBase: "rawScore", abortiveRyuukyoku: ["kyuushu"] };
+    assert.doesNotThrow(() => prepareImport(ok));
   });
 });
