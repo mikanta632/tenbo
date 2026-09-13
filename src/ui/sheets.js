@@ -787,7 +787,7 @@ export function openOverDialog({ state, rule, names, reason, onSave, onDiscard }
       h("button", { type: "button", class: "btn-primary", onclick: onSave }, "保存して終了"),
     ),
     onDiscard
-      ? h("div", { class: "sheet-actions" }, h("button", { type: "button", class: "btn-secondary danger", onclick: onDiscard }, "保存せずに終了（この対局を破棄）"))
+      ? h("div", { class: "sheet-actions" }, h("button", { type: "button", class: "btn-secondary danger wide", onclick: onDiscard }, "保存せずに終了"))
       : null,
   );
   return openSheet({ title: "終局", body, kind: "dialog" });

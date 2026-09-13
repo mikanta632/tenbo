@@ -4,7 +4,8 @@
 //  左（D）  右（B）
 //     下（A）
 //
-// 各位置で既存のプレイヤーを選ぶか、その場で新しい名前を入れる。
+// 各位置の席をタップし、シートから既存のプレイヤーを選ぶか、その場で新しい名前を入れる。
+// すでに他の席にいる人を選んだときは席を入れ替える。
 // 終了した対局の一覧は戦績タブに置く（§8.5）。
 // 3人麻雀は 4席のうち 1つを「空席」にする（どの位置でもよい）。起家は配置とは別に選ぶ。
 // 画面上の配置はここで決めた位置がそのまま使われる。
@@ -15,8 +16,6 @@ import { reduce } from "../reduce.js";
 import { kyokuName, gameId, positionsFor, POSITION_ORDER } from "./format.js";
 
 const POS_LABEL = { bottom: "下", right: "右", top: "上", left: "左" };
-const NEW_PLAYER = "__new__";
-const EMPTY = "__empty__";
 
 /**
  * Game を作る。seats は起家順、bottomSeat は「使う位置の先頭（通常は下）」に置く席、
@@ -48,7 +47,7 @@ export function seatsFromPositions({ posPlayers, chiichaPos }) {
 
 /**
  * 対局タブを描画する。
- * props: { storage, current, rulesFor(pc), onResume(), onStart(game), onDiscard() }
+ * props: { storage, current, rulesFor(pc), onResume(), onStart(game), onDiscard(), openActions({ title, items }) }
  */
 export function renderStart(props) {
   const { storage, current } = props;
@@ -127,7 +126,26 @@ export function renderStart(props) {
       ),
     );
 
-    // 位置ごとの選択部品
+    // 席をタップしたときの選択肢。他の席にいる人を選んだら入れ替える
+    const pickSeat = (key) => {
+      const isEmpty = n === 3 && key === emptyPosition;
+      const here = isEmpty ? null : posPlayers[key];
+      const place = (id) => {
+        const from = Object.keys(posPlayers).find((k) => posPlayers[k] === id && k !== key);
+        if (from) posPlayers[from] = here;
+        posPlayers[key] = id;
+        render();
+      };
+      const items = roster
+        .filter((p) => p.id !== here)
+        .map((p) => ({ label: p.name, onPick: () => place(p.id) }));
+      items.push({ label: "＋ 新しい名前", onPick: () => { editingPos = key; render(); } });
+      if (n === 3 && !isEmpty) items.push({ label: "空席にする", onPick: () => { emptyPosition = key; render(); } });
+      if (here) items.push({ label: "外す", danger: true, onPick: () => { posPlayers[key] = null; render(); } });
+      props.openActions({ title: `${POS_LABEL[key]}の席`, items });
+    };
+
+    // 位置ごとの席（タップで選ぶ）
     const seatControl = (key) => {
       const isEmpty = n === 3 && key === emptyPosition;
       if (editingPos === key) {
@@ -154,32 +172,20 @@ export function renderStart(props) {
         setTimeout(() => input.focus(), 0);
         return el;
       }
-      const sel = h(
-        "select",
+      const pid = isEmpty ? null : posPlayers[key];
+      const isChiicha = chiichaKey === key && !isEmpty;
+      return h(
+        "button",
         {
-          onchange: (e) => {
-            const v = e.target.value;
-            if (v === NEW_PLAYER) {
-              editingPos = key;
-              render();
-              return;
-            }
-            if (v === EMPTY) {
-              // 空席は 1つだけ。前の空席の位置は「—」に戻す
-              emptyPosition = key;
-              render();
-              return;
-            }
-            posPlayers[key] = v || null;
-            render();
-          },
+          type: "button",
+          class: `seat-slot${isChiicha ? " chiicha" : ""}${isEmpty ? " empty" : ""}${!pid && !isEmpty ? " unset" : ""}`,
+          "aria-label": `${POS_LABEL[key]}の席`,
+          onclick: () => pickSeat(key),
         },
-        h("option", { value: "", selected: !isEmpty && posPlayers[key] === null }, "—"),
-        n === 3 ? h("option", { value: EMPTY, selected: isEmpty }, "空席") : null,
-        roster.map((p) => h("option", { value: p.id, selected: !isEmpty && posPlayers[key] === p.id }, p.name)),
-        h("option", { value: NEW_PLAYER }, "＋ 新しい名前"),
+        h("span", { class: "seat-pos" }, POS_LABEL[key]),
+        h("span", { class: "seat-name" }, isEmpty ? "空席" : pid ? nameOf(pid) : "—"),
+        isChiicha ? h("span", { class: "seat-tag" }, "起家") : null,
       );
-      return h("div", { class: `seat-slot${chiichaKey === key && !isEmpty ? " chiicha" : ""}${isEmpty ? " empty" : ""}` }, h("span", { class: "seat-pos" }, POS_LABEL[key]), sel);
     };
 
     // 配置図: 上 / 左 右 / 下
