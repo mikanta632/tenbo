@@ -139,7 +139,7 @@ export function renderStart(props) {
       posPlayers[key] = id;
     };
 
-    // 位置ごとの席。見た目は黒い板、タップすると透明に重ねた select が開く
+    // 位置ごとの席。select をそのまま置く（タップで iOS のドラムロール）
     const seatControl = (key) => {
       const isEmpty = n === 3 && key === emptyPosition;
       if (editingPos === key) {
@@ -171,7 +171,6 @@ export function renderStart(props) {
       const sel = h(
         "select",
         {
-          class: "seat-select",
           "aria-label": `${POS_LABEL[key]}の席`,
           onchange: (e) => {
             const v = e.target.value;
@@ -192,10 +191,8 @@ export function renderStart(props) {
       );
       return h(
         "div",
-        { class: `seat-slot${isChiicha ? " chiicha" : ""}${isEmpty ? " empty" : ""}${!pid && !isEmpty ? " unset" : ""}${!ready && !isEmpty ? " locked" : ""}` },
+        { class: `seat-slot${isChiicha ? " chiicha" : ""}${isEmpty ? " empty" : ""}${!ready && !isEmpty ? " locked" : ""}` },
         h("span", { class: "seat-pos" }, POS_LABEL[key]),
-        h("span", { class: "seat-name" }, isEmpty ? "空席" : pid ? nameOf(pid) : "—"),
-        isChiicha ? h("span", { class: "seat-tag" }, "起家") : null,
         sel,
       );
     };
