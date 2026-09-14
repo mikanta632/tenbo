@@ -84,40 +84,86 @@ test("メニュー・終局画面に直前操作の取り消しを置かない",
 import { openAgariSheet, openSpecialMenu } from "../src/ui/sheets.js";
 import { renderTable } from "../src/ui/table.js";
 
-test("設定: プリセットを読み込むと人数ごとのカスタムルールとして保存され、名前を付けて保存・削除できる", (t) => {
+test("設定: 人数ごとのプリセットを選んで編集し、名前の変更・新規作成・複製・削除ができる", (t) => {
   mockDom(t);
-  const saved = [];
-  let presets = [];
+  // 人数ごとのプリセット一覧と選択を、アプリと同じ形で模す
+  let presets = [
+    { id: "a4", name: "4人標準", rule: makeRule() },
+    { id: "a3", name: "3人標準", rule: PRESETS["3人標準"] },
+    { id: "k3", name: "関西三麻", rule: PRESETS["関西三麻"] },
+  ];
+  const selected = { 4: "a4", 3: "a3" };
+  const forPc = (pc) => presets.filter((p) => p.rule.playerCount === pc);
+  const current = (pc) => forPc(pc).find((p) => p.id === selected[pc]) || forPc(pc)[0];
+  const changes = [];
+  let seq = 0;
   const root = renderSettings({
-    presets: PRESETS,
-    userPresets: presets,
-    rulesFor: (pc) => (pc === 3 ? PRESETS["3人標準"] : makeRule()),
-    isCustom: () => false,
-    onChange: (...args) => saved.push(args),
-    onSavePreset: (name, rule) => (presets = [...presets, { id: "r1", name, rule }]),
-    onDeletePreset: (id) => (presets = presets.filter((p) => p.id !== id)),
+    rulesFor: (pc) => current(pc).rule,
+    isCustom: (pc) => JSON.stringify(current(pc).rule) !== JSON.stringify(pc === 3 ? PRESETS["3人標準"] : makeRule()),
+    presetsFor: forPc,
+    selectedId: (pc) => current(pc).id,
+    onSelect: (pc, id) => (selected[pc] = id),
+    onRename: (pc, id, name) => (presets = presets.map((p) => (p.id === id ? { ...p, name } : p))),
+    onChange: (pc, rule) => {
+      changes.push([pc, rule]);
+      presets = presets.map((p) => (p.id === current(pc).id ? { ...p, rule: rule || (pc === 3 ? PRESETS["3人標準"] : makeRule()) } : p));
+    },
+    onCreate: (pc) => {
+      const p = { id: `n${++seq}`, name: `${pc}人 新しいルール`, rule: pc === 3 ? PRESETS["3人標準"] : makeRule() };
+      presets = [...presets, p];
+      selected[pc] = p.id;
+      return p;
+    },
+    onDuplicate: (pc) => {
+      const p = { id: `d${++seq}`, name: `${current(pc).name}のコピー`, rule: current(pc).rule };
+      presets = [...presets, p];
+      selected[pc] = p.id;
+      return p;
+    },
+    onDelete: (pc, id) => {
+      if (forPc(pc).length <= 1) return false;
+      presets = presets.filter((p) => p.id !== id);
+      if (selected[pc] === id) selected[pc] = forPc(pc)[0].id;
+      return true;
+    },
     version: "test",
   });
-  // 組み込みの関西三麻を読み込む → 3人麻雀に切り替わり、関西式で保存される
-  const kansaiRow = root.find((el) => el.matches(".preset-row") && el.textContent.includes("関西三麻"));
-  button(kansaiRow, "読み込む").handlers.click();
-  assert.equal(saved.at(-1)[0], 3);
-  assert.equal(saved.at(-1)[1].sanmaScoring, "kansai");
-  assert.match(root.textContent, /点数方式/);
-  assert.match(root.textContent, /読み込みました/);
-  // 名前を付けて保存
-  const nameInput = root.find((el) => el.tag === "input" && el.type === "text");
-  assert.equal(button(root, "今の設定を保存").disabled, true);
-  nameInput.handlers.input({ target: { value: "うちの三麻" } });
-  button(root, "今の設定を保存").handlers.click();
-  assert.equal(presets.length, 1);
-  assert.equal(presets[0].rule.sanmaScoring, "kansai");
-  assert.match(root.textContent, /うちの三麻/);
-  // 削除
-  const row = root.find((el) => el.matches(".preset-row") && el.textContent.includes("うちの三麻"));
-  button(row, "削除").handlers.click();
-  assert.equal(presets.length, 0);
-  assert.equal(root.find((el) => el.matches(".preset-row") && el.textContent.includes("うちの三麻")), undefined);
+  const picker = () => root.find((el) => el.tag === "select" && el["aria-label"] === "プリセット");
+  const options = () => picker().children.map((o) => o.children[0]);
+  // 4人の一覧だけが出る。最後の 1つは削除できない
+  assert.deepEqual(options(), ["4人標準"]);
+  assert.equal(button(root, "削除").disabled, true);
+  // 3人に切り替えると 3人の一覧。関西三麻を選ぶと関西式が編集対象になる
+  button(root, "3人麻雀").handlers.click();
+  assert.deepEqual(options(), ["3人標準", "関西三麻"]);
+  picker().handlers.change({ target: { value: "k3" } });
+  assert.equal(selected[3], "k3");
+  assert.match(root.textContent, /標準から変更あり/);
+  const scoring = root.find((el) => el.matches(".row") && el.children[0]?.textContent === "点数方式").find((el) => el.tag === "select");
+  assert.equal(scoring.children.find((o) => o.selected !== undefined).value, "kansai");
+  // 項目を変えると選んでいるプリセットに保存される
+  root.find((el) => el.matches(".row") && el.children[0]?.textContent === "チップ").find((el) => el.tag === "input").handlers.change({ target: { checked: true } });
+  assert.equal(changes.at(-1)[0], 3);
+  assert.equal(presets.find((p) => p.id === "k3").rule.chips, true);
+  // 名前の変更
+  root.find((el) => el.tag === "input" && el["aria-label"] === "プリセットの名前").handlers.change({ target: { value: "うちの三麻" } });
+  assert.equal(presets.find((p) => p.id === "k3").name, "うちの三麻");
+  assert.deepEqual(options(), ["3人標準", "うちの三麻"]);
+  // 複製 → 選択が移る。削除 → 先頭に戻る
+  button(root, "複製").handlers.click();
+  assert.deepEqual(options(), ["3人標準", "うちの三麻", "うちの三麻のコピー"]);
+  assert.equal(selected[3], "d1");
+  button(root, "削除").handlers.click();
+  assert.deepEqual(options(), ["3人標準", "うちの三麻"]);
+  assert.equal(selected[3], "a3");
+  // 新規作成は標準から。「標準に戻す」はそのプリセットの中身を戻す
+  button(root, "新規作成").handlers.click();
+  assert.equal(selected[3], "n2");
+  assert.ok(!root.textContent.includes("標準から変更あり"));
+  picker().handlers.change({ target: { value: "k3" } });
+  button(root, "標準に戻す").handlers.click();
+  assert.deepEqual(changes.at(-1), [3, null]);
+  assert.equal(presets.find((p) => p.id === "k3").rule.sanmaScoring, "standard");
 });
 
 test("設定: 東風なら延長戦は「南入」、下位項目は親がオフなら無効", (t) => {

@@ -447,3 +447,6 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .tag.chipcount { background: rgba(255, 214, 102, 0.22); color: #ffd666; }
 .pv-chips { min-width: 3.5em; text-align: right; color: #ffd666; font-variant-numeric: tabular-nums; }
 .choice.grid6 .chip { padding: 6px 2px; font-size: 15px; }
+.sheet-actions.three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.sheet-actions.three .btn-secondary { width: 100%; }
+.preset-pick select, .preset-name input[type="text"], .rule-row select { flex: 1; min-width: 0; }

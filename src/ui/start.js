@@ -131,6 +131,30 @@ export function renderStart(props) {
       ),
     );
 
+    // ルール（その人数のプリセット）。選択は設定タブと共有する（§7）
+    if (props.presetsFor) {
+      const presets = props.presetsFor(pc);
+      const selectedId = props.selectedId ? props.selectedId(pc) : null;
+      sec.append(
+        h(
+          "div",
+          { class: "row rule-row" },
+          h("span", null, "ルール"),
+          h(
+            "select",
+            {
+              "aria-label": "ルール",
+              onchange: (e) => {
+                if (props.onSelectPreset) props.onSelectPreset(pc, e.target.value);
+                render();
+              },
+            },
+            presets.map((p) => h("option", { value: p.id, selected: p.id === selectedId }, p.name)),
+          ),
+        ),
+      );
+    }
+
     // 他の席にいる人を選んだら入れ替える
     const place = (key, id) => {
       const here = posPlayers[key];

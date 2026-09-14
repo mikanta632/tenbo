@@ -1,34 +1,39 @@
-// 設定タブ（docs/design.md §7, §8.9）。新しい対局に使うルールを 4人／3人それぞれ編集する。
+// 設定タブ（docs/design.md §7, §8.9）。人数ごとのプリセットを選んで編集する。
 //
-// ウマは全順位をまとめて保存し、その他の変更はその場で保存する（mj.prefs.rules）。
-// 親の項目がオフのとき意味を持たない下位項目（責任払いのロン時の負担など）は無効にして残す。
-// 名前付きプリセット（mj.prefs.presets）と組み込みのプリセットは同じ一覧から読み込む。
+// 選択は対局タブと共有する（mj.prefs.selected）。項目の変更はそのプリセットに直接保存し、
+// ウマだけは全順位をまとめて保存する。親の項目がオフのとき意味を持たない下位項目は無効にして残す。
 
 import { h, clear, append } from "./dom.js";
-import { validateRule, normalizeRule, PRESETS } from "../rules.js";
+import { validateRule, normalizeRule } from "../rules.js";
 
 /**
  * props: {
- *   presets, userPresets: [{ id, name, rule }], rulesFor(pc) → Rule, isCustom(pc) → bool,
- *   onChange(pc, rule|null), onSavePreset(name, rule) → 新しい一覧, onDeletePreset(id) → 新しい一覧,
- *   initialPc, version
+ *   rulesFor(pc) → Rule（選んでいるプリセットのルール）, isCustom(pc) → bool（標準と違うか）,
+ *   presetsFor(pc) → [{ id, name, rule }], selectedId(pc) → id,
+ *   onSelect(pc, id), onRename(pc, id, name), onCreate(pc) → preset, onDuplicate(pc) → preset, onDelete(pc, id) → bool,
+ *   onChange(pc, rule|null)（null は標準に戻す）, initialPc, version
  * }
  */
 export function renderSettings(props) {
   const root = h("div", { class: "plain-screen settings-screen" });
   let pc = props.initialPc || 4;
   const copy = (r) => JSON.parse(JSON.stringify(r));
-  const builtin = props.presets || PRESETS;
-  let userPresets = props.userPresets || [];
   let rule = copy(normalizeRule(props.rulesFor(pc)));
   let umaDraft = rule.uma.map(String);
-  let presetName = "";
   const msg = h("div", { class: "hint", hidden: true });
+  const presets = () => (props.presetsFor ? props.presetsFor(pc) : []);
+  const selectedId = () => (props.selectedId ? props.selectedId(pc) : null);
 
   function setMsg(text, error = false) {
     msg.textContent = text;
     msg.className = `hint${error ? " error" : ""}`;
     msg.hidden = !text;
+  }
+
+  /** 選んでいるプリセットを読み直す */
+  function reload() {
+    rule = copy(normalizeRule(props.rulesFor(pc)));
+    umaDraft = rule.uma.map(String);
   }
 
   /** ルールを保存して再描画 */
@@ -41,16 +46,6 @@ export function renderSettings(props) {
     }
     props.onChange(pc, copy(rule));
     setMsg("");
-    render();
-  }
-
-  /** プリセットのルールをその人数のカスタムルールとして反映する */
-  function loadRule(name, source) {
-    rule = copy(normalizeRule(source));
-    pc = rule.playerCount;
-    umaDraft = rule.uma.map(String);
-    props.onChange(pc, copy(rule));
-    setMsg(`「${name}」を読み込みました。`);
     render();
   }
 
@@ -98,51 +93,66 @@ export function renderSettings(props) {
     return editor;
   }
 
+  /** プリセットの選択と管理（§8.9） */
   function presetSection() {
-    const rows = [];
-    for (const [name, r] of Object.entries(builtin)) {
-      rows.push(
-        h("div", { class: "row preset-row" },
-          h("span", null, name),
-          h("span", { class: "row-note" }, `${r.playerCount}人`),
-          h("button", { type: "button", class: "btn-secondary", onclick: () => loadRule(name, r) }, "読み込む"),
-        ),
-      );
-    }
-    for (const p of userPresets) {
-      rows.push(
-        h("div", { class: "row preset-row" },
-          h("span", null, p.name),
-          h("span", { class: "row-note" }, `${p.rule && p.rule.playerCount === 3 ? 3 : 4}人`),
-          h("button", { type: "button", class: "btn-secondary", onclick: () => loadRule(p.name, p.rule) }, "読み込む"),
-          h("button", {
-            type: "button", class: "btn-flat danger", onclick: () => {
-              if (props.onDeletePreset) userPresets = props.onDeletePreset(p.id) || userPresets.filter((x) => x.id !== p.id);
-              setMsg(`「${p.name}」を削除しました。`);
-              render();
-            },
-          }, "削除"),
-        ),
-      );
-    }
+    const list = presets();
+    const current = list.find((x) => x.id === selectedId()) || list[0] || null;
+    const picker = h(
+      "select",
+      {
+        "aria-label": "プリセット",
+        onchange: (e) => {
+          if (props.onSelect) props.onSelect(pc, e.target.value);
+          reload();
+          setMsg("");
+          render();
+        },
+      },
+      list.map((x) => h("option", { value: x.id, selected: current && x.id === current.id }, x.name)),
+    );
     const nameInput = h("input", {
-      type: "text", value: presetName, placeholder: "プリセットの名前", autocomplete: "off", enterkeyhint: "done",
-      oninput: (e) => { presetName = e.target.value; saveBtn.disabled = presetName.trim() === ""; },
-    });
-    const saveBtn = h("button", {
-      type: "button", class: "btn-primary", disabled: presetName.trim() === "", onclick: () => {
-        const name = presetName.trim();
-        if (!name) return;
-        if (props.onSavePreset) userPresets = props.onSavePreset(name, copy(rule)) || userPresets;
-        presetName = "";
-        setMsg(`「${name}」として保存しました。`);
+      type: "text", value: current ? current.name : "", placeholder: "名前", autocomplete: "off", enterkeyhint: "done", "aria-label": "プリセットの名前",
+      onchange: (e) => {
+        const name = e.target.value.trim();
+        if (!current || !name) {
+          render();
+          return;
+        }
+        if (props.onRename) props.onRename(pc, current.id, name);
+        setMsg("");
         render();
       },
-    }, "今の設定を保存");
+    });
+    const action = (label, cls, fn, disabled = false) => h("button", { type: "button", class: cls, disabled, onclick: fn }, label);
     return h("section", { class: "card" },
       h("h2", null, "プリセット"),
-      rows,
-      h("div", { class: "row preset-save" }, nameInput, saveBtn),
+      h("div", { class: "row preset-pick" }, h("span", null, "選択"), picker),
+      h("div", { class: "row preset-name" }, h("span", null, "名前"), nameInput),
+      h(
+        "div",
+        { class: "sheet-actions three" },
+        action("新規作成", "btn-secondary", () => {
+          if (!props.onCreate) return;
+          const created = props.onCreate(pc);
+          reload();
+          setMsg(created ? `「${created.name}」を作りました（${pc}人の標準から）。` : "");
+          render();
+        }),
+        action("複製", "btn-secondary", () => {
+          if (!props.onDuplicate) return;
+          const created = props.onDuplicate(pc);
+          reload();
+          setMsg(created ? `「${created.name}」を作りました。` : "");
+          render();
+        }, !current),
+        action("削除", "btn-secondary danger", () => {
+          if (!props.onDelete || !current) return;
+          const ok = props.onDelete(pc, current.id);
+          reload();
+          setMsg(ok ? `「${current.name}」を削除しました。` : "最後の 1つは削除できません。", !ok);
+          render();
+        }, !current || list.length <= 1),
+      ),
     );
   }
 
@@ -204,8 +214,7 @@ export function renderSettings(props) {
               class: `chip${pc === k ? " on" : ""}`,
               onclick: () => {
                 pc = k;
-                rule = copy(normalizeRule(props.rulesFor(pc)));
-                umaDraft = rule.uma.map(String);
+                reload();
                 setMsg("");
                 render();
               },
@@ -322,9 +331,8 @@ export function renderSettings(props) {
               disabled: !props.isCustom(pc),
               onclick: () => {
                 props.onChange(pc, null);
-                rule = copy(normalizeRule(props.rulesFor(pc)));
-                umaDraft = rule.uma.map(String);
-                setMsg(`${n}人麻雀を標準に戻しました。`);
+                reload();
+                setMsg(`このプリセットを${n}人麻雀の標準に戻しました。`);
                 render();
               },
             },

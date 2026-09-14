@@ -4,7 +4,7 @@
 // 画面: 初期画面はタブ（対局・設定・戦績・その他）。対局中・ログ・結果・個人ページはタブ無しの全画面。
 
 import { createStorage, prepareImport } from "../storage.js";
-import { PRESETS, validateRule, normalizeRule, presetFor } from "../rules.js";
+import { validateRule, normalizeRule, presetFor } from "../rules.js";
 import { reduce, isEndOfKyoku, agariYameAvailableAfter, dealerOf, kyokuGroups } from "../reduce.js";
 import { appendEvent, removeEvent, replaceEvent, insertEvent, deleteKyoku, withEvents } from "../edit.js";
 import { computeSettlement } from "../settlement.js";
@@ -37,7 +37,7 @@ import {
   openCombinedSettlement,
 } from "./sheets.js";
 import { fmtElapsed, kyokuName, gameDateTime } from "./format.js";
-import { customRules, saveCustomRule, loadPresets, savePreset, deletePreset } from "./prefs.js";
+import { ensurePresets, presetsFor, selectedPreset, selectedPresetId, selectPreset, updatePreset, addPreset, deletePreset } from "./prefs.js";
 import {
   soundEnabled,
   setSoundEnabled,
@@ -56,6 +56,7 @@ export const APP_VERSION = globalThis.APP_VERSION || "dev";
 
 const storage = createStorage();
 storage.init();
+ensurePresets(); // ルールのプリセット（組み込みの種、旧 rules の取り込み。§7）
 
 const root = document.getElementById("app");
 let game = storage.loadCurrent();
@@ -73,18 +74,21 @@ let elapsedTimer = null;
 let diffSeat = null; // 点差を表示中の席
 let diffTimer = null;
 
-/** 新しい対局に使うルール。設定タブで変更していればそれ（不足はプリセットで埋める）、なければプリセット */
+/** 新しい対局に使うルール。その人数で選んでいるプリセット（不足は標準で埋める。§7） */
 function rulesFor(pc) {
-  const custom = customRules()[String(pc)];
-  if (custom) return normalizeRule({ ...custom, playerCount: pc });
-  return presetFor(pc);
+  const preset = selectedPreset(pc);
+  return normalizeRule(preset ? { ...preset.rule, playerCount: pc } : presetFor(pc));
 }
-/** 標準プリセットと違う設定になっているか */
+/** 選んでいるプリセットが標準と違う設定になっているか */
 function isCustomRule(pc) {
-  const custom = customRules()[String(pc)];
-  if (!custom) return false;
   return JSON.stringify(rulesFor(pc)) !== JSON.stringify(presetFor(pc));
 }
+/** プリセットの選択・管理。対局タブと設定タブで共有する */
+const presetActions = {
+  presetsFor,
+  selectedId: (pc) => (selectedPreset(pc) || {}).id ?? selectedPresetId(pc),
+  onSelectPreset: (pc, id) => selectPreset(pc, id),
+};
 
 // ---- 効果音: すべてのボタン操作 ---------------------------------------------
 // 有効なボタン（と role=button のパネル）のクリックで共通の操作音を鳴らす。
@@ -166,6 +170,7 @@ function gameTabContent() {
     storage,
     current: game,
     rulesFor,
+    ...presetActions,
     onResume: () => show("table"),
     onDiscard: () => {
       openSheetHandle = openConfirm({
@@ -197,18 +202,36 @@ function gameTabContent() {
 
 function settingsContent() {
   return renderSettings({
-    presets: PRESETS,
-    userPresets: loadPresets(),
     rulesFor,
     isCustom: isCustomRule,
+    presetsFor,
+    selectedId: presetActions.selectedId,
     initialPc: settingsPc,
     version: APP_VERSION,
+    onSelect: (pc, id) => {
+      settingsPc = pc;
+      selectPreset(pc, id);
+    },
+    onRename: (pc, id, name) => updatePreset(id, { name }),
+    // 項目の変更は選んでいるプリセットに直接保存。null は標準に戻す
     onChange: (pc, rule) => {
       settingsPc = pc;
-      saveCustomRule(pc, rule);
+      const current = selectedPreset(pc);
+      if (current) updatePreset(current.id, { rule: rule || presetFor(pc) });
     },
-    onSavePreset: (name, rule) => savePreset(name, rule),
-    onDeletePreset: (id) => deletePreset(id),
+    onCreate: (pc) => {
+      const created = addPreset(`${pc}人 新しいルール`, presetFor(pc));
+      selectPreset(pc, created.id);
+      return created;
+    },
+    onDuplicate: (pc) => {
+      const current = selectedPreset(pc);
+      if (!current) return null;
+      const created = addPreset(`${current.name}のコピー`, current.rule);
+      selectPreset(pc, created.id);
+      return created;
+    },
+    onDelete: (pc, id) => deletePreset(id),
   });
 }
 

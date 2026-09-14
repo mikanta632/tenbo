@@ -1,8 +1,12 @@
 // 端末だけの設定（docs/design.md §4.2 の mj.prefs）。対局データとは別で、エクスポートに含めない。
 //
-// { sound: "on" | "off", voice: string, rules: { "4": Rule, "3": Rule }, presets: [{ id, name, rule }] }
-// rules は設定画面で作るカスタムルール。プレイヤー数ごとに 1つ。
-// presets は名前を付けて保存したルール（§7）。
+// { sound: "on" | "off", voice: string,
+//   presets: [{ id, name, rule }],      // ルールのプリセット。人数は rule.playerCount（§7）
+//   selected: { "4": id, "3": id },     // 人数ごとに選んでいるプリセット
+//   presetsSeeded: true }               // 組み込みを一度入れたか（消しても戻さない）
+// v0.31 までの rules（人数ごとのカスタムルール）は ensurePresets で取り込んで消す。
+
+import { PRESETS, presetFor, normalizeRule } from "../rules.js";
 
 export const PREFS_KEY = "mj.prefs";
 
@@ -22,39 +26,104 @@ export function savePrefs(p) {
   }
 }
 
-/** カスタムルールを保存する。null なら削除。 */
-export function saveCustomRule(playerCount, rule) {
+const copy = (r) => JSON.parse(JSON.stringify(r));
+const newId = () => "r_" + Math.random().toString(36).slice(2, 10);
+const pcOf = (preset) => (preset.rule && preset.rule.playerCount === 3 ? 3 : 4);
+
+/**
+ * 起動時に呼ぶ。プリセットが無ければ組み込みから作り、旧 rules を取り込み、選択を有効な id に揃える。
+ * 変更があれば保存する。
+ */
+export function ensurePresets() {
   const p = loadPrefs();
-  const rules = { ...(p.rules || {}) };
-  if (rule) rules[String(playerCount)] = rule;
-  else delete rules[String(playerCount)];
-  savePrefs({ ...p, rules });
+  const presets = Array.isArray(p.presets) ? p.presets.filter((x) => x && typeof x === "object" && x.rule) : [];
+  const selected = { ...(p.selected || {}) };
+  let changed = !Array.isArray(p.presets);
+  if (!p.presetsSeeded) {
+    for (const [name, rule] of Object.entries(PRESETS)) presets.push({ id: newId(), name, rule: copy(rule) });
+    changed = true;
+  }
+  if (p.rules && typeof p.rules === "object") {
+    for (const pc of [4, 3]) {
+      const old = p.rules[String(pc)];
+      if (!old) continue;
+      const preset = { id: newId(), name: `${pc}人 カスタム`, rule: normalizeRule({ ...old, playerCount: pc }) };
+      presets.push(preset);
+      selected[String(pc)] = preset.id;
+    }
+    changed = true;
+  }
+  for (const pc of [4, 3]) {
+    const mine = presets.filter((x) => pcOf(x) === pc);
+    if (mine.length === 0) {
+      const preset = { id: newId(), name: `${pc}人標準`, rule: copy(presetFor(pc)) };
+      presets.push(preset);
+      mine.push(preset);
+      changed = true;
+    }
+    if (!mine.some((x) => x.id === selected[String(pc)])) {
+      selected[String(pc)] = mine[0].id;
+      changed = true;
+    }
+  }
+  if (changed) {
+    const next = { ...p, presets, selected, presetsSeeded: true };
+    delete next.rules;
+    savePrefs(next);
+  }
 }
-
-export function customRules() {
-  return loadPrefs().rules || {};
-}
-
-// ---- 名前付きプリセット（§7） ----------------------------------------------
 
 export function loadPresets() {
   const list = loadPrefs().presets;
   return Array.isArray(list) ? list : [];
 }
 
-/** 今のルールに名前を付けて保存し、新しい一覧を返す。 */
-export function savePreset(name, rule) {
-  const p = loadPrefs();
-  const id = "r_" + Math.random().toString(36).slice(2, 10);
-  const presets = [...loadPresets(), { id, name, rule: JSON.parse(JSON.stringify(rule)) }];
-  savePrefs({ ...p, presets });
-  return presets;
+/** その人数のプリセット（保存順） */
+export function presetsFor(playerCount) {
+  return loadPresets().filter((x) => pcOf(x) === playerCount);
 }
 
-/** id のプリセットを消し、新しい一覧を返す。 */
+export function selectedPresetId(playerCount) {
+  return (loadPrefs().selected || {})[String(playerCount)] ?? null;
+}
+
+/** その人数で選んでいるプリセット。無ければその人数の先頭 */
+export function selectedPreset(playerCount) {
+  const mine = presetsFor(playerCount);
+  return mine.find((x) => x.id === selectedPresetId(playerCount)) || mine[0] || null;
+}
+
+export function selectPreset(playerCount, id) {
+  const p = loadPrefs();
+  savePrefs({ ...p, selected: { ...(p.selected || {}), [String(playerCount)]: id } });
+}
+
+/** 名前やルールを差し替える。patch: { name?, rule? } */
+export function updatePreset(id, patch) {
+  const p = loadPrefs();
+  const presets = loadPresets().map((x) => (x.id === id ? { ...x, ...(patch.name !== undefined ? { name: patch.name } : {}), ...(patch.rule ? { rule: copy(patch.rule) } : {}) } : x));
+  savePrefs({ ...p, presets });
+  return presets.find((x) => x.id === id) || null;
+}
+
+/** 追加して、そのプリセットを返す。 */
+export function addPreset(name, rule) {
+  const p = loadPrefs();
+  const preset = { id: newId(), name, rule: copy(rule) };
+  savePrefs({ ...p, presets: [...loadPresets(), preset] });
+  return preset;
+}
+
+/** 削除する。その人数の最後の 1つなら消さずに偽を返す。選択中だったら同じ人数の先頭を選ぶ。 */
 export function deletePreset(id) {
+  const target = loadPresets().find((x) => x.id === id);
+  if (!target) return false;
+  const pc = pcOf(target);
+  if (presetsFor(pc).length <= 1) return false;
   const p = loadPrefs();
   const presets = loadPresets().filter((x) => x.id !== id);
-  savePrefs({ ...p, presets });
-  return presets;
+  const selected = { ...(p.selected || {}) };
+  if (selected[String(pc)] === id) selected[String(pc)] = presets.find((x) => pcOf(x) === pc).id;
+  savePrefs({ ...p, presets, selected });
+  return true;
 }
