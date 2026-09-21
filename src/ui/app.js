@@ -419,14 +419,7 @@ async function checkForUpdate(setStatus) {
   }
   setStatus("確認中…");
   const latest = await fetchLatestVersion();
-  let reg;
-  try {
-    // 最新の版で登録し直す。版が上がっていればスクリプト URL が変わるので、確実に取り込まれる
-    reg = await navigator.serviceWorker.register(swUrl(latest || APP_VERSION), { updateViaCache: "none" });
-  } catch {
-    setStatus("更新の確認に失敗しました。ネットワークを確認してください。");
-    return;
-  }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // 新しい SW がインストール中なら、待機状態になるまで待つ
   const waitInstalled = (sw) =>
     new Promise((resolve) => {
@@ -435,9 +428,31 @@ async function checkForUpdate(setStatus) {
         if (sw.state === "installed" || sw.state === "redundant") resolve();
       });
     });
-  if (reg.installing) {
-    setStatus(`新しい版${latest ? ` ${latest}` : ""}をダウンロード中…`);
-    await waitInstalled(reg.installing);
+  /** 登録して、取り込みが始まっていればその完了（待機）まで待つ。戻り値は { reg, started } */
+  const registerAndWait = async (url) => {
+    const reg = await navigator.serviceWorker.register(url, { updateViaCache: "none" });
+    // iOS では register の解決時点で installing がまだ無いことがあるので、少し待って見直す
+    for (let i = 0; i < 10 && !reg.installing && !reg.waiting; i++) await sleep(200);
+    const started = !!reg.installing;
+    if (reg.installing) {
+      setStatus(`新しい版${latest ? ` ${latest}` : ""}をダウンロード中…`);
+      await waitInstalled(reg.installing);
+    }
+    return { reg, started };
+  };
+  let reg;
+  try {
+    // 最新の版で登録し直す。版が上がっていればスクリプト URL が変わるので、確実に取り込まれる
+    let r = await registerAndWait(swUrl(latest || APP_VERSION));
+    if (!r.started && !r.reg.waiting && latest && latest !== APP_VERSION) {
+      // SW の URL はすでに最新なのに動いているページが古い（以前の取り込みで配信元の古いファイルを掴んだ等）。
+      // 別の URL で登録し直し、事前キャッシュを取り直す（キャッシュ名は同じ版なので中身が上書きされる）
+      r = await registerAndWait(`${swUrl(latest)}&r=${Date.now()}`);
+    }
+    reg = r.reg;
+  } catch {
+    setStatus("更新の確認に失敗しました。ネットワークを確認してください。");
+    return;
   }
   if (reg.waiting) {
     const apply = () => {

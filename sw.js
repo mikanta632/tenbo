@@ -11,7 +11,8 @@
 
 importScripts("./version.js");
 
-const VERSION = new URL(self.location.href).searchParams.get("v") || self.APP_VERSION;
+const VERSION_FROM_URL = new URL(self.location.href).searchParams.get("v");
+const VERSION = VERSION_FROM_URL || self.APP_VERSION;
 const CACHE = `tenbo-${VERSION}`;
 
 const PRECACHE = [
@@ -48,10 +49,35 @@ const PRECACHE = [
   "./icons/icon-512-maskable.png",
 ];
 
+/**
+ * 事前キャッシュ。
+ * - HTTP キャッシュを通さない（cache: "reload"）。通すと、更新直後に古いファイルを取り込んでしまう
+ * - 配信元の CDN（GitHub Pages）は URL 単位で最大 10 分キャッシュするので、版をクエリに付けて必ず配信元から取る。
+ *   保存はクエリ無しの URL で行い、ページからの要求にそのまま当たるようにする
+ * - 取れた version.js の版がこの SW の版と違えば（配置の途中で配信元がまだ古い）、取り込まずに失敗させる。
+ *   古い版のファイルを新しい版の名前で固定すると、以後「更新を確認」しても同じ URL なので取り直せなくなる
+ */
+async function precache() {
+  const cache = await caches.open(CACHE);
+  const abs = (url) => new URL(url, self.location.href).href;
+  const bust = (url) => new Request(`${abs(url)}?v=${encodeURIComponent(VERSION)}`, { cache: "reload" });
+  const fetched = await Promise.all(
+    PRECACHE.map(async (url) => {
+      const res = await fetch(bust(url));
+      if (!res || !res.ok) throw new Error(`事前キャッシュに失敗: ${url} ${res && res.status}`);
+      return [url, res];
+    }),
+  );
+  if (VERSION_FROM_URL) {
+    const text = await fetched.find(([url]) => url === "./version.js")[1].clone().text();
+    const m = text.match(/APP_VERSION\s*=\s*"([^"]+)"/);
+    if (m && m[1] !== VERSION_FROM_URL) throw new Error(`配信元の版が違う: ${m[1]} != ${VERSION_FROM_URL}`);
+  }
+  await Promise.all(fetched.map(([url, res]) => cache.put(new Request(abs(url)), res)));
+}
+
 self.addEventListener("install", (event) => {
-  // HTTP キャッシュを通さずに取る。通すと、更新直後に古いファイルを事前キャッシュしてしまう
-  const requests = PRECACHE.map((url) => new Request(url, { cache: "reload" }));
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(requests)));
+  event.waitUntil(precache());
 });
 
 self.addEventListener("activate", (event) => {

@@ -5,7 +5,7 @@ import { runInNewContext } from "node:vm";
 
 const source = await readFile(new URL("../sw.js", import.meta.url), "utf8");
 
-function worker({ failPut = false, scriptUrl = "https://example.test/tenbo/sw.js" } = {}) {
+function worker({ failPut = false, scriptUrl = "https://example.test/tenbo/sw.js", originVersion = "test" } = {}) {
   const handlers = {};
   const puts = [];
   const network = [];
@@ -42,10 +42,19 @@ function worker({ failPut = false, scriptUrl = "https://example.test/tenbo/sw.js
         };
       },
     },
-    async fetch(req) { network.push(req.url); return new Response("network"); },
+    async fetch(req) {
+      network.push(req.url);
+      // 事前キャッシュ（?v= 付き）の version.js だけ配信元の版を返す
+      return new Response(/version\.js\?v=/.test(req.url) ? `self.APP_VERSION = "${originVersion}";` : "network");
+    },
   });
   return {
     puts, network,
+    async install() {
+      const pending = [];
+      handlers.install({ waitUntil: (p) => pending.push(p) });
+      await Promise.all(pending);
+    },
     async request(path, options) {
       let response;
       const pending = [];
@@ -102,4 +111,27 @@ test("新しい版の SW は、自分の版のキャッシュしか読まない"
   // tenbo-test には version.js があるが、?v=9.9.9 の SW はそれを使わない
   const next = worker({ scriptUrl: "https://example.test/tenbo/sw.js?v=9.9.9" });
   assert.equal(await next.request("version.js"), "network");
+});
+
+test("事前キャッシュは各ファイルに ?v=版 を付けて配信元から取り、クエリ無しの URL で保存する", async () => {
+  const sw = worker({ scriptUrl: "https://example.test/tenbo/sw.js?v=9.9.9", originVersion: "9.9.9" });
+  await sw.install();
+  assert.ok(sw.network.length > 10);
+  assert.ok(sw.network.every((u) => u.endsWith("?v=9.9.9")), sw.network[0]);
+  assert.ok(sw.network.includes("https://example.test/tenbo/?v=9.9.9"));
+  assert.ok(sw.puts.every(([cache, url]) => cache === "tenbo-9.9.9" && !url.includes("?")));
+  assert.ok(sw.puts.some(([, url]) => url === "https://example.test/tenbo/"));
+  assert.ok(sw.puts.some(([, url]) => url === "https://example.test/tenbo/src/ui/app.js"));
+});
+
+test("配信元の version.js が SW の版と違えば取り込まない（古い版を新しい名前で固定しない）", async () => {
+  const sw = worker({ scriptUrl: "https://example.test/tenbo/sw.js?v=9.9.9", originVersion: "9.9.8" });
+  await assert.rejects(sw.install(), /9\.9\.8/);
+  assert.deepEqual(sw.puts, []);
+});
+
+test("?v= 無しで登録された SW は版の照合をしない", async () => {
+  const sw = worker({ originVersion: "whatever" });
+  await sw.install();
+  assert.ok(sw.puts.length > 10);
 });
