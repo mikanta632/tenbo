@@ -342,10 +342,15 @@ export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = 
 
   function render() {
     clear(body);
-    append(body, whoLine(seat, state, names));
+    // 和了の形（form）・翻符（main）・プレビューと確定（side）に分けて置く。
+    // 縦向きではこの順に続けて並び、横向きでは 翻符を左の列、形とプレビューを右の列に置く（style.css）
+    const form = h("div", { class: "agari-form" });
+    const main = h("div", { class: "agari-main" });
+    const side = h("div", { class: "agari-side" });
+    append(body, whoLine(seat, state, names), form, main, side);
 
     if (selectSeat) {
-      append(body,
+      append(form,
         h("div", { class: "label" }, "和了者"),
         choice(
           seatItems(state, names),
@@ -359,7 +364,7 @@ export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = 
       );
     }
 
-    append(body,
+    append(form,
       h("div", { class: "label" }, "和了の形"),
       choice(
         [
@@ -383,20 +388,20 @@ export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = 
         },
         { class: "grid3" },
       ),
-      winnerForm({ s, state, rule, names, onChange: render }),
     );
+    append(main, winnerForm({ s, state, rule, names, onChange: render }));
 
     if (valid()) {
       const ev = buildEvent();
       const pv = previewTable({ state, event: ev, rule, names });
       const gain = pv.next.points[seat] - state.points[seat];
-      append(body,
+      append(side,
         h("div", { class: "summary" }, winnerSummary(s, rule), h("span", { class: "summary-gain" }, ` ${fmtDelta(gain)}`)),
         pv.el,
         confirmRow(() => onConfirm(ev)),
       );
     } else {
-      append(body,
+      append(side,
         h("div", { class: "summary" }, winnerSummary(s, rule), h("span", { class: "summary-gain dim" }, " 放銃者を選んでください")),
         placeholderPreview({ state, names }),
         confirmRow(null, false),

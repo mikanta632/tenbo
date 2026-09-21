@@ -36,3 +36,26 @@ test("各相手の点数欄に基準席からの点差を表示し、基準席�
     assert.deepEqual(state.points, [25000, 20000, 25000, 35000].slice(0, rule.playerCount));
   }
 });
+
+test("3人麻雀は横向き配置（対面を上、左右を短辺、手前に局の情報）で、4人は縦向きのまま", (t) => {
+  mockDom(t);
+  const names = ["A", "B", "C", "D"];
+  const posOf = (root) => Object.fromEntries(root.findAll((el) => el.dataset.seat !== undefined).map((el) => [el.className.match(/pos-(\w+)/)[1], Number(el.dataset.seat)]));
+
+  const rule3 = PRESETS["3人標準"];
+  // 自分 0（下）、右 1、対面 空席、左 2 → 端末は対面に横置き。右の短辺 2、上の長辺 0、左の短辺 1
+  const game3 = { rule: rule3, events: [], startedAt: "2026-09-21T00:00:00Z", bottomSeat: 0, emptyPosition: "top" };
+  const root3 = renderTable({ game: game3, state: initialState(rule3), names: names.slice(0, 3), actions: {} });
+  assert.match(root3.className, /landscape/);
+  assert.deepEqual(posOf(root3), { right: 2, top: 0, left: 1 });
+  assert.ok(root3.querySelector(".near"), "手前の行がない");
+  assert.match(root3.querySelector(".near").textContent, /東1局/);
+  assert.ok(button(root3, "ログ") && button(root3, "メニュー"));
+
+  const rule4 = PRESETS["4人標準"] || Object.values(PRESETS).find((r) => r.playerCount === 4);
+  const game4 = { rule: rule4, events: [], startedAt: "2026-09-21T00:00:00Z", bottomSeat: 0 };
+  const root4 = renderTable({ game: game4, state: initialState(rule4), names, actions: {} });
+  assert.ok(!/landscape/.test(root4.className));
+  assert.deepEqual(posOf(root4), { bottom: 0, right: 1, top: 2, left: 3 });
+  assert.equal(root4.querySelector(".near"), undefined);
+});

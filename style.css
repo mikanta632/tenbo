@@ -18,8 +18,15 @@
   --pw: min(340px, calc(100vw - 16px), var(--pw-avail));
   --pw-side: var(--pw);
   --bar: #0b2a1b;                               /* 下部タブバーの色 */
-  --sat: env(safe-area-inset-top, 0px);
-  --sab: env(safe-area-inset-bottom, 0px);
+  /* セーフエリア。env() は端末の向き基準なので、body を回すときは app.js が --sat 等を並べ替えて上書きする */
+  --env-sat: env(safe-area-inset-top, 0px);
+  --env-sar: env(safe-area-inset-right, 0px);
+  --env-sab: env(safe-area-inset-bottom, 0px);
+  --env-sal: env(safe-area-inset-left, 0px);
+  --sat: var(--env-sat);
+  --sar: var(--env-sar);
+  --sab: var(--env-sab);
+  --sal: var(--env-sal);
 }
 
 /* touch-action: manipulation でダブルタップ拡大を止める（iOS は user-scalable=no を無視する） */
@@ -85,36 +92,18 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
   background: var(--bar); pointer-events: none;
 }
 
-/* 対局タブの配置図 */
-/* 上下左右の枠を同じ大きさにする。minmax(0,1fr) で名前の長さに列幅を引っ張られないようにし、
-   行も 1fr にして一番高い枠へ全員をそろえる */
-.seat-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  grid-template-areas: ". top ." "left center right" ". bottom .";
-  margin: 16px 0 8px;
-}
-.seat-cell { display: flex; min-width: 0; }
-.seat-cell > .seat-slot { flex: 1; min-width: 0; }
-.seat-cell.top { grid-area: top; }
-.seat-cell.left { grid-area: left; }
-.seat-cell.center { grid-area: center; display: flex; align-items: center; justify-content: center; }
-.seat-cell.right { grid-area: right; }
-.seat-cell.bottom { grid-area: bottom; }
-.seat-center { width: 56px; height: 56px; border-radius: 10px; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; }
-.seat-slot { display: flex; flex-direction: column; gap: 4px; background: rgba(0,0,0,0.25); border-radius: 10px; padding: 6px; border: 2px solid transparent; }
+/* 対局タブの席。自分（基準）から見た 右・対面・左 を行で並べる */
+.seat-rows { display: flex; flex-direction: column; gap: 8px; margin: 16px 0 8px; }
+.seat-slot { display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.25); border-radius: 10px; padding: 6px 6px 6px 10px; border: 2px solid transparent; }
 .seat-slot.chiicha { border-color: var(--accent); }
-.seat-slot.empty { align-items: center; justify-content: center; opacity: 0.6; min-height: 64px; }
-/* 3人麻雀で空席が未定のあいだは、ほかの席を薄くする */
-.seat-slot.locked { opacity: 0.45; }
+.seat-slot.empty { opacity: 0.6; }
+.seat-slot .seat-pos { flex: 0 0 3em; }
 /* 起家の選択。選ぶと太字になるので、折り返して高さが変わらないよう 1行で省略する */
 .choice.seat-choice { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .choice.seat-choice .chip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 6px 4px; }
-.seat-slot .seat-pos { font-size: 12px; color: var(--muted); }
+.seat-slot .seat-pos { font-size: 14px; color: var(--muted); }
 .seat-slot select, .seat-slot input[type=text] {
-  width: 100%; min-width: 0; font: inherit; font-size: 15px; padding: 8px 6px; border-radius: 8px;
+  flex: 1; min-width: 0; font: inherit; font-size: 15px; padding: 8px 6px; border-radius: 8px;
   border: 1px solid rgba(255,255,255,0.25); background: #0b2a1b; color: var(--ink);
 }
 .btn-secondary.small { min-height: 36px; font-size: 14px; padding: 0 10px; }
@@ -201,6 +190,24 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .over-note { font-size: 14px; color: var(--accent); font-weight: 600; }
 
 .felt { position: relative; flex: 1; min-height: 0; }
+
+/* 3人麻雀は空席に横向きで置く（§2）。対面を上の長辺、左右を短辺に出し、手前の辺に情報と操作を 1行で並べる */
+.table-screen.landscape {
+  --near-h: 48px;
+  /* 卓面の高さ（画面 − セーフエリア − 手前の行）。左右のパネル群はこれに収める */
+  --felt-h: calc(var(--app-h) - var(--sat) - var(--sab) - var(--near-h));
+  --pw: min(340px, calc(var(--app-w) - var(--sal) - var(--sar) - 2 * (var(--ph) + 8px) - 16px));
+  --pw-side: min(340px, calc(var(--felt-h) - 8px));
+  padding-left: var(--sal); padding-right: var(--sar);
+}
+.table-screen.landscape > .near {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  height: var(--near-h); padding: 0 10px 4px;
+}
+.near-info { display: flex; align-items: center; gap: 12px; font-size: 17px; font-weight: 600; white-space: nowrap; }
+.table-screen.landscape .bar-right { display: flex; align-items: center; gap: 10px; }
+/* 終局ボタンは対面のパネルの下に入れる（卓面の中央だと対面のパネルと重なる） */
+.table-screen.landscape .btn-special { top: calc((100% + var(--ph)) / 2); }
 .pgroup {
   position: absolute; display: flex; flex-direction: column; align-items: stretch; gap: 4px;
   width: var(--pw); height: var(--ph); left: 50%; top: 50%;
@@ -321,6 +328,7 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 }
 /* 和了入力: 高さ固定でがたつかせない */
 .sheet.fixed { height: calc(var(--app-h) - 20px); }
+.sheet-body { flex: 1; min-height: 0; }
 .slot-detail { min-height: 168px; }
 .agari-body .chip { min-height: 40px; }
 .agari-body .label { margin: 8px 0 4px; }
@@ -355,6 +363,21 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
   .agari-body .sheet-actions { margin-top: 6px; }
   .agari-body .btn-primary { min-height: 44px; font-size: 17px; }
 }
+
+/* 横向き（3人麻雀の対局中）のシート。高さが足りないので幅を広げ、和了入力は入力とプレビューを左右 2列にする */
+body.app-landscape .sheet { max-width: 760px; }
+body.app-landscape .sheet, body.app-landscape .dialog { padding-left: var(--sal); padding-right: var(--sar); }
+body.app-landscape .agari-body {
+  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto 1fr; column-gap: 20px;
+  grid-template-areas: "who who" "main form" "main side"; overflow: hidden;
+}
+body.app-landscape .agari-body > .who-line { grid-area: who; }
+body.app-landscape .agari-form { grid-area: form; }
+body.app-landscape .agari-main { grid-area: main; overflow-y: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+body.app-landscape .agari-side { grid-area: side; display: flex; flex-direction: column; justify-content: flex-end; min-height: 0; }
+body.app-landscape .agari-side .preview { overflow-y: auto; min-height: 0; }
+/* メニュー類の一覧は 2列に並べて、スクロールなしで届くようにする */
+body.app-landscape .menu-list { display: grid; grid-template-columns: 1fr 1fr; }
 
 /* 点差表示（+/−） */
 .adj.on { background: #444; color: var(--ink); border-color: #ddd; }

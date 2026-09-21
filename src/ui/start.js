@@ -1,22 +1,21 @@
-// 対局タブ（docs/design.md §8.1）。席の配置図でプレイヤーを選び、起家を決めて対局を始める。
+// 対局タブ（docs/design.md §8.1）。一人を基準（自分）にして、その人から見た 右・対面・左 を選び、起家を決めて対局を始める。
 //
-//     上（C）
-//  左（D）  右（B）
-//     下（A）
+//   自分   → 画面位置 bottom
+//   右     → right（下家側）
+//   対面   → top
+//   左     → left（上家側）
 //
-// 各位置の席をタップすると iOS の選択肢（ドラムロール）が開き、既存のプレイヤーを選ぶか、その場で新しい名前を入れる。
+// 各行をタップすると iOS の選択肢（ドラムロール）が開き、既存のプレイヤーを選ぶか、その場で新しい名前を入れる。
 // すでに他の席にいる人を選んだときは席を入れ替える。
-// 3人麻雀は先にどこかを「空席」にしないと、ほかの席を選べない。
-// 終了した対局の一覧は戦績タブに置く（§8.5）。
-// 3人麻雀は 4席のうち 1つを「空席」にする（どの位置でもよい）。起家は配置とは別に選ぶ。
-// 画面上の配置はここで決めた位置がそのまま使われる。
+// 3人麻雀は 右・対面・左 のどれか 1つを「空席」にする（自分は空席にできない）。端末はその空席に横向きに置く（§2）。
+// 起家は配置とは別に選ぶ。終了した対局の一覧は戦績タブに置く（§8.5）。
 
 import { h, clear } from "./dom.js";
 import { validateRule } from "../rules.js";
 import { reduce } from "../reduce.js";
 import { kyokuName, gameId, positionsFor, POSITION_ORDER } from "./format.js";
 
-const POS_LABEL = { bottom: "下", right: "右", top: "上", left: "左" };
+const POS_LABEL = { bottom: "自分", right: "右", top: "対面", left: "左" };
 const NEW_PLAYER = "__new__";
 const EMPTY = "__empty__";
 
@@ -58,7 +57,7 @@ export function renderStart(props) {
 
   let pc = 4;
   const posPlayers = { bottom: null, right: null, top: null, left: null }; // 画面位置 → playerId
-  let emptyPosition = null; // 3人麻雀の空席。決まるまで他の席は選べない
+  let emptyPosition = null; // 3人麻雀の空席（右・対面・左のどれか）。未定なら対局を始められない
   let chiichaKey = "bottom";
   let editingPos = null; // 新しい名前を入力中の位置
 
@@ -72,6 +71,13 @@ export function renderStart(props) {
     const b = last.bottomSeat ?? 0;
     order.forEach((key, k) => (posPlayers[key] = last.seats[(b + k) % n]));
     chiichaKey = order[(n - b) % n];
+    // 旧記録で自分（下）が空席なら、相対配置を保ったまま卓を回して自分に人を置く
+    if (emptyPosition === "bottom") {
+      const prev = { ...posPlayers };
+      POSITION_ORDER.forEach((key, k) => (posPlayers[key] = prev[POSITION_ORDER[(k + 1) % 4]]));
+      chiichaKey = POSITION_ORDER[(POSITION_ORDER.indexOf(chiichaKey) + 3) % 4];
+      emptyPosition = "left";
+    }
   }
 
   const message = h("div", { class: "hint error", hidden: true });
@@ -81,9 +87,9 @@ export function renderStart(props) {
     const roster = storage.loadRoster();
     const nameOf = (id) => (roster.find((p) => p.id === id) || { name: "?" }).name;
     const n = pc;
-    const ready = n === 4 || emptyPosition !== null; // 3人麻雀は空席が決まってから
-    const order = ready ? positionsFor(n, emptyPosition) : [];
-    if (ready && !order.includes(chiichaKey)) chiichaKey = order[0];
+    // 使う位置。3人麻雀で空席が未定なら 4つとも出す（開始時に空席を求める）
+    const order = positionsFor(n, emptyPosition);
+    if (!order.includes(chiichaKey)) chiichaKey = order[0];
 
     root.append(h("header", { class: "plain-top" }, h("div", { class: "plain-title" }, "対局")));
 
@@ -166,6 +172,7 @@ export function renderStart(props) {
     // 位置ごとの席。select をそのまま置く（タップで iOS のドラムロール）
     const seatControl = (key) => {
       const isEmpty = n === 3 && key === emptyPosition;
+      const canBeEmpty = n === 3 && key !== "bottom"; // 自分は空席にできない
       if (editingPos === key) {
         const input = h("input", { type: "text", placeholder: "新しい名前", autocomplete: "off", enterkeyhint: "done" });
         const commit = () => {
@@ -191,7 +198,7 @@ export function renderStart(props) {
         return el;
       }
       const pid = isEmpty ? null : posPlayers[key];
-      const isChiicha = ready && chiichaKey === key && !isEmpty;
+      const isChiicha = chiichaKey === key && !isEmpty;
       const sel = h(
         "select",
         {
@@ -199,8 +206,11 @@ export function renderStart(props) {
           onchange: (e) => {
             const v = e.target.value;
             if (v === NEW_PLAYER) editingPos = key;
-            else if (v === EMPTY) emptyPosition = key; // 空席は1つだけ。前の空席は「—」に戻る
-            else {
+            else if (v === EMPTY) {
+              // 空席は1つだけ。前の空席は「—」に戻る
+              emptyPosition = key;
+              posPlayers[key] = null;
+            } else {
               if (isEmpty) emptyPosition = null; // 空席に人を入れたら、空席を選び直してもらう
               if (v) place(key, v);
               else posPlayers[key] = null;
@@ -209,33 +219,23 @@ export function renderStart(props) {
           },
         },
         h("option", { value: "", selected: !isEmpty && pid === null }, "—"),
-        n === 3 ? h("option", { value: EMPTY, selected: isEmpty }, "空席") : null,
-        // 3人麻雀で空席が未定なら「空席」しか選べない
-        ...(ready ? [roster.map((p) => h("option", { value: p.id, selected: !isEmpty && pid === p.id }, p.name)), h("option", { value: NEW_PLAYER }, "＋ 新しい名前")] : []),
+        canBeEmpty ? h("option", { value: EMPTY, selected: isEmpty }, "空席") : null,
+        roster.map((p) => h("option", { value: p.id, selected: !isEmpty && pid === p.id }, p.name)),
+        h("option", { value: NEW_PLAYER }, "＋ 新しい名前"),
       );
       return h(
         "div",
-        { class: `seat-slot${isChiicha ? " chiicha" : ""}${isEmpty ? " empty" : ""}${!ready && !isEmpty ? " locked" : ""}` },
+        { class: `seat-slot${isChiicha ? " chiicha" : ""}${isEmpty ? " empty" : ""}` },
         h("span", { class: "seat-pos" }, POS_LABEL[key]),
         sel,
       );
     };
 
-    // 配置図: 上 / 左 右 / 下
-    sec.append(
-      h(
-        "div",
-        { class: "seat-grid" },
-        h("div", { class: "seat-cell top" }, seatControl("top")),
-        h("div", { class: "seat-cell left" }, seatControl("left")),
-        h("div", { class: "seat-cell center" }, h("span", { class: "seat-center" }, "卓")),
-        h("div", { class: "seat-cell right" }, seatControl("right")),
-        h("div", { class: "seat-cell bottom" }, seatControl("bottom")),
-      ),
-    );
+    // 自分 → 右 → 対面 → 左 の順（反時計回り＝打牌順）に行で並べる
+    sec.append(h("div", { class: "seat-rows" }, POSITION_ORDER.map((key) => seatControl(key))));
 
-    // 起家（空席は除く）。3人麻雀で空席が未定なら出さない
-    if (ready) sec.append(
+    // 起家（空席は除く）
+    sec.append(
       h("div", { class: "label" }, "起家"),
       h(
         "div",
@@ -267,13 +267,13 @@ export function renderStart(props) {
           {
             type: "button",
             class: "btn-primary",
-            disabled: !ready,
             onclick: () => {
               const rule = props.rulesFor(pc);
               const errors = validateRule(rule);
               const list = order.map((key) => posPlayers[key]);
               const seatsInfo = seatsFromPositions({ posPlayers: list, chiichaPos: order.indexOf(chiichaKey) });
-              if (list.some((p) => p === null)) errors.push(`${n}人全員を選んでください`);
+              if (n === 3 && emptyPosition === null) errors.push("右・対面・左のどれかを空席にしてください");
+              else if (list.some((p) => p === null)) errors.push(`${n}人全員を選んでください`);
               if (new Set(list).size !== list.length) errors.push("同じプレイヤーが重複しています");
               if (errors.length) {
                 message.textContent = errors.join(" / ");

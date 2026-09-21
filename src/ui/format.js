@@ -120,6 +120,17 @@ export function seatPositions(bottomSeat, playerCount, emptyPosition = "left") {
   return pos;
 }
 
+/**
+ * 3人麻雀の横向き配置（§2）。端末を空席に横向きに置くので、空席から見て
+ * 右手の短辺 → right、対面の長辺 → top、左手の短辺 → left に各席を割り当てる。
+ * 反時計回りに 空席の次 → その次 → その次 の順。pos は seatPositions の戻り値。
+ */
+export function landscapePositions(pos, emptyPosition = "left") {
+  const i = POSITION_ORDER.indexOf(emptyPosition);
+  const at = (k) => pos[POSITION_ORDER[(i + k) % 4]];
+  return { right: at(1), top: at(2), left: at(3) };
+}
+
 
 /** 途中流局の種別名 */
 export const ABORTIVE_KIND_NAMES = Object.freeze({

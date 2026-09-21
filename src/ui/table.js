@@ -1,8 +1,10 @@
-// 対局画面（docs/design.md §8.2）。卓中央に置き、各パネルを席の方向に回転させる。
+// 対局画面（docs/design.md §8.2）。
+// 4人は卓中央に縦向きで置き、各パネルを席の方向に回転させる。
+// 3人は空席に横向きで置く（§2）。対面の長辺と左右の短辺にパネルを出し、手前（空席側）の辺に局の情報と操作を並べる。
 
 import { h, svg } from "./dom.js";
 import { dealerOf, canRiichi } from "../reduce.js";
-import { kyokuName, windName, fmtPoints, fmtDelta, fmtElapsed, seatPositions } from "./format.js";
+import { kyokuName, windName, fmtPoints, fmtDelta, fmtElapsed, seatPositions, landscapePositions } from "./format.js";
 
 // 点差表示。プラスとマイナスを重ねた ± 。文字ではなく線画にして、リーチ棒の絵と調子を揃える
 const ICON_DIFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
@@ -42,21 +44,17 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
   const rule = game.rule;
   const n = rule.playerCount;
   const dealer = dealerOf(state.kyoku, n);
-  const pos = seatPositions(game.bottomSeat ?? 0, n, game.emptyPosition || "left");
+  const landscape = n === 3;
+  const emptyPosition = game.emptyPosition || "left";
+  const seatPos = seatPositions(game.bottomSeat ?? 0, n, emptyPosition);
+  const pos = landscape ? landscapePositions(seatPos, emptyPosition) : seatPos;
 
-  const header = h(
-    "header",
-    { class: "top" },
-    h("div", { class: "kyoku" }, kyokuName(state.kyoku, n), " ", h("span", { class: "honba" }, `${state.honba}本場`)),
-    h("div", { class: "kyotaku" }, "供託 ", sticks(state.kyotaku)),
-  );
-
+  const kyokuInfo = h("div", { class: "kyoku" }, kyokuName(state.kyoku, n), " ", h("span", { class: "honba" }, `${state.honba}本場`));
+  const kyotakuInfo = h("div", { class: "kyotaku" }, "供託 ", sticks(state.kyotaku));
   const elapsed = h("span", { class: "elapsed", id: "elapsed" }, fmtElapsed(Date.now() - Date.parse(game.startedAt)));
-  const bar = h(
-    "div",
-    { class: "bar" },
-    h("div", { class: "bar-left" }, h("button", { type: "button", class: "btn-flat", onclick: actions.onLog, disabled: !actions.onLog }, "ログ"), elapsed),
-  );
+  const logBtn = h("button", { type: "button", class: "btn-flat", onclick: actions.onLog, disabled: !actions.onLog }, "ログ");
+  const menuBtn = h("button", { type: "button", class: "btn-flat", onclick: actions.onMenu }, "メニュー");
+  const overNote = h("div", { class: "over-note" }, state.over ? "終局" : "");
 
   const felt = h("div", { class: "felt" });
   for (const [position, seat] of Object.entries(pos)) {
@@ -70,13 +68,21 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
     ),
   );
 
-  const footer = h(
-    "footer",
-    { class: "bottom" },
-    h("div", { class: "over-note" }, state.over ? "終局" : ""),
-    h("button", { type: "button", class: "btn-flat", onclick: actions.onMenu }, "メニュー"),
-  );
+  if (landscape) {
+    // 手前の辺（空席側）に 1行でまとめる。誰も座らない辺なので、正立のまま置く
+    const near = h(
+      "footer",
+      { class: "near" },
+      h("div", { class: "bar-left" }, logBtn, elapsed),
+      h("div", { class: "near-info" }, kyokuInfo, kyotakuInfo),
+      h("div", { class: "bar-right" }, overNote, menuBtn),
+    );
+    return h("div", { class: "table-screen landscape" }, felt, near);
+  }
 
+  const header = h("header", { class: "top" }, kyokuInfo, kyotakuInfo);
+  const bar = h("div", { class: "bar" }, h("div", { class: "bar-left" }, logBtn, elapsed));
+  const footer = h("footer", { class: "bottom" }, overNote, menuBtn);
   return h("div", { class: "table-screen" }, header, bar, felt, footer);
 }
 

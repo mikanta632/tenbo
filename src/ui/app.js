@@ -123,6 +123,23 @@ function show(next) {
   else renderTabScreen();
   // タブ画面のときだけ body のスクロールを止める（起動直後に下部バーが浮くのを防ぐ）
   document.body.classList.toggle("tabs-screen", TAB_SCREENS.has(screen));
+  // 3人麻雀の対局中は横向き（§2, §10）。画面ごとに向きが変わるので、切り替えのたびに合わせ直す
+  document.body.classList.toggle("app-landscape", landscapeWanted());
+  applyOrientation();
+}
+
+/**
+ * 横向きに見せる画面か（§10）。3人麻雀の対局中に開く画面（卓面・そのログ・終局直後の結果とそのログ）だけ。
+ * 戦績タブから開いた過去の対局は、手に持って読むので縦向きのまま。
+ */
+function landscapeWanted() {
+  let g = null;
+  if (screen === "table") g = game;
+  else if (screen === "log" && logTarget) {
+    if (logTarget.kind === "current") g = game;
+    else if (resultBack === "game" && logTarget.id === resultId) g = storage.findGame(logTarget.id);
+  } else if (screen === "result" && resultBack === "game") g = storage.findGame(resultId);
+  return !!g && g.rule.playerCount === 3;
 }
 
 /** タブ付きの初期画面 */
@@ -893,15 +910,25 @@ function stopElapsed() {
 }
 
 // ---- 画面の向き（§10） --------------------------------------------------
-// iOS では向きを固定できないため、横向きになったら中身を逆に回して縦向きのまま見せる。
-// 本体（body）を回すので、body の中に fixed で置くシートも一緒に回る。
-// CSS の 100vh は実際の viewport を指すため、回転後の高さは --app-h / --app-w で渡す。
+// iOS では向きを固定できないため、端末の向きと見せたい向きが違うときは中身（body）を 90° 回す。
+// 縦向きに見せたい画面で端末が横なら逆に回して縦に、横向きに見せたい画面（3人麻雀の対局中）で
+// 端末が縦なら回して横に見せる。本体（body）を回すので、body の中に fixed で置くシートも一緒に回る。
+// CSS の 100vh は実際の viewport を指すため、回転後の幅・高さは --app-w / --app-h で渡す。
+// セーフエリアも回転に合わせて --sat / --sar / --sab / --sal を並べ替える。
+
+/** CSS の env(safe-area-inset-*) を JS から読む（style.css の --env-* 経由） */
+function safeInsets() {
+  const cs = getComputedStyle(document.documentElement);
+  const px = (name) => parseFloat(cs.getPropertyValue(name)) || 0;
+  return { top: px("--env-sat"), right: px("--env-sar"), bottom: px("--env-sab"), left: px("--env-sal") };
+}
 
 function applyOrientation() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   if (!w || !h) return; // 読み込み直後などで寸法が取れないときは触らない（CSS の既定 100vh のまま）
-  const landscape = w > h;
+  const deviceLandscape = w > h;
+  const wantLandscape = landscapeWanted();
   let angle = 0;
   // 注意: このファイルの screen は画面状態の変数。端末の向きは window.screen から取る
   const so = window.screen && window.screen.orientation;
@@ -909,25 +936,42 @@ function applyOrientation() {
   else if (typeof window.orientation === "number") angle = window.orientation;
   const body = document.body;
   const rootEl = document.documentElement;
-  if (landscape && (angle === 90 || angle === -90 || angle === 270)) {
+  const setInsets = (t, r, b, l) => {
+    rootEl.style.setProperty("--sat", `${t}px`);
+    rootEl.style.setProperty("--sar", `${r}px`);
+    rootEl.style.setProperty("--sab", `${b}px`);
+    rootEl.style.setProperty("--sal", `${l}px`);
+  };
+  let deg = 0;
+  if (deviceLandscape && !wantLandscape && (angle === 90 || angle === -90 || angle === 270)) {
     // 端末を左に倒した（angle 90）なら中身を右に回す
-    const deg = angle === 90 ? -90 : 90;
+    deg = angle === 90 ? -90 : 90;
+  } else if (!deviceLandscape && wantLandscape) {
+    // 端末は縦のまま横向きに見せる。中身の上を端末の左辺へ（iOS の landscape-primary と同じ向き）
+    deg = -90;
+  }
+  if (deg !== 0) {
     body.classList.add("rotated");
     body.style.width = `${h}px`;
     body.style.height = `${w}px`;
     body.style.transform = `translate(-50%, -50%) rotate(${deg}deg)`;
     rootEl.style.setProperty("--app-w", `${h}px`);
     rootEl.style.setProperty("--app-h", `${w}px`);
+    // 中身を -90° 回すと、中身の上辺は端末の左辺、右辺は端末の上辺になる。+90° はその逆
+    const s = safeInsets();
+    if (deg === -90) setInsets(s.left, s.top, s.right, s.bottom);
+    else setInsets(s.right, s.bottom, s.left, s.top);
   } else {
     body.classList.remove("rotated");
     body.style.width = "";
     body.style.height = "";
     body.style.transform = "";
     rootEl.style.removeProperty("--app-w");
+    for (const name of ["--sat", "--sar", "--sab", "--sal"]) rootEl.style.removeProperty(name);
     // ホーム画面から起動したとき（standalone）は 100dvh が実際の画面より小さく出て、
     // 下部のタブバーの下に隙間が残る。ツールバーの伸縮が無いので実測値をそのまま使う。
     // Safari のタブでは上下のツールバーに追従する必要があるので CSS の 100dvh に任せる。
-    if (isStandalone()) rootEl.style.setProperty("--app-h", `${viewportHeight()}px`);
+    if (isStandalone() && !deviceLandscape) rootEl.style.setProperty("--app-h", `${viewportHeight()}px`);
     else rootEl.style.removeProperty("--app-h");
   }
 }
