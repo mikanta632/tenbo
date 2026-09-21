@@ -6,6 +6,7 @@
 import { h, svg } from "./dom.js";
 import { dealerOf, canRiichi } from "../reduce.js";
 import { kyokuName, windName, fmtPoints, fmtDelta, fmtElapsed, seatPositions, landscapePositions } from "./format.js";
+import { agariCounts } from "../settlement.js";
 
 // 点差表示。プラスとマイナスを重ねた ± 。文字ではなく線画にして、リーチ棒の絵と調子を揃える
 const ICON_DIFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
@@ -23,6 +24,21 @@ const ICON_MELD = `<svg viewBox="0 0 64 28" width="56" height="24" aria-hidden="
   <circle cx="10" cy="14" r="3" fill="#2a7"/>
   <circle cx="32" cy="14" r="3" fill="#2a7"/>
   <circle cx="52" cy="16" r="3" fill="#2a7"/>
+</svg>`;
+
+// 焼き鳥の印。まだ和了していない人に出す小鳥の線画
+const ICON_BIRD = `<svg viewBox="0 0 32 24" aria-hidden="true">
+  <g fill="currentColor">
+    <ellipse cx="13" cy="13" rx="9.5" ry="6"/>
+    <circle cx="21.5" cy="8" r="4.2"/>
+    <path d="M25.3 7.2 30.5 8.4 25.3 9.6z"/>
+    <path d="M5 11.5 0.5 7.5 1.5 13.5z"/>
+  </g>
+  <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none">
+    <path d="M11 18.8 10 22.5M15.5 18.8 16.5 22.5"/>
+  </g>
+  <path d="M8.5 12.5c2 3 6 3.5 9.5 1.5" stroke="#111" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+  <circle cx="22.8" cy="7.2" r="0.9" fill="#111"/>
 </svg>`;
 
 export { seatPositions };
@@ -49,6 +65,7 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
   const emptyPosition = game.emptyPosition || "left";
   const seatPos = seatPositions(game.bottomSeat ?? 0, n, emptyPosition);
   const pos = landscape ? landscapePositions(seatPos, emptyPosition) : seatPos;
+  const agari = agariCounts(game);
 
   const kyokuInfo = h("div", { class: "kyoku" }, kyokuName(state.kyoku, n), " ", h("span", { class: "honba" }, `${state.honba}本場`));
   const kyotakuInfo = h("div", { class: "kyotaku" }, "供託 ", sticks(state.kyotaku));
@@ -59,7 +76,7 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
 
   const felt = h("div", { class: "felt" });
   for (const [position, seat] of Object.entries(pos)) {
-    felt.append(renderPanel({ position, seat, state, rule, dealer, names, actions, diffSeat }));
+    felt.append(renderPanel({ position, seat, state, rule, dealer, names, actions, diffSeat, yakitori: agari[seat] === 0 }));
   }
   felt.append(
     h(
@@ -87,7 +104,7 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
   return h("div", { class: "table-screen" }, header, bar, felt, footer);
 }
 
-function renderPanel({ position, seat, state, rule, dealer, names, actions, diffSeat }) {
+function renderPanel({ position, seat, state, rule, dealer, names, actions, diffSeat, yakitori }) {
   const n = rule.playerCount;
   const isDealer = seat === dealer;
   const riichiOn = state.round.riichi[seat];
@@ -123,6 +140,12 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions, diff
       onclick: () => actions.onMeld(seat, !melded),
     },
     "副露",
+  );
+  // 焼き鳥の印。副露ボタンの右に置き、和了したら消す（場所は残して幅を変えない）
+  const birdMark = h(
+    "span",
+    { class: `bird${yakitori ? "" : " off"}`, "aria-label": yakitori ? "焼き鳥（まだ和了なし）" : "", "aria-hidden": yakitori ? "false" : "true" },
+    svg(ICON_BIRD),
   );
 
   const panel = h(
@@ -181,7 +204,7 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions, diff
   return h(
     "div",
     { class: `pgroup pos-${position}`, dataset: { seat: String(seat) } },
-    h("div", { class: "pbtns" }, riichiBtn, meldBtn),
+    h("div", { class: "pbtns" }, riichiBtn, meldBtn, birdMark),
     h("div", { class: "prow-outer" }, chiichaSlot, panel, diffBtn),
   );
 }

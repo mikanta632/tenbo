@@ -38,6 +38,27 @@ test("各相手の点数欄に基準席からの点差を表示し、基準席�
   }
 });
 
+test("焼き鳥の印: まだ和了していない人に出し、和了（流し満貫を含む）で消える", (t) => {
+  mockDom(t);
+  const rule = PRESETS["4人標準"];
+  const names = ["A", "B", "C", "D"];
+  const events = [
+    { t: "agari", tsumo: true, from: null, winners: [{ who: 1, han: 1, fu: 30, yakumanCount: 0, sekinin: null, chips: 0 }] },
+    { t: "ryuukyoku", type: "nagashi", nagashiBy: [3], tenpai: [] },
+  ];
+  const game = { rule, events, startedAt: "2026-09-22T00:00:00Z", bottomSeat: 0 };
+  const root = renderTable({ game, state: initialState(rule), names, actions: {} });
+  const birdOf = (seat) => root.find((el) => el.dataset.seat === String(seat)).querySelector(".bird");
+  assert.ok(!/off/.test(birdOf(0).className));
+  assert.match(birdOf(1).className, /off/);
+  assert.ok(!/off/.test(birdOf(2).className));
+  assert.match(birdOf(3).className, /off/);
+  // 副露ボタンの右にある
+  const row = root.find((el) => el.dataset.seat === "0").querySelector(".pbtns");
+  assert.equal(row.children.at(-1), birdOf(0));
+  assert.equal(row.children.at(-2), button(row, "副露"));
+});
+
 test("3人麻雀は横向き配置（操作者を下、左右を短辺、奥に局の情報）で、4人は縦向きのまま", (t) => {
   mockDom(t);
   const names = ["A", "B", "C", "D"];

@@ -228,6 +228,13 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .ibtn.text { font-size: 18px; font-weight: 700; letter-spacing: 2px; }
 .ibtn.text.on { color: #111; }
 .ibtn:active { transform: scale(0.96); }
+/* 焼き鳥の印（副露ボタンの右）。ボタンと同じ枠に小鳥。和了したら透明にして場所だけ残す */
+.bird {
+  flex: 0 0 48px; border-radius: 10px; border: 1px solid rgba(255,179,0,0.5);
+  background: rgba(0,0,0,0.25); color: var(--accent); display: flex; align-items: center; justify-content: center;
+}
+.bird svg { width: 32px; height: 24px; }
+.bird.off { visibility: hidden; }
 
 /* 点数パネルと、その横の点差ボタン */
 .prow-outer { display: flex; gap: 8px; flex: 1; min-height: 0; }

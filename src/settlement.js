@@ -64,16 +64,12 @@ function rankGroups(points, ranks, rule) {
 }
 
 /**
- * 焼き鳥（§7）。和了が 0 回の席が他の各人に rule.yakitori 枚を払う。
- * 戻り値 { chips: [枚の増減], seats: [焼き鳥の席] }
+ * 席ごとの和了回数（焼き鳥の判定）。絞った後の和了者（§6.6）で数え、
+ * rule.yakitoriNagashi が真なら流し満貫の成立も数える。卓面の焼き鳥マークもこれを使う。
  */
-export function yakitoriChips(game) {
+export function agariCounts(game) {
   const rule = game.rule;
-  const n = rule.playerCount;
-  const chips = new Array(n).fill(0);
-  const per = rule.yakitori ?? 0;
-  if (!rule.chips || per <= 0) return { chips, seats: [] };
-  const agari = new Array(n).fill(0);
+  const agari = new Array(rule.playerCount).fill(0);
   const events = game.events;
   for (const g of kyokuGroups(events)) {
     if (g.endIndex === null) continue;
@@ -84,6 +80,20 @@ export function yakitoriChips(game) {
       for (const who of end.nagashiBy || []) agari[who]++;
     }
   }
+  return agari;
+}
+
+/**
+ * 焼き鳥（§7）。和了が 0 回の席が他の各人に rule.yakitori 枚を払う。
+ * 戻り値 { chips: [枚の増減], seats: [焼き鳥の席] }
+ */
+export function yakitoriChips(game) {
+  const rule = game.rule;
+  const n = rule.playerCount;
+  const chips = new Array(n).fill(0);
+  const per = rule.yakitori ?? 0;
+  if (!rule.chips || per <= 0) return { chips, seats: [] };
+  const agari = agariCounts(game);
   const seats = [];
   for (let s = 0; s < n; s++) {
     if (agari[s] > 0) continue;
