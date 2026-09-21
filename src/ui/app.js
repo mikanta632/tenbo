@@ -46,6 +46,7 @@ import {
   playMeld,
   playTap,
   playNextKyoku,
+  playNewWind,
   playRenchan,
   playGameOver,
   playTest,
@@ -129,12 +130,13 @@ function show(next) {
 }
 
 /**
- * 横向きに見せる画面か（§10）。3人麻雀の対局中に開く画面（卓面・そのログ・終局直後の結果とそのログ）だけ。
+ * 横向きに見せる画面か（§10）。3人麻雀の対局が進行中なら、卓面もタブ画面（開始画面へ戻ったとき）も横向きのまま。
+ * 行き来のたびに画面を回さないため。終了直後の結果とそのログも横向き。
  * 戦績タブから開いた過去の対局は、手に持って読むので縦向きのまま。
  */
 function landscapeWanted() {
   let g = null;
-  if (screen === "table") g = game;
+  if (screen === "table" || TAB_SCREENS.has(screen)) g = game;
   else if (screen === "log" && logTarget) {
     if (logTarget.kind === "current") g = game;
     else if (resultBack === "game" && logTarget.id === resultId) g = storage.findGame(logTarget.id);
@@ -614,6 +616,7 @@ function emit(event) {
   else if (isEndOfKyoku(event)) {
     // 局が進んだか、親が続いた（連荘・チョンボ）かで音を変える
     if (state.kyoku === prevKyoku) playRenchan();
+    else if (Math.floor(state.kyoku / game.rule.playerCount) !== Math.floor(prevKyoku / game.rule.playerCount)) playNewWind(); // 南入・西入
     else playNextKyoku();
   }
   show();

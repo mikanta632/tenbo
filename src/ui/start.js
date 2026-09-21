@@ -251,7 +251,7 @@ export function renderStart(props) {
                 render();
               },
             },
-            `${POS_LABEL[key]} ${posPlayers[key] ? nameOf(posPlayers[key]) : "—"}`,
+            POS_LABEL[key],
           ),
         ),
       ),

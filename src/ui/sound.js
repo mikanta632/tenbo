@@ -111,6 +111,16 @@ export function playRenchan() {
   tone(1319, 0.45, 0.36, { type: "triangle", gain: 0.2 }); // 矩形波だけだと痩せるので三角波を重ねる
 }
 
+/** 場が変わる（南入・西入）: 次局の3音のあと、間を置いて高い2音のチャイムを足す */
+export function playNewWind() {
+  if (!soundEnabled()) return;
+  tone(784, 0.12, 0, { type: "triangle" });
+  tone(988, 0.12, 0.13, { type: "triangle" });
+  tone(1319, 0.3, 0.26, { type: "triangle" });
+  tone(1568, 0.18, 0.7, { type: "triangle", gain: 0.28 });
+  tone(2093, 0.5, 0.9, { type: "triangle", gain: 0.28 });
+}
+
 /** 終局: 長めの2音 */
 export function playGameOver() {
   if (!soundEnabled()) return;
