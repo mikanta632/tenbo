@@ -2,7 +2,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { createStorage, memoryStorage, migrate, prepareImport, SCHEMA_VERSION, KEYS } from "../src/storage.js";
+import { createStorage, memoryStorage, migrate, prepareImport, mergeImport, SCHEMA_VERSION, KEYS } from "../src/storage.js";
 import { makeRule } from "../src/rules.js";
 import { appendEvent } from "../src/edit.js";
 import { computeSettlement } from "../src/settlement.js";
@@ -314,5 +314,73 @@ describe("チップの保存", () => {
     const ok = backup();
     ok.games[0].rule = { ...ok.games[0].rule, nishiIri: true, rateBase: "rawScore", abortiveRyuukyoku: ["kyuushu"] };
     assert.doesNotThrow(() => prepareImport(ok));
+  });
+});
+
+describe("マージ（§8.7）", () => {
+  const game = (id, seats, startedAt) => ({ ...backup().games[0], id, seats, startedAt });
+  const player = (id, name) => ({ id, name, createdAt: "2026-09-01T00:00:00Z" });
+  const dump = (roster, games, extra = {}) => ({ meta: { schemaVersion: SCHEMA_VERSION }, roster, current: null, games, carry: [], ...extra });
+
+  test("無い対局と人を足し、同じ対局 ID は既存を残す", () => {
+    const existing = dump([player("a", "A"), player("b", "B"), player("c", "C"), player("d", "D")], [game("g_1", ["a", "b", "c", "d"], "2026-09-01T00:00:00Z")]);
+    const incoming = dump(
+      [player("a", "A"), player("b", "B"), player("c", "C"), player("e", "E")],
+      [{ ...game("g_1", ["a", "b", "c", "e"], "2026-09-01T00:00:00Z"), endedAt: "x" }, game("g_2", ["a", "b", "c", "e"], "2026-09-02T00:00:00Z")],
+    );
+    const { merged, summary } = mergeImport(existing, incoming);
+    assert.deepEqual(summary, { games: 1, skippedGames: 1, players: 1, mergedPlayers: 0, carry: 0 });
+    assert.deepEqual(merged.games.map((g) => g.id), ["g_2", "g_1"]); // 新しい順
+    assert.deepEqual(merged.games[1].seats, ["a", "b", "c", "d"]); // 既存を残す
+    assert.equal(merged.games[1].endedAt, null);
+    assert.deepEqual(merged.roster.map((p) => p.id), ["a", "b", "c", "d", "e"]);
+    // 引数は変更しない
+    assert.equal(existing.games.length, 1);
+    assert.equal(existing.roster.length, 4);
+  });
+
+  test("ID が違っても同じ名前なら同一人物として既存の ID に寄せ、席も書き換える", () => {
+    const existing = dump([player("a", "あきら"), player("b", "B"), player("c", "C"), player("d", "D")], []);
+    const incoming = dump([player("x1", " あきら "), player("x2", "B"), player("x3", "C"), player("x4", "新人")], [game("g_9", ["x1", "x2", "x3", "x4"], "2026-09-03T00:00:00Z")]);
+    const { merged, summary } = mergeImport(existing, incoming);
+    assert.deepEqual(merged.games[0].seats, ["a", "b", "c", "x4"]);
+    assert.deepEqual(merged.roster.map((p) => p.id), ["a", "b", "c", "d", "x4"]);
+    assert.equal(summary.mergedPlayers, 3);
+    assert.equal(summary.players, 1);
+  });
+
+  test("寄せると同じ対局に同じ人が 2 席出るときは、その対局だけ寄せずに別人として足す", () => {
+    // 既存 a=太郎。取り込み側に a（別名）と y（太郎）が同じ対局に居る
+    const existing = dump([player("a", "太郎"), player("b", "B"), player("c", "C"), player("d", "D")], []);
+    const incoming = dump([player("a", "太郎（旧）"), player("y", "太郎"), player("b", "B"), player("c", "C")], [game("g_5", ["a", "y", "b", "c"], "2026-09-04T00:00:00Z")]);
+    const { merged } = mergeImport(existing, incoming);
+    assert.deepEqual(merged.games[0].seats, ["a", "y", "b", "c"]);
+    assert.ok(merged.roster.some((p) => p.id === "y"));
+    assert.equal(merged.roster.find((p) => p.id === "a").name, "太郎"); // 既存の名前を残す
+  });
+
+  test("進行中の対局は既存を保持し、繰越は無いものだけ足す", () => {
+    const cur = game("g_cur", ["a", "b", "c", "d"], "2026-09-05T00:00:00Z");
+    const existing = dump([player("a", "A"), player("b", "B"), player("c", "C"), player("d", "D")], [], { current: cur, carry: [carry("a", 4)] });
+    const incoming = dump([player("a", "A"), player("z", "Z"), player("b", "B"), player("c", "C")], [game("g_cur", ["a", "z", "b", "c"], "2026-09-05T00:00:00Z")], {
+      current: game("g_other", ["a", "z", "b", "c"], "2026-09-06T00:00:00Z"),
+      carry: [carry("a", 4), carry("z", 3)],
+    });
+    const { merged, summary } = mergeImport(existing, incoming);
+    assert.equal(merged.current.id, "g_cur");
+    assert.deepEqual(merged.games, []); // 進行中と同じ ID は飛ばす
+    assert.deepEqual(merged.carry.map((c) => `${c.playerId}/${c.playerCount}`), ["a/4", "z/3"]);
+    assert.deepEqual(summary, { games: 0, skippedGames: 1, players: 1, mergedPlayers: 0, carry: 1 });
+  });
+
+  test("storage.mergeAll は検証してから保存し、結果を返す", () => {
+    const { st } = make();
+    st.init();
+    const a = st.addPlayer("A");
+    st.appendGame({ ...backup().games[0], id: "g_1", seats: [a.id, "b", "c", "d"] });
+    const summary = st.mergeAll(backup());
+    assert.equal(summary.games, 1);
+    assert.equal(st.loadGames().length, 2);
+    assert.throws(() => st.mergeAll({ meta: { schemaVersion: 999 } }), /schemaVersion/);
   });
 });

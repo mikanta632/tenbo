@@ -894,20 +894,54 @@ function importJson(file) {
       return;
     }
     closeSheet();
-    openSheetHandle = openConfirm({
+    const head = `対局 ${data.games.length}件、プレイヤー ${data.roster.length}人`;
+    openSheetHandle = openActionSheet({
       title: "インポート",
-      message: `対局 ${data.games.length}件、プレイヤー ${data.roster.length}人を読み込み、今のデータをすべて置き換えます。`,
-      okLabel: "置き換える",
-      onOk: () => {
-        try {
-          storage.importAll(data);
-        } catch (error) {
-          alert("インポートに失敗しました: " + error.message);
-          return;
-        }
-        game = storage.loadCurrent();
-        show(game ? "table" : "game");
-      },
+      items: [
+        {
+          label: "マージ（今のデータに追加）",
+          sub: `${head}。無い対局と人を足す。進行中の対局は今のまま`,
+          onPick: () => {
+            let summary;
+            try {
+              summary = storage.mergeAll(data);
+            } catch (error) {
+              alert("インポートに失敗しました: " + error.message);
+              return;
+            }
+            const parts = [`対局 ${summary.games}件を追加`];
+            if (summary.skippedGames) parts.push(`同じ対局 ${summary.skippedGames}件は飛ばした`);
+            if (summary.players) parts.push(`プレイヤー ${summary.players}人を追加`);
+            if (summary.mergedPlayers) parts.push(`同名 ${summary.mergedPlayers}人は同一人物として寄せた`);
+            if (summary.carry) parts.push(`繰越 ${summary.carry}件を追加`);
+            game = storage.loadCurrent();
+            show(game ? "table" : "stats");
+            alert("マージしました。" + parts.join("、") + "。");
+          },
+        },
+        {
+          label: "置き換え（今のデータを捨てる）",
+          sub: `${head}で全部入れ替える。元に戻せない`,
+          danger: true,
+          onPick: () => {
+            openSheetHandle = openConfirm({
+              title: "置き換え",
+              message: `${head}を読み込み、今のデータ（進行中の対局を含む）をすべて置き換えます。`,
+              okLabel: "置き換える",
+              onOk: () => {
+                try {
+                  storage.importAll(data);
+                } catch (error) {
+                  alert("インポートに失敗しました: " + error.message);
+                  return;
+                }
+                game = storage.loadCurrent();
+                show(game ? "table" : "game");
+              },
+            });
+          },
+        },
+      ],
     });
   };
   reader.readAsText(file);

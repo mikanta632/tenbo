@@ -272,30 +272,122 @@ export function createStorage(ls = globalThis.localStorage, now = () => new Date
       };
     },
     importAll(data) {
-      const migrated = prepareImport(data);
-      const entries = [
-        [KEYS.roster, migrated.roster],
-        [KEYS.current, migrated.current ?? null],
-        [KEYS.games, migrated.games],
-        [KEYS.carry, migrated.carry ?? []],
-        [KEYS.meta, { schemaVersion: SCHEMA_VERSION, updatedAt: now() }],
-      ].map(([key, value]) => [key, JSON.stringify(value), ls.getItem(key)]);
-      const written = [];
-      try {
-        for (const entry of entries) {
-          ls.setItem(entry[0], entry[1]);
-          written.push(entry);
-        }
-      } catch (error) {
-        // localStorage は複数キーを一括保存できない。成功した書き込みだけを逆順で戻す。
-        for (const [key, , previous] of written.reverse()) {
-          if (previous === null) ls.removeItem(key);
-          else ls.setItem(key, previous);
-        }
-        throw error;
-      }
+      writeAll(prepareImport(data));
+    },
+    /** 今のデータに取り込む（§8.7 マージ）。戻り値は mergeImport の summary */
+    mergeAll(data) {
+      const { merged, summary } = mergeImport(this.exportAll(), prepareImport(data));
+      writeAll(merged);
+      return summary;
     },
   };
+
+  /** 全キーをまとめて保存する。途中で失敗したら書いた分を戻す */
+  function writeAll(migrated) {
+    const entries = [
+      [KEYS.roster, migrated.roster],
+      [KEYS.current, migrated.current ?? null],
+      [KEYS.games, migrated.games],
+      [KEYS.carry, migrated.carry ?? []],
+      [KEYS.meta, { schemaVersion: SCHEMA_VERSION, updatedAt: now() }],
+    ].map(([key, value]) => [key, JSON.stringify(value), ls.getItem(key)]);
+    const written = [];
+    try {
+      for (const entry of entries) {
+        ls.setItem(entry[0], entry[1]);
+        written.push(entry);
+      }
+    } catch (error) {
+      // localStorage は複数キーを一括保存できない。成功した書き込みだけを逆順で戻す。
+      for (const [key, , previous] of written.reverse()) {
+        if (previous === null) ls.removeItem(key);
+        else ls.setItem(key, previous);
+      }
+      throw error;
+    }
+  }
+}
+
+/**
+ * マージ（§8.7）。existing に incoming を足した新しい全データを返す。どちらも変更しない。
+ * - 対局は ID で突き合わせ、無いものを追加。同じ ID は既存を残す
+ * - プレイヤーは ID が同じなら同一人物。ID が違っても名前が同じなら同一人物とみなして既存の ID に寄せ、
+ *   取り込む対局の席もその ID に書き換える（別の端末で同じ名前を登録した場合に成績を分裂させない）。
+ *   寄せた結果ひとつの対局に同じ人が 2 席出るときは、その対局だけ寄せずに元の ID のまま取り込む
+ * - 進行中の対局は既存を保持する
+ * - 繰越（carry）は既存に無い（playerId, playerCount）だけ足す
+ * 戻り値 { merged, summary: { games, skippedGames, players, mergedPlayers, carry } }
+ */
+export function mergeImport(existing, incoming) {
+  const roster = existing.roster.map((p) => ({ ...p }));
+  const byId = new Map(roster.map((p) => [p.id, p]));
+  const byName = new Map();
+  for (const p of roster) if (!byName.has(p.name.trim())) byName.set(p.name.trim(), p);
+  const incomingIds = new Set(incoming.roster.map((p) => p.id));
+
+  // 取り込む ID → 既存の ID。名前で寄せるのは、その既存 ID が取り込み側に無い場合だけ（1 人が 2 人に化けない）
+  const map = new Map();
+  let mergedPlayers = 0;
+  const unmapped = [];
+  for (const p of incoming.roster) {
+    if (byId.has(p.id)) {
+      map.set(p.id, p.id);
+      continue;
+    }
+    const same = byName.get(p.name.trim());
+    if (same && !incomingIds.has(same.id)) {
+      map.set(p.id, same.id);
+      mergedPlayers++;
+    } else unmapped.push(p);
+  }
+  const added = new Map(); // 追加するプレイヤー（ID → Player）
+  const addPlayer = (p) => {
+    if (!byId.has(p.id) && !added.has(p.id)) added.set(p.id, { ...p });
+  };
+  for (const p of unmapped) addPlayer(p);
+  const incomingPlayer = new Map(incoming.roster.map((p) => [p.id, p]));
+  const remap = (id) => map.get(id) ?? id;
+  const remapSeats = (seats) => {
+    const mapped = seats.map(remap);
+    if (new Set(mapped).size === mapped.length) return mapped;
+    // 寄せると同じ人が 2 席になる対局。元の ID のまま取り込み、その人を別人として足す
+    for (const id of seats) if (map.get(id) !== id && incomingPlayer.has(id)) addPlayer(incomingPlayer.get(id));
+    return seats.slice();
+  };
+
+  const existingGameIds = new Set(existing.games.map((g) => g.id));
+  if (existing.current) existingGameIds.add(existing.current.id);
+  const newGames = [];
+  let skippedGames = 0;
+  for (const g of incoming.games) {
+    if (existingGameIds.has(g.id)) {
+      skippedGames++;
+      continue;
+    }
+    newGames.push({ ...g, seats: remapSeats(g.seats) });
+  }
+  // 新しい順（appendGame と同じ）に並べ直す
+  const games = [...existing.games, ...newGames].sort((a, b) => String(b.startedAt ?? "").localeCompare(String(a.startedAt ?? "")));
+
+  const existingCarry = existing.carry ?? [];
+  const carryKeys = new Set(existingCarry.map((c) => `${c.playerId}/${c.playerCount}`));
+  const newCarry = [];
+  for (const c of incoming.carry ?? []) {
+    const playerId = remap(c.playerId);
+    const key = `${playerId}/${c.playerCount}`;
+    if (carryKeys.has(key)) continue;
+    carryKeys.add(key);
+    newCarry.push({ ...c, playerId });
+  }
+
+  const merged = {
+    meta: { ...(existing.meta || {}), schemaVersion: SCHEMA_VERSION },
+    roster: [...roster, ...added.values()],
+    current: existing.current ?? null,
+    games,
+    carry: [...existingCarry, ...newCarry],
+  };
+  return { merged, summary: { games: newGames.length, skippedGames, players: added.size, mergedPlayers, carry: newCarry.length } };
 }
 
 /** テスト用のメモリ上 localStorage 互換オブジェクト */
