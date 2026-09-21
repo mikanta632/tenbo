@@ -41,16 +41,16 @@ describe("seatPositions", () => {
     assert.deepEqual(["bottom", "right", "left"].map((k) => r.seats[pos[k]]), ["a", "b", "c"]);
     assert.equal(pos.top, undefined);
   });
-  test("3人の横向き配置: 空席から見て 右の短辺・対面の長辺・左の短辺 に、空席の次から反時計回りに割り当てる", () => {
-    // 自分 a（下）、右 b、対面 空席、左 c。空席（上）に座って卓を見ると、左手が右（b）、右手が左（c）、対面が下（a）
+  test("3人の横向き配置: 空席の対面の人を下（操作者）、その右手を右、左手を左の短辺に割り当てる", () => {
+    // 自分 a（下）、右 b、対面 空席、左 c。空席に置いた端末を a が操作する。a の右手（下家）は b、左手は c
     const pos = seatPositions(0, 3, "top"); // { bottom: 0, right: 1, left: 2 }
-    assert.deepEqual(landscapePositions(pos, "top"), { right: 2, top: 0, left: 1 });
-    // 空席が左: 右手が下（自分）、対面が右、左手が上
-    assert.deepEqual(landscapePositions(seatPositions(0, 3, "left"), "left"), { right: 0, top: 1, left: 2 });
-    // 空席が右: 使う位置は 下 0・上 1・左 2。右手が上（1）、対面が左（2）、左手が下（0）
-    assert.deepEqual(landscapePositions(seatPositions(0, 3, "right"), "right"), { right: 1, top: 2, left: 0 });
-    // 旧記録の空席が下でも同じ規則で置ける
-    assert.deepEqual(landscapePositions(seatPositions(1, 3, "bottom"), "bottom"), { right: 1, top: 2, left: 0 });
+    assert.deepEqual(landscapePositions(pos, "top"), { bottom: 0, right: 1, left: 2 });
+    // 空席が左: 対面は右（1）。その右手（下家）は上（2）、左手は下（0）
+    assert.deepEqual(landscapePositions(seatPositions(0, 3, "left"), "left"), { bottom: 1, right: 2, left: 0 });
+    // 空席が右: 使う位置は 下 0・上 1・左 2。対面は左（2）。その右手は下（0）、左手は上（1）
+    assert.deepEqual(landscapePositions(seatPositions(0, 3, "right"), "right"), { bottom: 2, right: 0, left: 1 });
+    // 旧記録の空席が下でも同じ規則で置ける: 対面は上（2）。その右手は左（0）、左手は右（1）
+    assert.deepEqual(landscapePositions(seatPositions(1, 3, "bottom"), "bottom"), { bottom: 2, right: 0, left: 1 });
   });
   test("配置図の選択（下→右→上→左の順）と起家の位置から seats / bottomSeat を出し、往復が一致する", () => {
     // 4人: 下 a、右 b、上 c、左 d。起家は上（添字 2）→ seats は c,d,a,b、下は seats[2]

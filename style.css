@@ -191,23 +191,23 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 
 .felt { position: relative; flex: 1; min-height: 0; }
 
-/* 3人麻雀は空席に横向きで置く（§2）。対面を上の長辺、左右を短辺に出し、手前の辺に情報と操作を 1行で並べる */
+/* 3人麻雀は空席に横向きで置き、空席の対面の人が操作する（§2）。その人を下の長辺、左右を短辺に出し、奥の辺に情報と操作を 1行で並べる */
 .table-screen.landscape {
-  --near-h: 48px;
-  /* 卓面の高さ（画面 − セーフエリア − 手前の行）。左右のパネル群はこれに収める */
-  --felt-h: calc(var(--app-h) - var(--sat) - var(--sab) - var(--near-h));
+  --edge-h: 48px;
+  /* 卓面の高さ（画面 − セーフエリア − 奥の行）。左右のパネル群はこれに収める */
+  --felt-h: calc(var(--app-h) - var(--sat) - var(--sab) - var(--edge-h));
   --pw: min(340px, calc(var(--app-w) - var(--sal) - var(--sar) - 2 * (var(--ph) + 8px) - 16px));
   --pw-side: min(340px, calc(var(--felt-h) - 8px));
   padding-left: var(--sal); padding-right: var(--sar);
 }
-.table-screen.landscape > .near {
+.table-screen.landscape > .edge {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  height: var(--near-h); padding: 0 10px 4px;
+  height: var(--edge-h); padding: 4px 10px 0;
 }
-.near-info { display: flex; align-items: center; gap: 12px; font-size: 17px; font-weight: 600; white-space: nowrap; }
+.edge-info { display: flex; align-items: center; gap: 12px; font-size: 17px; font-weight: 600; white-space: nowrap; }
 .table-screen.landscape .bar-right { display: flex; align-items: center; gap: 10px; }
-/* 終局ボタンは対面のパネルの下に入れる（卓面の中央だと対面のパネルと重なる） */
-.table-screen.landscape .btn-special { top: calc((100% + var(--ph)) / 2); }
+/* 終局ボタンは操作者のパネルの上に入れる（卓面の中央だとパネルと重なる） */
+.table-screen.landscape .btn-special { top: calc((100% - var(--ph)) / 2); }
 .pgroup {
   position: absolute; display: flex; flex-direction: column; align-items: stretch; gap: 4px;
   width: var(--pw); height: var(--ph); left: 50%; top: 50%;
