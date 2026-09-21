@@ -240,3 +240,43 @@ test("対局画面: チップの収支を名前の行に出す（0 は出さな�
   assert.equal(tagOf(1), undefined);
   assert.equal(tagOf(2).textContent, "−2枚");
 });
+
+// ---- ログからの編集（§8.4） ---------------------------------------------------
+
+import { openMultiRonSheet, openEventEditor } from "../src/ui/sheets.js";
+
+test("和了の編集: 和了者を変えられ、放銃者と重なったら入れ替える。通常の和了入力には出さない", (t) => {
+  mockDom(t);
+  const rule = makeRule();
+  const names = ["A", "B", "C", "D"];
+  const events = [];
+  const initial = { t: "agari", tsumo: false, from: 2, winners: [{ who: 1, han: 3, fu: 40, yakumanCount: 0, sekinin: null, chips: 0 }] };
+  const { box } = openEventEditor({ event: initial, state: initialState(rule), rule, names, onConfirm: (ev) => events.push(ev) });
+  const seatRow = box.find((el) => el.matches(".grid2"));
+  assert.ok(seatRow, "和了者の行がない");
+  seatRow.find((el) => el.tag === "button" && el.textContent === "西 C").handlers.click();
+  button(box, "確定").handlers.click();
+  assert.equal(events[0].winners[0].who, 2);
+  assert.equal(events[0].from, 1);
+  assert.equal(events[0].winners[0].han, 3);
+  assert.equal(events[0].winners[0].fu, 40);
+
+  const plain = openAgariSheet({ state: initialState(rule), rule, names, seat: 1, onConfirm: () => {} });
+  assert.equal(plain.box.find((el) => el.matches(".grid2")), undefined);
+});
+
+test("複数和了: 和了者が1人では確定できず、2人以上で確定できる", (t) => {
+  mockDom(t);
+  const rule = makeRule();
+  const names = ["A", "B", "C", "D"];
+  const events = [];
+  const { box } = openMultiRonSheet({ state: initialState(rule), rule, names, onConfirm: (ev) => events.push(ev) });
+  box.find((el) => el.matches(".grid2")).find((el) => el.tag === "button" && el.textContent === "東 A").handlers.click();
+  box.find((el) => el.tag === "button" && el.matches(".wide") && el.textContent.startsWith("南 B")).handlers.click();
+  assert.equal(button(box, "確定").disabled, true);
+  assert.match(box.textContent, /2人以上/);
+  box.find((el) => el.tag === "button" && el.matches(".wide") && el.textContent.startsWith("西 C")).handlers.click();
+  assert.equal(button(box, "確定").disabled, false);
+  button(box, "確定").handlers.click();
+  assert.deepEqual(events[0].winners.map((w) => w.who), [1, 2]);
+});

@@ -780,7 +780,7 @@ function renderLogScreen() {
                 items: names.map((name, i) => ({
                   label: name,
                   onPick: () => {
-                    openSheetHandle = openAgariSheet({ state: before, rule, names, seat: i, onConfirm });
+                    openSheetHandle = openAgariSheet({ state: before, rule, names, seat: i, onConfirm, selectSeat: true });
                   },
                 })),
               });

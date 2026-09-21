@@ -314,15 +314,26 @@ function whoLine(seat, state, names, extra = []) {
 
 /**
  * 和了入力シート。seat の和了を入力する。initial に既存の agari イベントを渡せる。
+ * selectSeat が真なら「和了者」の行を先頭に出し、和了者を変えられる（ログからの編集・挿入用）。
  */
-export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = null }) {
+export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = null, selectSeat = false }) {
   const n = rule.playerCount;
   const w0 = initial && initial.winners.find((w) => w.who === seat);
   const s = winnerState(seat, w0);
   const f = { tsumo: initial ? initial.tsumo : true, from: initial ? initial.from : null };
   const body = h("div", { class: "sheet-body agari-body" });
-  const others = [];
-  for (let i = 0; i < n; i++) if (i !== seat) others.push(i);
+  let others = [];
+  const setSeat = (v) => {
+    const prev = seat;
+    seat = v;
+    s.who = v;
+    // 和了者と放銃者・包が重なったら入れ替える（取り違えの修正が1タップで済む）
+    if (f.from === v) f.from = prev;
+    if (s.sekininWho === v) s.sekininWho = prev;
+    others = [];
+    for (let i = 0; i < n; i++) if (i !== seat) others.push(i);
+  };
+  setSeat(seat);
 
   function buildEvent() {
     return { t: "agari", tsumo: f.tsumo, from: f.tsumo ? null : f.from, winners: [winnerFromState(s, rule)] };
@@ -332,6 +343,21 @@ export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = 
   function render() {
     clear(body);
     append(body, whoLine(seat, state, names));
+
+    if (selectSeat) {
+      append(body,
+        h("div", { class: "label" }, "和了者"),
+        choice(
+          seatItems(state, names),
+          seat,
+          (v) => {
+            setSeat(v);
+            render();
+          },
+          { class: "grid2" },
+        ),
+      );
+    }
 
     append(body,
       h("div", { class: "label" }, "和了の形"),
@@ -398,7 +424,8 @@ export function openMultiRonSheet({ state, rule, names, onConfirm, initial = nul
     const winners = [...forms.values()].sort((a, b) => a.who - b.who).map((s) => winnerFromState(s, rule));
     return { t: "agari", tsumo: false, from, winners };
   }
-  const valid = () => from !== null && forms.size >= 1 && !forms.has(from);
+  // 複数和了なので和了者は 2 人以上。1 人なら通常の和了入力で入れる
+  const valid = () => from !== null && forms.size >= 2 && !forms.has(from);
 
   function render() {
     clear(body);
@@ -440,15 +467,13 @@ export function openMultiRonSheet({ state, rule, names, onConfirm, initial = nul
         append(body, h("div", { class: "subform" }, winnerForm({ s: forms.get(i), state, rule, names, onChange: render })));
       }
     }
-    if (!rule.multiRon && forms.size > 1) {
-    }
     if (valid()) {
       const ev = buildEvent();
       const pv = previewTable({ state, event: ev, rule, names });
       append(body, h("div", { class: "summary" }, `${forms.size}人和了`), pv.el, confirmRow(() => onConfirm(ev)));
     } else {
       append(body,
-        h("div", { class: "hint" }, from === null ? "放銃者を選んでください" : "和了者を1人以上選んでください"),
+        h("div", { class: "hint" }, from === null ? "放銃者を選んでください" : "和了者を2人以上選んでください（1人なら和了入力で）"),
         placeholderPreview({ state, names }),
         confirmRow(null, false),
       );
@@ -681,7 +706,7 @@ export function openSpecialMenu({ rule, onPick, title = "特殊終局", withAdju
 export function openEventEditor({ event, state, rule, names, onConfirm }) {
   const p = { state, rule, names, onConfirm, initial: event };
   if (event.t === "agari") {
-    if (event.tsumo || event.winners.length === 1) return openAgariSheet({ ...p, seat: event.winners[0].who });
+    if (event.tsumo || event.winners.length === 1) return openAgariSheet({ ...p, seat: event.winners[0].who, selectSeat: true });
     return openMultiRonSheet(p);
   }
   if (event.t === "ryuukyoku") {
