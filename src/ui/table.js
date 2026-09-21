@@ -141,7 +141,7 @@ function renderPanel({ position, seat, state, rule, dealer, names, actions, diff
     },
     "副露",
   );
-  // 焼き鳥の印。副露ボタンの右に置き、和了したら消す（場所は残して幅を変えない）
+  // 焼き鳥の印。点差ボタンの上（副露ボタンの右）に置き、和了したら消す（場所は残して幅を変えない）
   const birdMark = h(
     "span",
     { class: `bird${yakitori ? "" : " off"}`, "aria-label": yakitori ? "焼き鳥（まだ和了なし）" : "", "aria-hidden": yakitori ? "false" : "true" },
