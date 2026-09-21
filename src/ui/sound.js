@@ -86,10 +86,10 @@ export function playMeld(on) {
   }
 }
 
-/** 操作音（すべてのボタン） */
+/** 操作音（すべてのボタン）: 低めの短い「コッ」。矩形波の高音は耳に刺さるので三角波で柔らかく */
 export function playTap() {
   if (!soundEnabled()) return;
-  tone(1500, 0.04, 0, { gain: 0.12, type: "square" });
+  tone(740, 0.045, 0, { gain: 0.16, type: "triangle" });
 }
 
 /** 局が終わり次の局へ: 上昇する3音 */
