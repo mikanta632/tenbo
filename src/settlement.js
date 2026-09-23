@@ -113,10 +113,11 @@ export function yakitoriChips(game) {
  * - 終局時の供託は rule.finalKyotaku === "top" ならトップの持ち点に加算する
  * - pt(i) = 丸め((points − returnPoints) / 1000) + 順位点
  *   順位点はウマ（トップならオカも）。tieBreak "split" なら同点の者で等分する
- *   ptRounding が "round5"（五捨六入）のときは、トップ（のグループ）の pt を他の合計の符号反転とし、
- *   丸めの端数とオカをトップが引き受ける。"none" のときは式のまま
+ *   ptRounding が "round5"（五捨六入）のときは、トップ（のグループ）の pt を「丸めない pt の合計 − 他の人の pt」とし、
+ *   丸めの端数とオカをトップが引き受ける。残り供託（remain）や手動修正の卓外差額はトップに吸わせず、
+ *   pt の合計のずれとして残す（支払い経路では卓外との授受になる）。"none" のときは式のまま
  * - チップ = State.chips + 焼き鳥。円 = pt × rate + チップ × chipRate
- * - 卓外差額 = 全 adjust の deltas の合計（点）。表示用で、pt には反映しない
+ * - 卓外差額 = 全 adjust の deltas の合計（点）
  */
 export function computeSettlement(game) {
   const rule = game.rule;
@@ -162,7 +163,10 @@ export function computeSettlement(game) {
     pt[i] = rounding(points[i] - rule.returnPoints) + share[i];
   }
   if (rule.ptRounding !== "none") {
-    const rest = -pt.reduce((a, b) => a + b, 0) || 0; // −0 を作らない
+    // 丸めない pt の合計。供託が残らず手動修正の合計も 0 なら 0 になる
+    const exactTotal = points.reduce((sum, p) => sum + (p - rule.returnPoints), 0) / 1000 + oka;
+    const others = pt.reduce((a, b) => a + b, 0);
+    const rest = Math.round((exactTotal - others) * 1e6) / 1e6 || 0; // 浮動小数の誤差と −0 を消す
     for (const seat of topGroup) pt[seat] = rest / topGroup.length;
   }
 

@@ -164,6 +164,35 @@ describe("同点の等分", () => {
   });
 });
 
+describe("五捨六入でもトップに卓外の分を吸わせない", () => {
+  test("残り供託（remain）の分だけ pt の合計がマイナスになり、場に残した分は卓外への支払いになる", () => {
+    const rule = makeRule({ finalKyotaku: "remain", rate: 100 });
+    const s = computeSettlement(game(rule, riichi(0), adjust([15000, 5000, -5000, -15000])));
+    assert.deepEqual(s.points, [39000, 30000, 20000, 10000]);
+    // 1: 0 + 10、2: −10 − 10、3: −20 − 20。トップは丸めない合計 −1 から他を引いて 49（吸わせると 50）
+    assert.deepEqual(s.pt, [49, 10, -20, -40]);
+    assert.equal(s.pt.reduce((a, b) => a + b, 0), -1);
+    // 卓外への支払いは 1pt × 100円（誰が払うかは経路の組み方による）
+    assert.equal(s.transfers.filter((t) => t.to === null).reduce((a, t) => a + t.amount, 0), 100);
+    assert.equal(s.transfers.some((t) => t.from === null), false);
+  });
+  test("手動修正の卓外差額は pt の合計のずれとして残り、卓外からの受取になる", () => {
+    const rule = makeRule({ rate: 100 });
+    const s = computeSettlement(game(rule, adjust([1000, 0, 0, 0])));
+    assert.equal(s.outsideDiff, 1000);
+    assert.deepEqual(s.pt, [36, 5, -15, -25]);
+    assert.equal(s.pt.reduce((a, b) => a + b, 0), 1);
+    assert.equal(s.transfers.filter((t) => t.from === null).reduce((a, t) => a + t.amount, 0), 100);
+    assert.equal(s.transfers.some((t) => t.to === null), false);
+  });
+  test("小数保持（none）と合計が一致する", () => {
+    const events = [riichi(0), adjust([15000, 5000, -5000, -15000])];
+    const round = computeSettlement(game(makeRule({ finalKyotaku: "remain" }), ...events)).pt;
+    const exact = computeSettlement(game(makeRule({ finalKyotaku: "remain", ptRounding: "none" }), ...events)).pt;
+    assert.equal(round.reduce((a, b) => a + b, 0), exact.reduce((a, b) => a + b, 0));
+  });
+});
+
 describe("同点トップと残り供託", () => {
   const SPLIT = makeRule({ tieBreak: "split" });
   test("トップが並んでいれば、残り供託は並んだ者で等分する", () => {
