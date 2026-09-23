@@ -121,11 +121,13 @@ export function seatPositions(bottomSeat, playerCount, emptyPosition = "left") {
 }
 
 /**
- * 3人麻雀の横向き配置（§2）。端末を空席に横向きに置き、空席の対面の人が操作する。
- * 画面はその人に正立させるので、対面の人 → bottom（0°）、その人の右手（下家）→ right、左手（上家）→ left。
- * 反時計回りに 空席の次（left）→ その次（bottom）→ その次（right）の順。pos は seatPositions の戻り値。
+ * 3人麻雀の横向き配置（§2）。端末は「自分」の前に横向きに置き、自分が操作する。
+ * 自分から見た位置がそのまま画面の位置になる: 自分 → bottom（手前の長辺）、右 → right（短辺）、
+ * 対面 → top（奥の長辺）、左 → left（短辺）。空席の位置には局の情報と操作を置く。pos は seatPositions の戻り値。
+ * 自分を空席にできた頃の記録（emptyPosition が "bottom"）だけは、空席の対面の人を下にする旧来の割り当てを使う。
  */
 export function landscapePositions(pos, emptyPosition = "left") {
+  if (emptyPosition !== "bottom") return { ...pos };
   const i = POSITION_ORDER.indexOf(emptyPosition);
   const at = (k) => pos[POSITION_ORDER[(i + k) % 4]];
   return { bottom: at(2), right: at(3), left: at(1) };

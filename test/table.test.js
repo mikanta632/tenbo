@@ -59,7 +59,7 @@ test("焼き鳥の印: まだ和了していない人に出し、和了（流し
   assert.equal(row.children.at(-2), button(row, "副露"));
 });
 
-test("3人麻雀は横向き配置（操作者を下、左右を短辺、奥に局の情報）で、4人は縦向きのまま", (t) => {
+test("3人麻雀は横向き配置（自分を下、自分から見た位置のまま、空席の側に局の情報）で、4人は縦向きのまま", (t) => {
   mockDom(t);
   const names = ["A", "B", "C", "D"];
   const posOf = (root) => Object.fromEntries(root.findAll((el) => el.dataset.seat !== undefined).map((el) => [el.className.match(/pos-(\w+)/)[1], Number(el.dataset.seat)]));
@@ -73,6 +73,20 @@ test("3人麻雀は横向き配置（操作者を下、左右を短辺、奥に�
   assert.ok(root3.querySelector(".edge"), "奥の行がない");
   assert.match(root3.querySelector(".edge").textContent, /東1局/);
   assert.ok(button(root3, "ログ") && button(root3, "メニュー"));
+
+  // 空席が左: 端末は自分の前。自分 0 が下、右 1 が右の短辺、対面 2 が奥の長辺。局の情報と操作は空いた左の短辺
+  const gameL = { ...game3, emptyPosition: "left" };
+  const rootL = renderTable({ game: gameL, state: initialState(rule3), names: names.slice(0, 3), actions: {} });
+  assert.deepEqual(posOf(rootL), { bottom: 0, right: 1, top: 2 });
+  assert.equal(rootL.querySelector(".edge"), undefined);
+  const side = rootL.querySelector(".side-edge");
+  assert.match(side.className, /side-left/);
+  assert.match(side.textContent, /東1局/);
+  assert.ok(button(side, "ログ") && button(side, "メニュー"));
+  // 空席が右なら右の短辺
+  const rootR = renderTable({ game: { ...game3, emptyPosition: "right" }, state: initialState(rule3), names: names.slice(0, 3), actions: {} });
+  assert.deepEqual(posOf(rootR), { bottom: 0, top: 1, left: 2 });
+  assert.match(rootR.querySelector(".side-edge").className, /side-right/);
 
   const rule4 = PRESETS["4人標準"] || Object.values(PRESETS).find((r) => r.playerCount === 4);
   const game4 = { rule: rule4, events: [], startedAt: "2026-09-21T00:00:00Z", bottomSeat: 0 };

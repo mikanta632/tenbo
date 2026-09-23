@@ -1,7 +1,7 @@
 // 対局画面（docs/design.md §8.2）。
 // 4人は卓中央に縦向きで置き、各パネルを席の方向に回転させる。
-// 3人は空席に横向きで置く（§2）。空席の対面の人が操作するので画面はその人に正立させ、
-// その人のパネルを手前（下）の長辺、左右の人を短辺に出し、奥（空席側）の辺に局の情報と操作を並べる。
+// 3人は自分の前に横向きで置く（§2）。自分が操作するので画面は自分に正立させ、自分から見た位置のまま
+// 自分を手前（下）の長辺、左右の人を短辺、対面の人を奥の長辺に出し、空席の側に局の情報と操作を並べる。
 
 import { h, svg } from "./dom.js";
 import { dealerOf, canRiichi } from "../reduce.js";
@@ -84,7 +84,24 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
   );
 
   if (landscape) {
-    // 奥の辺（空席側）に 1行でまとめる。操作する対面の人から見て正立
+    // 局の情報と操作は空席の側に置く（自分から見て正立）。空席が対面（または旧記録の下）なら奥の長辺に 1行、
+    // 左右なら空いた短辺に縦に並べる
+    const infoSide = emptyPosition === "left" || emptyPosition === "right" ? emptyPosition : "top";
+    if (infoSide !== "top") {
+      felt.append(
+        h(
+          "aside",
+          { class: `side-edge side-${infoSide}` },
+          kyokuInfo,
+          kyotakuInfo,
+          elapsed,
+          logBtn,
+          overNote,
+          menuBtn,
+        ),
+      );
+      return h("div", { class: "table-screen landscape side-info" }, felt);
+    }
     const edge = h(
       "header",
       { class: "edge" },
