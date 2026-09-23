@@ -190,6 +190,20 @@ function closeSheet() {
   }
 }
 
+/**
+ * 保存する。失敗（端末の保存領域が足りない等）したら知らせて false を返す。
+ * 呼び出し側は、保存できたときだけ画面の状態を進める（保存されていない操作を画面に残さない）。
+ */
+function persist(write) {
+  try {
+    write();
+    return true;
+  } catch {
+    alert("保存できませんでした。端末の保存領域が足りない可能性があります。この操作は反映していません。");
+    return false;
+  }
+}
+
 /** 現在局（最後の局末イベントより後）にある seat の riichi イベントの添字。無ければ -1。 */
 function findCurrentRiichiIndex(events, seat) {
   for (let i = events.length - 1; i >= 0; i--) {
@@ -232,8 +246,8 @@ function gameTabContent() {
         alert("ルールが不正: " + errors.join("; "));
         return;
       }
+      if (!persist(() => storage.saveCurrent(g))) return;
       game = g;
-      storage.saveCurrent(game);
       show("table");
     },
     onSettings: () => show("settings"),
@@ -559,9 +573,10 @@ function renderTableScreen() {
       if (state.round.riichi[seat]) {
         const idx = findCurrentRiichiIndex(game.events, seat);
         if (idx < 0) return;
+        const next = withEvents(game, removeEvent(game.events, idx, rule));
+        if (!persist(() => storage.saveCurrent(next))) return;
         playRiichiCancel();
-        game = withEvents(game, removeEvent(game.events, idx, rule));
-        storage.saveCurrent(game);
+        game = next;
         show();
         return;
       }
@@ -646,8 +661,9 @@ function emit(event) {
     alert(e.message);
     return;
   }
-  game = withEvents(game, events);
-  storage.saveCurrent(game);
+  const next = withEvents(game, events);
+  if (!persist(() => storage.saveCurrent(next))) return; // 保存できなければ操作ごと取り消す
+  game = next;
   const state = reduce(game.events, game.rule);
   if (state.over) {
     if (!prev.over) playGameOver(); // 終局後の手動修正では鳴らさない
@@ -693,7 +709,7 @@ function showOver(state, names) {
       // 精算を確定して焼き込み、終了した対局に移す（§7, §9.2）
       const finished = { ...game, endedAt: new Date().toISOString() };
       finished.settlement = { ...computeSettlement(finished), computedAt: finished.endedAt };
-      storage.appendGame(finished);
+      if (!persist(() => storage.appendGame(finished))) return;
       storage.clearCurrent();
       game = null;
       resultId = finished.id;
@@ -722,7 +738,11 @@ function showOver(state, names) {
 function settlementOf(g) {
   if (g.settlement) return g.settlement;
   const s = { ...computeSettlement(g), computedAt: new Date().toISOString() };
-  storage.updateGame({ ...g, settlement: s });
+  try {
+    storage.updateGame({ ...g, settlement: s });
+  } catch {
+    /* 焼き込めなくても表示はできる。次に開いたときにまた計算する */
+  }
   return s;
 }
 
@@ -759,11 +779,11 @@ function logGame() {
 /** 編集結果を保存する。進行中なら mj.current、終了済みなら mj.games を更新する（settlement は null に戻る）。 */
 function saveLogGame(events) {
   if (logTarget.kind === "current") {
-    game = withEvents(game, events);
-    storage.saveCurrent(game);
+    const next = withEvents(game, events);
+    if (persist(() => storage.saveCurrent(next))) game = next;
   } else {
     const g = withEvents(logGame(), events);
-    storage.updateGame(g);
+    persist(() => storage.updateGame(g));
   }
 }
 
