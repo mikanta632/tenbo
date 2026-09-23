@@ -134,6 +134,11 @@ export function validateRule(rule) {
   if (rule.length !== n && rule.length !== n * 2) {
     errors.push(`length は playerCount か playerCount×2: ${rule.length}`);
   }
+  // ノーテン罰符（§6.4）: テンパイ者・ノーテン者が何人でも 1 人あたり 100点単位に割り切れる総点だけ（4人は 600、3人は 200 の倍数）
+  const tenpaiUnit = n === 3 ? 200 : 600;
+  if (Number.isFinite(rule.ryuukyokuTenpaiTotal) && (rule.ryuukyokuTenpaiTotal < 0 || rule.ryuukyokuTenpaiTotal % tenpaiUnit !== 0)) {
+    errors.push(`ノーテン罰符の総点は ${tenpaiUnit} の倍数: ${rule.ryuukyokuTenpaiTotal}`);
+  }
   return errors;
 }
 
