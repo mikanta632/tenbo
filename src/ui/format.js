@@ -134,6 +134,30 @@ export function landscapePositions(pos, emptyPosition = "left") {
 }
 
 
+/** 角度を −180〜180 に直す（−180 と 180 は同じ向き） */
+function normAngle(d) {
+  const r = (((d % 360) + 360) % 360);
+  return r > 180 ? r - 360 : r;
+}
+
+/**
+ * 画面の擬似固定（§10）。端末本体に対する中身の向き target（0 = 本体の縦、±90 = 横）を保つために、
+ * body を何度回すかを返す。angle は iOS が今表示している向き（screen.orientation.angle。0 / 90 / −90 / 270 / 180）。
+ * iOS が表示を回しても、その分を逆に回して打ち消すので、中身は本体に対して回らない。
+ */
+export function bodyRotation(target, angle) {
+  return normAngle(target - normAngle(angle));
+}
+
+/**
+ * 横向きに見せる画面の、本体に対する向き（§10）。横向きに見せ始めたときに決めて、そのあいだは変えない。
+ * 端末がすでに横なら iOS が表示しているその横向き、縦なら中身の上を本体の左辺にした横向き（−90）。
+ */
+export function landscapeTarget({ deviceLandscape, angle }) {
+  const a = normAngle(angle);
+  return deviceLandscape && (a === 90 || a === -90) ? a : -90;
+}
+
 /** 途中流局の種別名 */
 export const ABORTIVE_KIND_NAMES = Object.freeze({
   kyuushu: "九種九牌",

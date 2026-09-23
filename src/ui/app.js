@@ -37,7 +37,7 @@ import {
   openRateSheet,
   openCombinedSettlement,
 } from "./sheets.js";
-import { fmtElapsed, kyokuName, gameDateTime } from "./format.js";
+import { fmtElapsed, kyokuName, gameDateTime, bodyRotation, landscapeTarget } from "./format.js";
 import { ensurePresets, presetsFor, selectedPreset, selectedPresetId, selectPreset, updatePreset, addPreset, deletePreset } from "./prefs.js";
 import {
   soundEnabled,
@@ -1028,17 +1028,25 @@ function safeInsets() {
   return { top: px("--env-sat"), right: px("--env-sar"), bottom: px("--env-sab"), left: px("--env-sal") };
 }
 
+// 横向きに見せているあいだの、端末本体に対する中身の向き（landscapeTarget）。横向きに見せ始めたときに決める。
+// iOS が左右の横向きを入れ替えても（端末を持ち上げた・揺れた）中身を回さないため
+let landscapeLock = null;
+
 function applyOrientation() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   if (!w || !h) return; // 読み込み直後などで寸法が取れないときは触らない（CSS の既定 100vh のまま）
   const deviceLandscape = w > h;
   const wantLandscape = landscapeWanted();
-  let angle = 0;
+  let angle = null;
   // 注意: このファイルの screen は画面状態の変数。端末の向きは window.screen から取る
   const so = window.screen && window.screen.orientation;
   if (so && typeof so.angle === "number") angle = so.angle;
   else if (typeof window.orientation === "number") angle = window.orientation;
+  // 向きの切り替え途中などで、寸法（縦横）と角度が食い違うときは角度を使わない
+  if (angle !== null && deviceLandscape !== [90, 270].includes(((angle % 360) + 360) % 360)) angle = null;
+  if (!wantLandscape) landscapeLock = null;
+  else if (landscapeLock === null) landscapeLock = landscapeTarget({ deviceLandscape, angle: angle ?? 0 });
   const body = document.body;
   const rootEl = document.documentElement;
   const setInsets = (t, r, b, l) => {
@@ -1047,15 +1055,21 @@ function applyOrientation() {
     rootEl.style.setProperty("--sab", `${b}px`);
     rootEl.style.setProperty("--sal", `${l}px`);
   };
+  // 中身を端末本体に対して固定する: 縦に見せる画面は本体の縦（0）、横に見せる画面は決めた横向き
   let deg = 0;
-  if (deviceLandscape && !wantLandscape && (angle === 90 || angle === -90 || angle === 270)) {
-    // 端末を左に倒した（angle 90）なら中身を右に回す
-    deg = angle === 90 ? -90 : 90;
-  } else if (!deviceLandscape && wantLandscape) {
-    // 端末は縦のまま横向きに見せる。中身の上を端末の左辺へ（iOS の landscape-primary と同じ向き）
-    deg = -90;
-  }
-  if (deg !== 0) {
+  if (angle !== null) deg = bodyRotation(wantLandscape ? landscapeLock : 0, angle);
+  else if (!deviceLandscape && wantLandscape) deg = -90; // 向きが取れない・食い違う: 縦のまま横向きに見せる
+  if (deg === 180 || deg === -180) {
+    // 上下を入れ替えるだけ（iOS が反対の横向きにしたとき）。幅と高さはそのまま
+    body.classList.add("rotated");
+    body.style.width = `${w}px`;
+    body.style.height = `${h}px`;
+    body.style.transform = "translate(-50%, -50%) rotate(180deg)";
+    rootEl.style.setProperty("--app-w", `${w}px`);
+    rootEl.style.setProperty("--app-h", `${h}px`);
+    const s = safeInsets();
+    setInsets(s.bottom, s.left, s.top, s.right);
+  } else if (deg !== 0) {
     body.classList.add("rotated");
     body.style.width = `${h}px`;
     body.style.height = `${w}px`;

@@ -2,7 +2,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { seatPositions, positionsFor, landscapePositions, kyokuName, windName, fmtPoints, fmtDelta, fmtPt, fmtYen, fmtElapsed, rankBadgeClass, hanName, fmtDateTime, fmtDate, gameDateTime } from "../src/ui/format.js";
+import { seatPositions, positionsFor, landscapePositions, bodyRotation, landscapeTarget, kyokuName, windName, fmtPoints, fmtDelta, fmtPt, fmtYen, fmtElapsed, rankBadgeClass, hanName, fmtDateTime, fmtDate, gameDateTime } from "../src/ui/format.js";
 import { buildGame, seatsFromPositions } from "../src/ui/start.js";
 import { makeRule } from "../src/rules.js";
 import { createStorage, memoryStorage } from "../src/storage.js";
@@ -144,5 +144,29 @@ describe("fmtDateTime", () => {
   test("gameDateTime は終局時刻、無ければ開始時刻を使う", () => {
     assert.equal(gameDateTime({ startedAt: "2026-09-01T10:00:00.000Z", endedAt: "2026-09-01T12:00:00.000Z" }, TZ), "2026-09-01 21:00");
     assert.equal(gameDateTime({ startedAt: "2026-09-01T10:00:00.000Z", endedAt: null }, TZ), "2026-09-01 19:00");
+  });
+});
+
+describe("画面の擬似固定（§10）", () => {
+  test("縦に見せる画面は、iOS が横にしても逆に回して本体の縦を保つ", () => {
+    assert.equal(bodyRotation(0, 0), 0);
+    assert.equal(bodyRotation(0, 90), -90);
+    assert.equal(bodyRotation(0, -90), 90);
+    assert.equal(bodyRotation(0, 270), 90);
+  });
+  test("横に見せる画面は見せ始めたときの横向きで固定し、iOS が反対の横向きにしたら上下を入れ替える", () => {
+    // 端末が縦のまま始めたら、中身の上を本体の左辺に
+    const fromPortrait = landscapeTarget({ deviceLandscape: false, angle: 0 });
+    assert.equal(fromPortrait, -90);
+    assert.equal(bodyRotation(fromPortrait, 0), -90);
+    assert.equal(bodyRotation(fromPortrait, -90), 0);
+    assert.equal(Math.abs(bodyRotation(fromPortrait, 90)), 180);
+    // 横に置いて始めたらその向き。あとで iOS が反対の横向きにしても中身は回らない（上下を入れ替えて打ち消す）
+    const fromLandscape = landscapeTarget({ deviceLandscape: true, angle: 90 });
+    assert.equal(fromLandscape, 90);
+    assert.equal(bodyRotation(fromLandscape, 90), 0);
+    assert.equal(Math.abs(bodyRotation(fromLandscape, -90)), 180);
+    assert.equal(bodyRotation(fromLandscape, 0), 90);
+    assert.equal(landscapeTarget({ deviceLandscape: true, angle: 270 }), -90);
   });
 });
