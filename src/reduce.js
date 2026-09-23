@@ -246,7 +246,7 @@ export function applyEvent(state, event, rule) {
       // 4. round リセット
       next.round = emptyRound(n);
       // 5. 終局判定（アガリやめは agariYameAvailable で別途判定し、end イベントで終局する）
-      next.over = judgeOver(next, rule);
+      next.over = state.over || judgeOver(next, rule); // 一度終局したら（end を含む）戻らない
       // 6. チップ: 和了時の枚数と、トビで終局したときのトビ賞
       addChips(next.chips, agariChips({ rule, tsumo: event.tsumo, from: event.from, winners: event.winners }));
       addChips(next.chips, tobiPrizeChips(next.points, winners.map((w) => w.who), rule));
@@ -268,7 +268,7 @@ export function applyEvent(state, event, rule) {
         if (!dealerStays) next.kyoku += 1;
       }
       next.round = emptyRound(n);
-      next.over = judgeOver(next, rule);
+      next.over = state.over || judgeOver(next, rule);
       // 流し満貫で飛んだら成立者を和了者とみなしてトビ賞（§5.3）
       if (type === "nagashi") addChips(next.chips, tobiPrizeChips(next.points, event.nagashiBy || [], rule));
       return next;
@@ -285,7 +285,7 @@ export function applyEvent(state, event, rule) {
       }
       addDeltas(next.points, event.deltas);
       next.round = emptyRound(n);
-      next.over = judgeOver(next, rule);
+      next.over = state.over || judgeOver(next, rule);
       return next;
     }
 

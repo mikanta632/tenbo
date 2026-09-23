@@ -6,7 +6,7 @@
 import { createStorage, prepareImport } from "../storage.js";
 import { validateRule, normalizeRule, presetFor } from "../rules.js";
 import { reduce, isEndOfKyoku, agariYameAvailableAfter, dealerOf, kyokuGroups } from "../reduce.js";
-import { appendEvent, removeEvent, replaceEvent, insertEvent, deleteKyoku, withEvents } from "../edit.js";
+import { appendEvent, removeEvent, replaceEvent, insertEvent, insertIndexOf, deleteKyoku, withEvents } from "../edit.js";
 import { computeSettlement } from "../settlement.js";
 import { combineGames } from "../stats.js";
 import { clear, h } from "./dom.js";
@@ -755,13 +755,6 @@ function renderLogScreen() {
   const names = playerNames(g);
   const title = logTarget.kind === "current" ? "ログ（進行中）" : `ログ ${gameDateTime(g).slice(0, 10)}`;
 
-  /** 挿入位置。空の進行中グループなら末尾（end イベントの前）。 */
-  const insertIndexOf = (group) => {
-    if (group.indices.length) return group.indices[0];
-    const endIdx = g.events.findIndex((e) => e.t === "end");
-    return endIdx >= 0 ? endIdx : g.events.length;
-  };
-
   root.append(
     renderLog({
       game: g,
@@ -792,8 +785,7 @@ function renderLogScreen() {
         });
       },
       onInsert: (gi) => {
-        const group = kyokuGroups(g.events)[gi];
-        const idx = insertIndexOf(group);
+        const idx = insertIndexOf(g.events, gi);
         const before = reduce(g.events.slice(0, idx), rule);
         const onConfirm = (ev) => {
           closeSheet();

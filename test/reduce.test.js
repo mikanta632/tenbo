@@ -24,6 +24,7 @@ import {
   recalc,
   replaceEvent,
   insertEvent,
+  insertIndexOf,
   removeEvent,
   undoLast,
   deleteKyoku,
@@ -376,6 +377,10 @@ describe("終局判定", () => {
     assert.equal(states[7].over, true);
     assert.equal(states[7].kyoku, 8);
   });
+  test("end の後に局末イベントがあっても終局のまま", () => {
+    const s = run(R4, ron(1, 3, 1, 30), end(), ron(2, 3, 1, 30), exhaustive([]));
+    assert.equal(s.over, true);
+  });
   test("トビ", () => {
     const s = run(R4, adjust([0, 0, -20000, 20000]), ron(3, 2, 5, 30));
     assert.equal(s.points[2], -3000);
@@ -506,6 +511,20 @@ describe("7. 編集後の再計算", () => {
     assert.deepEqual(inserted[2].deltas, [0, 1500, -1500, 0]);
     const removed = removeEvent(inserted, 0, R4);
     assert.deepEqual(removed.map((e) => e.deltas), events.map((e) => e.deltas));
+  });
+  test("挿入位置: 局の先頭。空の進行中の局は末尾で、どちらも end より後ろにしない", () => {
+    const events = build(R4, ron(1, 3, 1, 30), riichi(2), ron(2, 0, 1, 30));
+    assert.equal(insertIndexOf(events, 1), 1);
+    assert.equal(insertIndexOf(events, 2), 3);
+    const withRiichi = build(R4, ron(1, 3, 1, 30), riichi(2));
+    assert.equal(insertIndexOf(withRiichi, 1), 1);
+    const ended = build(R4, ron(1, 3, 1, 30), end());
+    assert.equal(insertIndexOf(ended, 1), 1);
+    // 終局後の手動修正は進行中の局に入るが、挿入は end の前
+    const adjusted = [...ended, adjust([1000, -1000, 0, 0])];
+    assert.equal(insertIndexOf(adjusted, 1), 1);
+    const after = insertEvent(adjusted, insertIndexOf(adjusted, 1), exhaustive([]), R4);
+    assert.equal(reduce(after, R4).over, true);
   });
   test("流局と流し満貫の deltas も親の変化に追随する", () => {
     const events = build(R4, ron(1, 3, 1, 30), nagashi([1], []));

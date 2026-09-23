@@ -116,6 +116,18 @@ export function deleteKyoku(events, groupIndex, rule) {
 }
 
 /**
+ * ログの「前に挿入」の挿入位置（§8.4）。選んだ局の先頭（局中イベントより前）。
+ * 空の進行中の局なら末尾。どちらの場合も `end` より後ろには入れない（終わった対局が再開しないように）。
+ */
+export function insertIndexOf(events, groupIndex) {
+  const group = kyokuGroups(events)[groupIndex];
+  if (!group) throw new Error(`局が存在しない: ${groupIndex}`);
+  const head = group.indices.length ? group.indices[0] : events.length;
+  const endIdx = events.findIndex((e) => e.t === "end");
+  return endIdx >= 0 ? Math.min(head, endIdx) : head;
+}
+
+/**
  * 局末イベントだけを差し替える（ログ画面の行編集）。
  * その局の局中イベントは保持し、以降を再計算する。
  */
