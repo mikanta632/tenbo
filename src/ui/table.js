@@ -43,12 +43,9 @@ const ICON_BIRD = `<svg viewBox="0 0 32 24" aria-hidden="true">
 
 export { seatPositions };
 
+/** 供託。リーチ棒 1 本と「×本数」で出す（本数で幅が変わらないように、0 本でも ×0） */
 function sticks(count) {
-  const shown = Math.min(count, 6);
-  const el = h("span", { class: "sticks", "aria-label": `供託${count}本` });
-  for (let i = 0; i < shown; i++) el.append(svg(ICON_RIICHI));
-  if (count > shown) el.append(h("span", { class: "sticks-more" }, `×${count}`));
-  return el;
+  return h("span", { class: "sticks", "aria-label": `供託${count}本` }, svg(ICON_RIICHI), h("span", { class: "sticks-more" }, `×${count}`));
 }
 
 /**

@@ -81,3 +81,16 @@ test("3人麻雀は横向き配置（操作者を下、左右を短辺、奥に�
   assert.deepEqual(posOf(root4), { bottom: 0, right: 1, top: 2, left: 3 });
   assert.equal(root4.querySelector(".edge"), undefined);
 });
+
+test("供託はリーチ棒 1 本と「×本数」で出す（0 本でも ×0）", (t) => {
+  mockDom(t);
+  const rule = PRESETS["4人標準"];
+  for (const kyotaku of [0, 1, 3, 8]) {
+    const state = { ...initialState(rule), kyotaku };
+    const game = { rule, events: [], startedAt: "2026-09-06T00:00:00Z", bottomSeat: 0 };
+    const root = renderTable({ game, state, names: ["A", "B", "C", "D"], actions: {} });
+    const sticks = root.querySelector(".sticks");
+    assert.equal(sticks.findAll((el) => el.tag === "svg").length, 1);
+    assert.equal(sticks.querySelector(".sticks-more").textContent, `×${kyotaku}`);
+  }
+});
