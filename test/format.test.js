@@ -2,7 +2,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { seatPositions, positionsFor, landscapePositions, bodyRotation, landscapeTarget, kyokuName, windName, fmtPoints, fmtDelta, fmtPt, fmtYen, fmtElapsed, rankBadgeClass, hanName, fmtDateTime, fmtDate, gameDateTime } from "../src/ui/format.js";
+import { seatPositions, positionsFor, landscapePositions, isLandscapeGame, bodyRotation, landscapeTarget, kyokuName, windName, fmtPoints, fmtDelta, fmtPt, fmtYen, fmtElapsed, rankBadgeClass, hanName, fmtDateTime, fmtDate, gameDateTime } from "../src/ui/format.js";
 import { buildGame, seatsFromPositions } from "../src/ui/start.js";
 import { makeRule } from "../src/rules.js";
 import { createStorage, memoryStorage } from "../src/storage.js";
@@ -144,6 +144,19 @@ describe("fmtDateTime", () => {
   test("gameDateTime は終局時刻、無ければ開始時刻を使う", () => {
     assert.equal(gameDateTime({ startedAt: "2026-09-01T10:00:00.000Z", endedAt: "2026-09-01T12:00:00.000Z" }, TZ), "2026-09-01 21:00");
     assert.equal(gameDateTime({ startedAt: "2026-09-01T10:00:00.000Z", endedAt: null }, TZ), "2026-09-01 19:00");
+  });
+});
+
+describe("横向きに見せる対局（§2）", () => {
+  test("3人麻雀で空席が対面（と旧記録の下）のときだけ横向き。左右は縦向き、4人は縦向き", () => {
+    const r3 = { playerCount: 3 };
+    assert.equal(isLandscapeGame({ rule: r3, emptyPosition: "top" }), true);
+    assert.equal(isLandscapeGame({ rule: r3, emptyPosition: "bottom" }), true);
+    assert.equal(isLandscapeGame({ rule: r3, emptyPosition: "left" }), false);
+    assert.equal(isLandscapeGame({ rule: r3, emptyPosition: "right" }), false);
+    assert.equal(isLandscapeGame({ rule: r3 }), false); // 空席の記録が無い古い対局は左とみなす
+    assert.equal(isLandscapeGame({ rule: { playerCount: 4 }, emptyPosition: null }), false);
+    assert.equal(isLandscapeGame(null), false);
   });
 });
 

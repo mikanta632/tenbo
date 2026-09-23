@@ -121,10 +121,19 @@ export function seatPositions(bottomSeat, playerCount, emptyPosition = "left") {
 }
 
 /**
- * 3人麻雀の横向き配置（§2）。端末は「自分」の前に横向きに置き、自分が操作する。
- * 自分から見た位置がそのまま画面の位置になる: 自分 → bottom（手前の長辺）、右 → right（短辺）、
- * 対面 → top（奥の長辺）、左 → left（短辺）。空席の位置には局の情報と操作を置く。pos は seatPositions の戻り値。
- * 自分を空席にできた頃の記録（emptyPosition が "bottom"）だけは、空席の対面の人を下にする旧来の割り当てを使う。
+ * 横向きに見せる対局か（§2）。3人麻雀で空席が対面のときだけ。端末は空席に横向きに置き、長辺が自分に向く。
+ * 空席が左右なら端末は自分から見て縦になる（短辺が自分に向く）ので、4人麻雀と同じ縦向きの画面にする。
+ * 自分を空席にできた頃の記録（emptyPosition が "bottom"）も横向き。
+ */
+export function isLandscapeGame(game) {
+  return !!game && game.rule.playerCount === 3 && ["top", "bottom"].includes(game.emptyPosition || "left");
+}
+
+/**
+ * 3人麻雀の横向き配置（§2）。空席（対面）に置いた端末の長辺が自分に向くので、自分から見た位置のまま:
+ * 自分 → bottom（手前の長辺）、右 → right（短辺）、左 → left（短辺）。奥の長辺（空席側）に局の情報と操作を置く。
+ * pos は seatPositions の戻り値。自分を空席にできた頃の記録（emptyPosition が "bottom"）だけは、
+ * 空席の対面の人を下にする旧来の割り当てを使う。
  */
 export function landscapePositions(pos, emptyPosition = "left") {
   if (emptyPosition !== "bottom") return { ...pos };

@@ -1,11 +1,12 @@
 // 対局画面（docs/design.md §8.2）。
 // 4人は卓中央に縦向きで置き、各パネルを席の方向に回転させる。
-// 3人は自分の前に横向きで置く（§2）。自分が操作するので画面は自分に正立させ、自分から見た位置のまま
-// 自分を手前（下）の長辺、左右の人を短辺、対面の人を奥の長辺に出し、空席の側に局の情報と操作を並べる。
+// 3人は空席に横向きで置く（§2）。操作するのは自分なので、画面は自分に正立させ、自分から見た位置のまま並べる。
+// 空席が対面なら端末の長辺が自分に向くので横向き（自分を手前の長辺、左右の人を短辺、奥の辺に局の情報と操作）。
+// 空席が左右なら端末は自分から見て縦になるので、4人と同じ縦向きの画面にして空席の位置を空ける。
 
 import { h, svg } from "./dom.js";
 import { dealerOf, canRiichi } from "../reduce.js";
-import { kyokuName, windName, fmtPoints, fmtDelta, fmtElapsed, seatPositions, landscapePositions } from "./format.js";
+import { kyokuName, windName, fmtPoints, fmtDelta, fmtElapsed, seatPositions, landscapePositions, isLandscapeGame } from "./format.js";
 import { agariCounts } from "../settlement.js";
 
 // 点差表示。プラスとマイナスを重ねた ± 。文字ではなく線画にして、リーチ棒の絵と調子を揃える
@@ -58,7 +59,7 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
   const rule = game.rule;
   const n = rule.playerCount;
   const dealer = dealerOf(state.kyoku, n);
-  const landscape = n === 3;
+  const landscape = isLandscapeGame(game);
   const emptyPosition = game.emptyPosition || "left";
   const seatPos = seatPositions(game.bottomSeat ?? 0, n, emptyPosition);
   const pos = landscape ? landscapePositions(seatPos, emptyPosition) : seatPos;
@@ -84,24 +85,7 @@ export function renderTable({ game, state, names, actions, diffSeat = null }) {
   );
 
   if (landscape) {
-    // 局の情報と操作は空席の側に置く（自分から見て正立）。空席が対面（または旧記録の下）なら奥の長辺に 1行、
-    // 左右なら空いた短辺に縦に並べる
-    const infoSide = emptyPosition === "left" || emptyPosition === "right" ? emptyPosition : "top";
-    if (infoSide !== "top") {
-      felt.append(
-        h(
-          "aside",
-          { class: `side-edge side-${infoSide}` },
-          kyokuInfo,
-          kyotakuInfo,
-          elapsed,
-          logBtn,
-          overNote,
-          menuBtn,
-        ),
-      );
-      return h("div", { class: "table-screen landscape side-info" }, felt);
-    }
+    // 奥の長辺（空席側）に 1行でまとめる。操作する自分から見て正立
     const edge = h(
       "header",
       { class: "edge" },

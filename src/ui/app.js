@@ -37,7 +37,7 @@ import {
   openRateSheet,
   openCombinedSettlement,
 } from "./sheets.js";
-import { fmtElapsed, kyokuName, gameDateTime, bodyRotation, landscapeTarget } from "./format.js";
+import { fmtElapsed, kyokuName, gameDateTime, bodyRotation, landscapeTarget, isLandscapeGame } from "./format.js";
 import { ensurePresets, presetsFor, selectedPreset, selectedPresetId, selectPreset, updatePreset, addPreset, deletePreset } from "./prefs.js";
 import {
   soundEnabled,
@@ -143,7 +143,7 @@ function landscapeWanted() {
     if (logTarget.kind === "current") g = game;
     else if (resultBack === "game" && logTarget.id === resultId) g = storage.findGame(logTarget.id);
   } else if (screen === "result" && resultBack === "game") g = storage.findGame(resultId);
-  return !!g && g.rule.playerCount === 3;
+  return isLandscapeGame(g);
 }
 
 /** タブ付きの初期画面 */
