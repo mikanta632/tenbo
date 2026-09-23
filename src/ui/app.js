@@ -160,6 +160,29 @@ function renderTabScreen() {
   if (screen === "stats") scroller.scrollTop = statsListState.scrollTop;
 }
 
+/** シートやダイアログが開いているか（背景のタップで閉じたものは開いていない扱い） */
+function sheetOpen() {
+  return !!openSheetHandle?.overlay?.isConnected;
+}
+
+/**
+ * +/− の点差表示を戻す。再描画はシートを閉じるので、シートが開いているあいだは待つ
+ * （流局の入力中やアガリやめの選択中に消さない）。
+ */
+function clearDiff() {
+  diffTimer = null;
+  if (screen !== "table") {
+    diffSeat = null;
+    return;
+  }
+  if (sheetOpen()) {
+    diffTimer = setTimeout(clearDiff, 1000);
+    return;
+  }
+  diffSeat = null;
+  show();
+}
+
 function closeSheet() {
   if (openSheetHandle) {
     openSheetHandle.close();
@@ -555,13 +578,7 @@ function renderTableScreen() {
       if (diffTimer) clearTimeout(diffTimer);
       diffTimer = null;
       diffSeat = diffSeat === seat ? null : seat;
-      if (diffSeat !== null) {
-        diffTimer = setTimeout(() => {
-          diffSeat = null;
-          diffTimer = null;
-          if (screen === "table") show();
-        }, 8000);
-      }
+      if (diffSeat !== null) diffTimer = setTimeout(clearDiff, 8000);
       show();
     },
     onSpecial: () => {
