@@ -213,8 +213,10 @@ export function winnerDeltas({ rule, dealer, honba, tsumo, from, winner }) {
       deltas[s] -= pay;
       deltas[who] += pay;
     }
-    // 責任分は責任者が全額（ロン相当額）を負担
-    const amt = unitResp.ron(isDealer);
+    // 責任分は、通常のツモで和了者が受け取る額を責任者が 1 人で負担する。
+    // 4人麻雀・ツモ損なし・関西式ではロンと同じ額、3人麻雀のツモ損ありでは北家の分が無い（子の役満で 24000）
+    let amt = 0;
+    for (let s = 0; s < n; s++) if (s !== who) amt += unitResp.tsumo(isDealer, s === dealer);
     if (amt > 0) {
       deltas[sekinin.who] -= amt;
       deltas[who] += amt;

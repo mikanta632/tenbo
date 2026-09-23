@@ -432,9 +432,19 @@ describe("責任払い", () => {
     const d = ron(yakuman(1, 1, sek3), 2, { rule });
     assert.deepEqual(d, [0, 32000, 0, -32000]);
   });
-  test("単独役満ツモ: 責任者が全額（ロン相当額）", () => {
+  test("単独役満ツモ: 通常のツモで受け取る額を責任者が全額（4人麻雀ではロンと同じ額）", () => {
     assert.deepEqual(tsumo(yakuman(1, 1, sek3)), [0, 32000, 0, -32000]);
     assert.deepEqual(tsumo(yakuman(0, 1, sek3)), [48000, 0, 0, -48000]);
+  });
+  test("3人麻雀のツモ損ありでは、責任者の負担も北家の分が無い額（子 24000、親 32000）", () => {
+    const sek2 = { who: 2, yakumanCount: 1 };
+    assert.deepEqual(tsumo(yakuman(1, 1, sek2), { rule: R3 }), [0, 24000, -24000]);
+    assert.deepEqual(tsumo(yakuman(0, 1, sek2), { rule: R3 }), [32000, 0, -32000]);
+    // ツモ損なし・関西式はロンと同じ額
+    for (const sanmaScoring of ["noTsumoLoss", "kansai"]) {
+      const rule = { ...R3, sanmaScoring };
+      assert.deepEqual(tsumo(yakuman(1, 1, sek2), { rule }), [0, 32000, -32000], sanmaScoring);
+    }
   });
   test("複合役満で責任分だけを責任者が負担する（ロン half）", () => {
     // 大三元（包あり）+ 四暗刻（包なし）: 子 64000 のうち責任分 32000
