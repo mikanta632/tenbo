@@ -34,6 +34,7 @@ import {
   openAgariYameDialog,
   openConfirm,
   openActionSheet,
+  openRateSheet,
   openCombinedSettlement,
 } from "./sheets.js";
 import { fmtElapsed, kyokuName, gameDateTime } from "./format.js";
@@ -350,6 +351,22 @@ function pickGame(id) {
         onPick: () => {
           logTarget = { kind: "finished", id };
           show("log");
+        },
+      },
+      {
+        label: "レートを変更",
+        sub: `${g.rule.rate}円 / pt`,
+        onPick: () => {
+          openSheetHandle = openRateSheet({
+            rate: g.rule.rate,
+            onConfirm: (rate) => {
+              closeSheet();
+              // 精算は焼き込み直す（収支・まとめて精算・個人成績は settlement から取る）
+              const next = { ...g, rule: { ...g.rule, rate } };
+              next.settlement = { ...computeSettlement(next), computedAt: new Date().toISOString() };
+              if (persist(() => storage.updateGame(next))) show("stats");
+            },
+          });
         },
       },
       {

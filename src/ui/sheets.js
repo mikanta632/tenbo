@@ -896,6 +896,45 @@ export function openAgariYameDialog({ dealerName, onYame, onContinue }) {
   return openSheet({ title: "アガリやめ", body, kind: "dialog" });
 }
 
+/**
+ * 終了した対局のレート（円/pt）を直す（§8.5）。0 以上の数だけ確定できる。今と同じ値なら確定しない。
+ */
+export function openRateSheet({ rate, onConfirm }) {
+  const body = h("div", { class: "sheet-body" });
+  let text = String(rate);
+  const parsed = () => (/^\d+(\.\d+)?$/.test(text.trim()) ? Number(text.trim()) : null);
+  const confirmBtn = h(
+    "button",
+    {
+      type: "button",
+      class: "btn-primary",
+      disabled: true,
+      onclick: () => {
+        const v = parsed();
+        if (v !== null) onConfirm(v);
+      },
+    },
+    "確定",
+  );
+  const input = h("input", {
+    type: "text",
+    inputmode: "decimal",
+    class: "points-input",
+    value: text,
+    oninput: (e) => {
+      text = e.target.value;
+      const v = parsed();
+      confirmBtn.disabled = v === null || v === rate;
+    },
+  });
+  append(body,
+    h("div", { class: "label" }, "レート（円/pt）"),
+    h("div", { class: "row-inline" }, input),
+    h("div", { class: "sheet-actions" }, confirmBtn),
+  );
+  return openSheet({ title: "レートを変更", body });
+}
+
 /** 確認ダイアログ */
 export function openConfirm({ title, message, okLabel = "OK", onOk }) {
   const body = h("div", { class: "sheet-body" });

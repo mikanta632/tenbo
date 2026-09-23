@@ -308,3 +308,23 @@ test("和了入力はありえない符を選べず、ロンに変えると 20�
   button(box, "確定").handlers.click();
   assert.equal(confirmed.at(-1).winners[0].fu, 30);
 });
+
+test("レートの変更は 0 以上の数だけ確定でき、今と同じ値では確定しない", async (t) => {
+  mockDom(t);
+  const { openRateSheet } = await import("../src/ui/sheets.js");
+  const picked = [];
+  const { box } = openRateSheet({ rate: 50, onConfirm: (v) => picked.push(v) });
+  const input = box.querySelector(".points-input");
+  const confirm = button(box, "確定");
+  assert.equal(confirm.disabled, true);
+  for (const value of ["", "abc", "-10", "50"]) {
+    input.handlers.input({ target: { value } });
+    assert.equal(confirm.disabled, true, JSON.stringify(value));
+  }
+  for (const [value, rate] of [["100", 100], ["0", 0], [" 2.5 ", 2.5]]) {
+    input.handlers.input({ target: { value } });
+    assert.equal(confirm.disabled, false, value);
+    confirm.handlers.click();
+    assert.equal(picked.at(-1), rate);
+  }
+});
