@@ -314,19 +314,35 @@ function whoLine(seat, state, names, extra = []) {
   );
 }
 
-// ---- 和了入力（§8.3、単独） -----------------------------------------------
+// ---- 和了入力（§8.3、単独）。1画面に1項目ずつ -----------------------------
+
+const YAKUMAN_NAMES = ["役満", "ダブル役満", "トリプル役満"];
+const STEP_TITLES = {
+  who: "和了者",
+  form: "ツモ／ロン",
+  from: "放銃者",
+  han: "翻",
+  fu: "符",
+  count: "役満の数",
+  pao: "包（責任払い）",
+  paoCount: "責任分",
+  chips: "チップ（枚）",
+};
 
 /**
  * 和了入力シート。seat の和了を入力する。initial に既存の agari イベントを渡せる。
- * selectSeat が真なら「和了者」の行を先頭に出し、和了者を変えられる（ログからの編集・挿入用）。
+ * 1画面に1項目（ツモ／ロン → 放銃者 → 翻 → 符 → 確認）を出し、選んだら自動で次へ進む。
+ * 満貫以上・関西式は符を、ツモは放銃者を飛ばす。役満は符の代わりに 数 → 包 → 責任分。
+ * 確認画面の各項目をタップするとその画面に戻り、選び直すと確認に戻る（選び直しで新しく要るようになった画面は通る）。
+ * initial があれば確認画面から開く。selectSeat が真なら「和了者」の項目を出し、和了者を変えられる（ログからの編集・挿入用）。
  */
 export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = null, selectSeat = false }) {
   const n = rule.playerCount;
   const w0 = initial && initial.winners.find((w) => w.who === seat);
   const s = winnerState(seat, w0);
   const f = { tsumo: initial ? initial.tsumo : true, from: initial ? initial.from : null };
-  const body = h("div", { class: "sheet-body agari-body" });
-  let others = [];
+  const body = h("div", { class: "sheet-body wizard-body" });
+
   const setSeat = (v) => {
     const prev = seat;
     seat = v;
@@ -334,67 +350,174 @@ export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = 
     // 和了者と放銃者・包が重なったら入れ替える（取り違えの修正が1タップで済む）
     if (f.from === v) f.from = prev;
     if (s.sekininWho === v) s.sekininWho = prev;
-    others = [];
-    for (let i = 0; i < n; i++) if (i !== seat) others.push(i);
   };
-  setSeat(seat);
+  const others = () => [...Array(n).keys()].filter((i) => i !== seat);
+  // ありえない翻符（§6.1）は選ばせない。翻やツモ／ロンを変えてありえなくなったら 30符に寄せる
+  const possible = (fu) => isPossibleHanFu({ han: s.han, fu, yakumanCount: 0 }, { tsumo: f.tsumo, rule });
+  const normalize = () => {
+    if (!s.yakuman && !possible(s.fu)) s.fu = 30;
+    if (s.sekininCount > s.yakumanCount) s.sekininCount = s.yakumanCount;
+  };
+  const needsFu = () => !s.yakuman && s.han < 5 && !isKansai(rule);
+  const pao = () => s.yakuman && rule.sekinin;
+
+  /** 今の入力で通る画面の順 */
+  const steps = () => [
+    ...(selectSeat ? ["who"] : []),
+    "form",
+    ...(f.tsumo ? [] : ["from"]),
+    "han",
+    ...(s.yakuman ? ["count", ...(pao() ? ["pao"] : []), ...(pao() && s.sekininWho !== null && s.yakumanCount > 1 ? ["paoCount"] : [])] : []),
+    ...(needsFu() ? ["fu"] : []),
+    ...(rule.chips ? ["chips"] : []),
+    "confirm",
+  ];
+  let step = initial ? "confirm" : "form";
+  let reviewing = !!initial; // 確認画面まで来たか（以後の選び直しは確認へ戻る）
+  const history = [];
+  // 選んだ画面。まだ選んでいない画面では既定値を塗らない（選んだように見せない）
+  const chosen = new Set(initial ? steps() : []);
+  const sel = (k, v) => (chosen.has(k) ? v : undefined);
+  const go = (next) => {
+    history.push(step);
+    step = next;
+    render();
+  };
+  /** 選んだら次へ。最初は順に進み、確認画面から直しているときは新しく要るようになった画面か未入力の画面だけを通る */
+  const choose = (mutate) => (v) => {
+    const before = steps();
+    chosen.add(step);
+    mutate(v);
+    normalize();
+    const list = steps();
+    const rest = list.slice(list.indexOf(step) + 1);
+    go(reviewing ? rest.find((k) => k === "confirm" || !before.includes(k) || (k === "from" && f.from === null)) : rest[0]);
+  };
+  const back = () => {
+    step = history.pop();
+    render();
+  };
 
   function buildEvent() {
     return { t: "agari", tsumo: f.tsumo, from: f.tsumo ? null : f.from, winners: [winnerFromState(s, rule)] };
   }
   const valid = () => f.tsumo || f.from !== null;
 
-  function render() {
-    clear(body);
-    // 和了の形（form）・翻符（main）・プレビューと確定（side）に分けて置く。
-    // 縦向きではこの順に続けて並び、横向きでは 翻符を左の列、形とプレビューを右の列に置く（style.css）
-    const form = h("div", { class: "agari-form" });
-    const main = h("div", { class: "agari-main" });
-    const side = h("div", { class: "agari-side" });
-    append(body, whoLine(seat, state, names), form, main, side);
+  /** 各画面の値の表示（上の経過と確認画面の項目） */
+  const valueOf = (k) => {
+    switch (k) {
+      case "who":
+        return names[seat];
+      case "form":
+        return f.tsumo ? "ツモ" : "ロン";
+      case "from":
+        return f.from === null ? "—" : `${names[f.from]}から`;
+      case "han":
+        return s.yakuman ? "役満" : hanName(s.han);
+      case "fu":
+        return `${s.fu}符`;
+      case "count":
+        return YAKUMAN_NAMES[s.yakumanCount - 1];
+      case "pao":
+        return s.sekininWho === null ? "包なし" : `包 ${names[s.sekininWho]}`;
+      case "paoCount":
+        return `責任分 ${s.sekininCount}`;
+      case "chips":
+        return `チップ${s.chips}枚`;
+      default:
+        return "";
+    }
+  };
 
-    if (selectSeat) {
-      append(form,
-        h("div", { class: "label" }, "和了者"),
-        choice(
-          seatItems(state, names),
-          seat,
-          (v) => {
-            setSeat(v);
-            render();
-          },
-          { class: "grid2" },
-        ),
-      );
+  function stepChoice(k) {
+    switch (k) {
+      case "who":
+        return choice(seatItems(state, names), sel(k, seat), choose(setSeat), { class: "grid2 wz-grid" });
+      case "form":
+        return choice(
+          [
+            { value: true, label: "ツモ" },
+            { value: false, label: "ロン" },
+          ],
+          sel(k, f.tsumo),
+          choose((v) => (f.tsumo = v)),
+          { class: "grid2 wz-grid wz-big" },
+        );
+      case "from":
+        return choice(others().map((i) => ({ value: i, label: seatLabel(i, state, names) })), sel(k, f.from), choose((v) => (f.from = v)), { class: "grid1 wz-grid" });
+      case "han":
+        return choice(
+          HAN_ITEMS,
+          sel(k, s.yakuman ? "yakuman" : s.han),
+          choose((v) => {
+            if (v === "yakuman") s.yakuman = true;
+            else {
+              s.yakuman = false;
+              s.han = v;
+            }
+          }),
+          { class: "wz-grid wz-han" },
+        );
+      case "fu":
+        return choice(FU_ITEMS.map((it) => ({ ...it, disabled: !possible(it.value) })), sel(k, s.fu), choose((v) => (s.fu = v)), { class: "wz-grid wz-fu" });
+      case "count":
+        return choice(YAKUMAN_NAMES.map((label, i) => ({ value: i + 1, label })), sel(k, s.yakumanCount), choose((v) => (s.yakumanCount = v)), { class: "grid1 wz-grid" });
+      case "pao":
+        return choice(
+          [{ value: null, label: "包なし" }, ...others().map((i) => ({ value: i, label: seatLabel(i, state, names) }))],
+          sel(k, s.sekininWho),
+          choose((v) => (s.sekininWho = v)),
+          { class: "grid1 wz-grid" },
+        );
+      case "paoCount":
+        return choice(
+          [...Array(s.yakumanCount).keys()].map((i) => ({ value: i + 1, label: `${i + 1}個分` })),
+          sel(k, s.sekininCount),
+          choose((v) => (s.sekininCount = v)),
+          { class: "grid1 wz-grid" },
+        );
+      case "chips":
+        return choice([0, 1, 2, 3, 4, 5].map((v) => ({ value: v, label: String(v) })), sel(k, s.chips), choose((v) => (s.chips = v)), { class: "grid3 wz-grid" });
+      default:
+        return null;
+    }
+  }
+
+  function render() {
+    if (step === "confirm") reviewing = true;
+    clear(body);
+    const list = steps();
+    // ここまでに選んだもの（確認画面では全部）を上に並べる
+    const passed = step === "confirm" ? list.filter((k) => k !== "confirm") : list.slice(0, list.indexOf(step));
+    const nav = h(
+      "div",
+      { class: "wz-nav" },
+      history.length ? h("button", { type: "button", class: "btn-flat wz-back", onclick: back }, "戻る") : null,
+      h("div", { class: "wz-crumbs" }, passed.map(valueOf).join("・")),
+    );
+    append(body, whoLine(seat, state, names), nav);
+
+    if (step !== "confirm") {
+      append(body, h("div", { class: "wz-title" }, STEP_TITLES[step]), stepChoice(step));
+      return;
     }
 
-    append(form,
-      h("div", { class: "label" }, "和了の形"),
-      choice(
-        [
-          { value: true, label: "ツモ" },
-          { value: false, label: "ロン" },
-        ],
-        f.tsumo,
-        (v) => {
-          f.tsumo = v;
-          render();
-        },
-        { class: "big" },
-      ),
-      h("div", { class: "label" }, f.tsumo ? "放銃者（ツモのため不要）" : "放銃者"),
-      choice(
-        others.map((i) => ({ value: i, label: seatLabel(i, state, names), disabled: f.tsumo })),
-        f.tsumo ? undefined : f.from,
-        (v) => {
-          f.from = v;
-          render();
-        },
-        { class: "grid3" },
-      ),
+    // 確認: 項目をタップするとその画面へ。プレビューと確定
+    const items = h(
+      "div",
+      { class: "wz-items" },
+      list
+        .filter((k) => k !== "confirm")
+        .map((k) =>
+          h(
+            "button",
+            { type: "button", class: "wz-item", onclick: () => go(k) },
+            h("span", { class: "wz-item-label" }, STEP_TITLES[k]),
+            h("span", { class: "wz-item-value" }, valueOf(k)),
+          ),
+        ),
     );
-    append(main, winnerForm({ s, state, rule, names, tsumo: f.tsumo, onChange: render }));
-
+    const side = h("div", { class: "wz-side" });
     if (valid()) {
       const ev = buildEvent();
       const pv = previewTable({ state, event: ev, rule, names });
@@ -405,12 +528,9 @@ export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = 
         confirmRow(() => onConfirm(ev)),
       );
     } else {
-      append(side,
-        h("div", { class: "summary" }, winnerSummary(s, rule), h("span", { class: "summary-gain dim" }, " 放銃者を選んでください")),
-        placeholderPreview({ state, names }),
-        confirmRow(null, false),
-      );
+      append(side, placeholderPreview({ state, names }), confirmRow(null, false));
     }
+    append(body, h("div", { class: "wz-confirm" }, items, side));
   }
 
   render();

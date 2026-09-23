@@ -352,11 +352,6 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .sheet.fixed { height: calc(var(--app-h) - 20px); }
 .sheet-body { flex: 1; min-height: 0; }
 .slot-detail { min-height: 168px; }
-.agari-body .chip { min-height: 40px; }
-.agari-body .label { margin: 8px 0 4px; }
-.agari-body .summary { margin: 8px 0 4px; }
-.agari-body .preview .prow-line { padding: 2px 0; }
-.agari-body .sheet-actions { margin-top: 8px; }
 .row-inline { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
 .inline-label { flex: 0 0 3.5em; font-size: 13px; color: var(--muted); }
 .row-inline .choice { flex: 1; flex-wrap: nowrap; }
@@ -369,45 +364,64 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .summary { min-height: 24px; }
 .summary-gain.dim { color: var(--muted); font-weight: normal; font-size: 14px; }
 
+/* 和了入力（§8.3）: 1画面に1項目。選択肢を大きく出す */
+.choice.grid1 { display: grid; grid-template-columns: 1fr; }
+.wizard-body { display: flex; flex-direction: column; }
+.wz-nav { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 2px 0 4px; }
+.wz-back { flex: none; }
+.wz-crumbs { flex: 1; min-width: 0; font-size: 15px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wz-title { font-size: 15px; color: var(--muted); margin: 6px 0 8px; }
+.wz-grid { gap: 8px; }
+.wz-grid .chip { min-height: 60px; font-size: 20px; }
+.wz-grid.wz-big .chip { min-height: 140px; font-size: 28px; font-weight: 700; }
+.wz-han { display: grid; grid-template-columns: repeat(2, 1fr); }
+.wz-fu { display: grid; grid-template-columns: repeat(3, 1fr); }
+.wz-items { display: flex; flex-direction: column; gap: 6px; }
+.wz-item {
+  display: flex; justify-content: space-between; align-items: center; min-height: 44px; padding: 0 14px;
+  border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.06); font-size: 17px;
+}
+.wz-item-label { color: var(--muted); font-size: 14px; }
+.wz-item-value { font-weight: 700; }
+.wz-side .summary { margin: 10px 0 4px; }
+.wz-side .preview .prow-line { padding: 2px 0; }
+.wz-side .sheet-actions { margin-top: 8px; }
+
 /* 背の低い端末（iPhone SE 系）では和了入力を詰めて、スクロールなしで確定に届かせる */
 @media (max-height: 700px) {
   .sheet.fixed { height: calc(var(--app-h) - 12px); }
   .sheet.fixed .sheet-head { padding: 6px 16px 0; }
-  .agari-body .who-line { font-size: 16px; margin: 0; }
-  .agari-body .chip { min-height: 34px; font-size: 15px; }
-  .agari-body .choice.big .chip { min-height: 42px; font-size: 17px; }
-  .agari-body .label { margin: 4px 0 2px; font-size: 12px; }
   .slot-detail { min-height: 138px; }
-  .agari-body .row-inline { margin: 3px 0; }
-  .agari-body .summary { margin: 6px 0 2px; font-size: 15px; min-height: 20px; }
-  .agari-body .preview { padding: 2px 10px; }
-  .agari-body .preview .prow-line { padding: 0; font-size: 14px; }
-  .agari-body .sheet-actions { margin-top: 6px; }
-  .agari-body .btn-primary { min-height: 44px; font-size: 17px; }
+  .wizard-body .who-line { font-size: 16px; margin: 0; }
+  .wz-grid .chip { min-height: 50px; font-size: 18px; }
+  .wz-grid.wz-big .chip { min-height: 110px; }
+  .wz-item { min-height: 38px; }
+  .wz-side .preview .prow-line { padding: 0; font-size: 14px; }
 }
 
-/* 横向き（3人麻雀の対局中）のシート。高さが足りないので幅を広げ、和了入力は入力とプレビューを左右 2列にする */
+/* 横向き（3人麻雀の対局中）のシート。高さが足りないので幅を広げ、和了入力は選択肢を横に並べ、確認は項目とプレビューを左右 2列にする */
 body.app-landscape .sheet { max-width: none; max-height: calc(var(--app-h) - 8px); }
 body.app-landscape .sheet, body.app-landscape .dialog { padding-left: var(--sal); padding-right: var(--sar); }
 body.app-landscape .sheet.fixed { height: calc(var(--app-h) - 8px); }
 body.app-landscape .sheet.fixed .sheet-head { padding: 4px 16px 0; }
-/* 翻・符の列（左）を少し広くして、5列の「数え役満」が折り返さないようにする */
-body.app-landscape .agari-body {
-  display: grid; grid-template-columns: 1.15fr 1fr; grid-template-rows: auto auto 1fr; column-gap: 20px;
-  grid-template-areas: "who who" "main form" "main side"; overflow: hidden; padding-bottom: 10px;
+body.app-landscape .wizard-body .who-line { font-size: 16px; margin: 0; }
+body.app-landscape .wz-nav { min-height: 40px; margin: 0; }
+body.app-landscape .wz-title { margin: 2px 0 6px; }
+body.app-landscape .wz-grid .chip { white-space: nowrap; }
+body.app-landscape .wz-grid.wz-big .chip { min-height: 120px; }
+body.app-landscape .wz-han { grid-template-columns: repeat(5, 1fr); }
+body.app-landscape .wz-fu { grid-template-columns: repeat(6, 1fr); }
+body.app-landscape .wz-grid.grid1 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+body.app-landscape .wz-grid.grid3 { grid-template-columns: repeat(6, 1fr); }
+body.app-landscape .wz-confirm {
+  display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; flex: 1; min-height: 0; padding-bottom: 8px;
 }
-body.app-landscape .agari-body > .who-line { grid-area: who; }
-body.app-landscape .agari-form { grid-area: form; }
-body.app-landscape .agari-main { grid-area: main; overflow-y: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
-body.app-landscape .agari-side { grid-area: side; display: flex; flex-direction: column; justify-content: flex-end; min-height: 0; }
-body.app-landscape .agari-body .chip { white-space: nowrap; }
-body.app-landscape .agari-body .choice.grid5 .chip { font-size: 13px; padding: 6px 0; }
-body.app-landscape .agari-body .choice.big .chip { min-height: 36px; font-size: 16px; }
-body.app-landscape .agari-body .row-inline .chip { font-size: 14px; }
-body.app-landscape .agari-body .preview { padding: 2px 10px; }
-body.app-landscape .agari-body .preview .prow-line { padding: 0; font-size: 14px; }
-body.app-landscape .agari-body .sheet-actions { margin-top: 6px; }
-body.app-landscape .agari-body .btn-primary { min-height: 44px; font-size: 17px; }
+body.app-landscape .wz-items { overflow-y: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+body.app-landscape .wz-item { min-height: 38px; }
+body.app-landscape .wz-side { display: flex; flex-direction: column; justify-content: flex-end; min-height: 0; }
+body.app-landscape .wz-side .summary { margin-top: 0; }
+body.app-landscape .wz-side .preview .prow-line { padding: 0; font-size: 14px; }
+body.app-landscape .wz-side .btn-primary { min-height: 44px; font-size: 17px; }
 /* メニュー類の一覧は 2列に並べて、スクロールなしで届くようにする */
 body.app-landscape .menu-list { display: grid; grid-template-columns: 1fr 1fr; }
 

@@ -182,26 +182,77 @@ test("設定: 東風なら延長戦は「南入」、下位項目は親がオフ
   assert.equal(root.find((el) => el.matches(".row") && el.children[0]?.textContent === "点数方式"), undefined, "4人麻雀に3人の項目が出ている");
 });
 
-test("和了入力: チップを使うルールでは枚数の行を出し、Winner.chips に入る。関西式では符を無効にする", (t) => {
+/** 段階入力の今の画面の選択肢を押す */
+const pickStep = (box, label) => {
+  const el = box.find((e) => e.tag === "button" && e.closest(".wz-grid") && e.textContent === label);
+  assert.ok(el, `選択肢「${label}」がない: ${box.textContent.slice(0, 80)}`);
+  el.handlers.click();
+};
+const stepTitle = (box) => box.querySelector(".wz-title")?.textContent ?? "確認";
+const confirmItem = (box, label) => box.find((e) => e.tag === "button" && e.matches(".wz-item") && e.children[0].textContent === label);
+
+test("和了入力: 1画面に1項目。チップを使うルールでは枚数の画面を出し、Winner.chips に入る。関西式は符を飛ばす", (t) => {
   mockDom(t);
   const events = [];
   const rule = makeRule({ chips: true });
   const { box } = openAgariSheet({ state: initialState(rule), rule, names: ["A", "B", "C", "D"], seat: 1, onConfirm: (ev) => events.push(ev) });
-  assert.match(box.textContent, /チップ（枚）/);
-  const chipRow = box.find((el) => el.matches(".grid6"));
-  chipRow.find((el) => el.tag === "button" && el.textContent === "2").handlers.click();
-  button(box, "確定").handlers.click();
-  assert.equal(events[0].winners[0].chips, 2);
+  assert.equal(stepTitle(box), "ツモ／ロン");
+  // まだ選んでいない画面では既定値を塗らない
+  const onChips = () => box.findAll((e) => e.tag === "button" && e.closest(".wz-grid") && / on/.test(e.className));
+  assert.equal(onChips().length, 0);
+  pickStep(box, "ツモ");
+  assert.equal(stepTitle(box), "翻");
+  assert.equal(onChips().length, 0);
+  pickStep(box, "3");
+  assert.equal(stepTitle(box), "符");
+  pickStep(box, "40");
+  assert.equal(stepTitle(box), "チップ（枚）");
+  pickStep(box, "2");
+  assert.equal(stepTitle(box), "確認");
   assert.match(box.textContent, /チップ2枚/);
+  button(box, "確定").handlers.click();
+  assert.deepEqual(events[0].winners[0], { who: 1, han: 3, fu: 40, yakumanCount: 0, sekinin: null, chips: 2 });
+  assert.equal(events[0].tsumo, true);
 
+  // チップを使わないルールではチップの画面を通らない。満貫以上は符を飛ばす
   const plain = openAgariSheet({ state: initialState(makeRule()), rule: makeRule(), names: ["A", "B", "C", "D"], seat: 1, onConfirm: () => {} });
+  pickStep(plain.box, "ロン");
+  assert.equal(stepTitle(plain.box), "放銃者");
+  pickStep(plain.box, "西 C");
+  pickStep(plain.box, "満貫");
+  assert.equal(stepTitle(plain.box), "確認");
   assert.ok(!plain.box.textContent.includes("チップ"));
 
+  // 関西式は符を使わないので、翻のあとは確認
   const kansai = makeRule({ playerCount: 3, length: 6, uma: [30, -10, -20], sanmaScoring: "kansai" });
   const k = openAgariSheet({ state: initialState(kansai), rule: kansai, names: ["A", "B", "C"], seat: 1, onConfirm: () => {} });
-  assert.match(k.box.textContent, /関西式のため不要/);
-  const fuButtons = k.box.find((el) => el.matches(".grid4")).findAll((el) => el.tag === "button");
-  assert.ok(fuButtons.length > 0 && fuButtons.every((b) => b.disabled));
+  pickStep(k.box, "ツモ");
+  pickStep(k.box, "2");
+  assert.equal(stepTitle(k.box), "確認");
+  assert.equal(confirmItem(k.box, "符"), undefined);
+});
+
+test("和了入力: 役満は符の代わりに 数 → 包 → 責任分。「戻る」で1つ前の画面に戻る", (t) => {
+  mockDom(t);
+  const events = [];
+  const rule = makeRule();
+  const { box } = openAgariSheet({ state: initialState(rule), rule, names: ["A", "B", "C", "D"], seat: 1, onConfirm: (ev) => events.push(ev) });
+  pickStep(box, "ロン");
+  pickStep(box, "西 C");
+  pickStep(box, "3");
+  assert.equal(stepTitle(box), "符");
+  button(box, "戻る").handlers.click();
+  assert.equal(stepTitle(box), "翻");
+  pickStep(box, "役満");
+  assert.equal(stepTitle(box), "役満の数");
+  pickStep(box, "ダブル役満");
+  assert.equal(stepTitle(box), "包（責任払い）");
+  pickStep(box, "北 D");
+  assert.equal(stepTitle(box), "責任分");
+  pickStep(box, "1個分");
+  assert.equal(stepTitle(box), "確認");
+  button(box, "確定").handlers.click();
+  assert.deepEqual(events[0].winners[0], { who: 1, han: 0, fu: 0, yakumanCount: 2, sekinin: { who: 3, yakumanCount: 1 }, chips: 0 });
 });
 
 test("特殊終局: 流し満貫をオフにすると入口から消える", (t) => {
@@ -245,16 +296,20 @@ test("対局画面: チップの収支を名前の行に出す（0 は出さな�
 
 import { openMultiRonSheet, openEventEditor } from "../src/ui/sheets.js";
 
-test("和了の編集: 和了者を変えられ、放銃者と重なったら入れ替える。通常の和了入力には出さない", (t) => {
+test("和了の編集: 確認画面から開き、和了者を変えられ、放銃者と重なったら入れ替える。通常の和了入力には出さない", (t) => {
   mockDom(t);
   const rule = makeRule();
   const names = ["A", "B", "C", "D"];
   const events = [];
   const initial = { t: "agari", tsumo: false, from: 2, winners: [{ who: 1, han: 3, fu: 40, yakumanCount: 0, sekinin: null, chips: 0 }] };
   const { box } = openEventEditor({ event: initial, state: initialState(rule), rule, names, onConfirm: (ev) => events.push(ev) });
-  const seatRow = box.find((el) => el.matches(".grid2"));
-  assert.ok(seatRow, "和了者の行がない");
-  seatRow.find((el) => el.tag === "button" && el.textContent === "西 C").handlers.click();
+  assert.equal(stepTitle(box), "確認");
+  const who = confirmItem(box, "和了者");
+  assert.ok(who, "和了者の項目がない");
+  who.handlers.click();
+  pickStep(box, "西 C");
+  // 選び直したら確認へ戻る
+  assert.equal(stepTitle(box), "確認");
   button(box, "確定").handlers.click();
   assert.equal(events[0].winners[0].who, 2);
   assert.equal(events[0].from, 1);
@@ -262,7 +317,10 @@ test("和了の編集: 和了者を変えられ、放銃者と重なったら入
   assert.equal(events[0].winners[0].fu, 40);
 
   const plain = openAgariSheet({ state: initialState(rule), rule, names, seat: 1, onConfirm: () => {} });
-  assert.equal(plain.box.find((el) => el.matches(".grid2")), undefined);
+  pickStep(plain.box, "ツモ");
+  pickStep(plain.box, "1");
+  pickStep(plain.box, "30");
+  assert.equal(confirmItem(plain.box, "和了者"), undefined);
 });
 
 test("複数和了: 和了者が1人では確定できず、2人以上で確定できる", (t) => {
@@ -289,24 +347,32 @@ test("途中流局は古い rule に abortiveRyuukyoku が残っていても全�
   assert.deepEqual(labels, ["九種九牌", "四風連打", "四家立直", "四開槓", "三家和"]);
 });
 
-test("和了入力はありえない符を選べず、ロンに変えると 20符を 30符に寄せる", (t) => {
+test("和了入力はありえない符を選べず、確認画面からロンに変えると放銃者を聞き、20符を 30符に寄せる", (t) => {
   mockDom(t);
   const rule = makeRule();
   const confirmed = [];
   const { box } = openAgariSheet({ state: initialState(rule), rule, names: ["A", "B", "C", "D"], seat: 1, onConfirm: (ev) => confirmed.push(ev) });
-  const inRow = (row, label) => box.find((el) => el.matches(row)).find((el) => el.tag === "button" && el.textContent === label);
+  const fu = (label) => box.find((e) => e.tag === "button" && e.closest(".wz-grid") && e.textContent === label);
+  pickStep(box, "ツモ");
+  pickStep(box, "1");
   // ツモ・1翻: 20符と 25符は選べない
-  assert.equal(inRow(".grid4", "20").disabled, true);
-  assert.equal(inRow(".grid4", "25").disabled, true);
-  inRow(".grid5", "2").handlers.click();
-  assert.equal(inRow(".grid4", "20").disabled, false);
-  inRow(".grid4", "20").handlers.click();
-  inRow(".big", "ロン").handlers.click();
-  box.find((el) => el.matches(".grid3")).find((el) => el.tag === "button").handlers.click();
-  assert.equal(inRow(".grid4", "20").disabled, true);
-  assert.equal(inRow(".grid4", "25").disabled, false);
+  assert.equal(fu("20").disabled, true);
+  assert.equal(fu("25").disabled, true);
+  button(box, "戻る").handlers.click();
+  pickStep(box, "2");
+  assert.equal(fu("20").disabled, false);
+  pickStep(box, "20");
+  assert.equal(stepTitle(box), "確認");
+  // 確認画面から ツモ／ロン を直す → 放銃者の画面を通って確認へ。20符のロンはありえないので 30符になる
+  confirmItem(box, "ツモ／ロン").handlers.click();
+  pickStep(box, "ロン");
+  assert.equal(stepTitle(box), "放銃者");
+  pickStep(box, "西 C");
+  assert.equal(stepTitle(box), "確認");
+  assert.equal(confirmItem(box, "符").children[1].textContent, "30符");
   button(box, "確定").handlers.click();
   assert.equal(confirmed.at(-1).winners[0].fu, 30);
+  assert.equal(confirmed.at(-1).from, 2);
 });
 
 test("レートの変更は 0 以上の数だけ確定でき、今と同じ値では確定しない", async (t) => {
