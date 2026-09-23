@@ -582,7 +582,11 @@ function renderTableScreen() {
       show();
     },
     onSpecial: () => {
-      if (state.over) return;
+      // 終局後は終局ダイアログを開き直す（閉じてしまっても保存できるように）
+      if (state.over) {
+        showOver(state, names);
+        return;
+      }
       closeSheet();
       openSheetHandle = openSpecialMenu({
         rule,
@@ -633,7 +637,8 @@ function renderTableScreen() {
 
 /** イベントを発行して保存し、再描画する。局末なら終局・アガリやめを確認する。 */
 function emit(event) {
-  const prevKyoku = reduce(game.events, game.rule).kyoku;
+  const prev = reduce(game.events, game.rule);
+  const prevKyoku = prev.kyoku;
   let events;
   try {
     events = appendEvent(game.events, event, game.rule);
@@ -644,8 +649,9 @@ function emit(event) {
   game = withEvents(game, events);
   storage.saveCurrent(game);
   const state = reduce(game.events, game.rule);
-  if (state.over) playGameOver();
-  else if (isEndOfKyoku(event)) {
+  if (state.over) {
+    if (!prev.over) playGameOver(); // 終局後の手動修正では鳴らさない
+  } else if (isEndOfKyoku(event)) {
     // 局が進んだか、親が続いた（連荘・チョンボ）かで音を変える
     if (state.kyoku === prevKyoku) playRenchan();
     else if (Math.floor(state.kyoku / game.rule.playerCount) !== Math.floor(prevKyoku / game.rule.playerCount)) playNewWind(); // 南入・西入
