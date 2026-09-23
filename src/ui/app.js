@@ -114,6 +114,7 @@ function show(next) {
   const statsScroller = root.querySelector(".stats-screen")?.closest(".tab-content");
   if (statsScroller) statsListState.scrollTop = statsScroller.scrollTop;
   if (next) screen = next;
+  if (screen !== "table") releaseWakeLock();
   closeSheet();
   clear(root);
   window.scrollTo(0, 0);
@@ -1092,15 +1093,29 @@ setTimeout(applyOrientation, 300);
 
 // ---- Screen Wake Lock（§10） --------------------------------------------
 
+// 対局中（卓面）だけ画面を維持する。卓面を離れたら手放す
 let wakeLock = null;
+let wakeLockPending = false; // 再描画が続いても要求を重ねない
 async function requestWakeLock() {
-  if (!("wakeLock" in navigator) || wakeLock) return;
+  if (!("wakeLock" in navigator) || wakeLock || wakeLockPending) return;
+  wakeLockPending = true;
   try {
-    wakeLock = await navigator.wakeLock.request("screen");
-    wakeLock.addEventListener("release", () => (wakeLock = null));
+    const lock = await navigator.wakeLock.request("screen");
+    lock.addEventListener("release", () => {
+      if (wakeLock === lock) wakeLock = null;
+    });
+    wakeLock = lock;
+    if (screen !== "table") releaseWakeLock(); // 取得を待つあいだに卓面を離れた
   } catch {
     wakeLock = null;
+  } finally {
+    wakeLockPending = false;
   }
+}
+function releaseWakeLock() {
+  const lock = wakeLock;
+  wakeLock = null;
+  if (lock) lock.release().catch(() => {});
 }
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && screen === "table") requestWakeLock();
