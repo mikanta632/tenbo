@@ -33,3 +33,24 @@ test("標準から変えていればその印だけ出す", (t) => {
   assert.ok(text.includes("標準から変更あり"));
   assert.ok(!text.includes("null"), "null が混ざっている");
 });
+
+test("数値欄を空にしても 0 を保存せず、元の値に戻す", (t) => {
+  mockDom(t);
+  const saved = [];
+  const root = renderSettings({
+    presets: PRESETS,
+    rulesFor: () => makeRule(),
+    isCustom: () => false,
+    initialPc: 4,
+    version: "9.9.9",
+    onChange: (pc, rule) => saved.push(rule),
+  });
+  const input = root.find((el) => el.tag === "input" && el.type === "number" && el.value === "25000");
+  const target = { value: "" };
+  input.handlers.change({ target });
+  assert.equal(saved.length, 0);
+  assert.equal(target.value, "25000");
+  target.value = "30000";
+  input.handlers.change({ target });
+  assert.equal(saved.at(-1).startPoints, 30000);
+});

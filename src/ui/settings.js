@@ -169,8 +169,14 @@ export function renderSettings(props) {
         value: String(rule[key]),
         disabled,
         onchange: (e) => {
-          const v = Number(e.target.value);
-          if (Number.isFinite(v)) rule[key] = v;
+          // 空欄は Number("") が 0 になるので、保存せずに元の値へ戻す
+          const raw = e.target.value.trim();
+          const v = Number(raw);
+          if (raw === "" || !Number.isFinite(v)) {
+            e.target.value = String(rule[key]);
+            return;
+          }
+          rule[key] = v;
           commit();
         },
       });
