@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { openAdjustSheet, openMenu, openOverDialog } from "../src/ui/sheets.js";
+import { openAdjustSheet, openAbortiveSheet, openMenu, openOverDialog } from "../src/ui/sheets.js";
 import { renderSettings } from "../src/ui/settings.js";
 import { makeRule, PRESETS } from "../src/rules.js";
 import { initialState } from "../src/reduce.js";
@@ -279,4 +279,12 @@ test("複数和了: 和了者が1人では確定できず、2人以上で確定�
   assert.equal(button(box, "確定").disabled, false);
   button(box, "確定").handlers.click();
   assert.deepEqual(events[0].winners.map((w) => w.who), [1, 2]);
+});
+
+test("途中流局は古い rule に abortiveRyuukyoku が残っていても全種別を出す", (t) => {
+  mockDom(t);
+  const rule = { ...makeRule(), abortiveRyuukyoku: ["kyuushu"] };
+  const { box } = openAbortiveSheet({ state: initialState(rule), rule, names: ["A", "B", "C", "D"], onConfirm: () => {}, initial: { abortiveKind: "suufon" } });
+  const labels = box.findAll((el) => el.tag === "button" && (el.className || "").includes("chip")).map((el) => el.textContent);
+  assert.deepEqual(labels, ["九種九牌", "四風連打", "四家立直", "四開槓", "三家和"]);
 });

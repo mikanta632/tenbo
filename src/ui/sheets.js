@@ -542,10 +542,8 @@ export function openRyuukyokuSheet({ state, rule, names, onConfirm, initial = nu
 
 /** 途中流局。種別を選ぶ。点数移動なし、親は連荘。 */
 export function openAbortiveSheet({ state, rule, names, onConfirm, initial = null }) {
-  const kinds = (rule.abortiveRyuukyoku && rule.abortiveRyuukyoku.length ? rule.abortiveRyuukyoku : Object.keys(ABORTIVE_KIND_NAMES)).map((k) => ({
-    value: k,
-    label: ABORTIVE_KIND_NAMES[k] || k,
-  }));
+  // 種別は絞らない（§7）。古い rule に残る abortiveRyuukyoku は見ない
+  const kinds = Object.keys(ABORTIVE_KIND_NAMES).map((k) => ({ value: k, label: ABORTIVE_KIND_NAMES[k] }));
   let kind = initial ? initial.abortiveKind : kinds[0].value;
   const body = h("div", { class: "sheet-body" });
 
