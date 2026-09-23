@@ -5,7 +5,7 @@
 // （winners の翻符、tenpai、tsumo、from など）から、その時点の State を使って計算する。
 // adjust の deltas は意味情報を持たないため、そのまま保持する。
 
-import { agariDeltas, tenpaiDeltas, nagashiDeltas, chomboDeltas } from "./score.js";
+import { agariDeltas, tenpaiDeltas, nagashiDeltas, chomboDeltas, isPossibleHanFu } from "./score.js";
 import { initialState, applyEvent, reduce, dealerOf, kyokuGroups, isEndOfKyoku, canRiichi } from "./reduce.js";
 
 /**
@@ -61,20 +61,30 @@ export function recalc(events, rule, from = 0) {
   return result;
 }
 
+/** ありえない翻符（§6.1）の和了は入れさせない。記録済みの古いイベントは再計算で咎めない */
+function checkHanFu(event, rule) {
+  if (event.t !== "agari") return;
+  for (const w of event.winners) {
+    if (!isPossibleHanFu(w, { tsumo: event.tsumo, rule })) throw new Error(`ありえない翻符: ${w.fu}符${w.han}翻（${event.tsumo ? "ツモ" : "ロン"}）`);
+  }
+}
+
 /**
  * 末尾にイベントを追加する。deltas は現在の状態から計算する。
- * 1000点未満のリーチ（§5.1）は発行時に拒否する。
+ * 1000点未満のリーチ（§5.1）とありえない翻符（§6.1）は発行時に拒否する。
  */
 export function appendEvent(events, event, rule) {
   const state = reduce(events, rule);
   if (event.t === "riichi" && !canRiichi(state, event.who, rule)) {
     throw new Error(`1000点未満はリーチできない: seat ${event.who} (${state.points[event.who]})`);
   }
+  checkHanFu(event, rule);
   return [...events, withDeltas(event, state, rule)];
 }
 
 /** index のイベントを差し替え、以降を再計算する。 */
 export function replaceEvent(events, index, event, rule) {
+  checkHanFu(event, rule);
   const next = events.slice();
   next[index] = event;
   return recalc(next, rule, index);
@@ -82,6 +92,7 @@ export function replaceEvent(events, index, event, rule) {
 
 /** index の位置にイベントを挿入し、以降を再計算する。 */
 export function insertEvent(events, index, event, rule) {
+  checkHanFu(event, rule);
   const next = events.slice();
   next.splice(index, 0, event);
   return recalc(next, rule, index);

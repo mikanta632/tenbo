@@ -503,6 +503,17 @@ describe("7. 編集後の再計算", () => {
     assert.deepEqual(again.map((e) => e.deltas), events.map((e) => e.deltas));
     assert.deepEqual(reduce(again, R4), reduce(events, R4));
   });
+  test("ありえない翻符の和了は追加・挿入・差し替えで拒否する", () => {
+    assert.throws(() => appendEvent([], ron(1, 3, 1, 20), R4), /ありえない翻符/);
+    assert.throws(() => appendEvent([], tsumo(1, 1, 25), R4), /ありえない翻符/);
+    assert.throws(() => appendEvent([], doubleRon(2, w(3, 2, 30), w(0, 2, 20)), R4), /ありえない翻符/);
+    const events = build(R4, ron(1, 3, 1, 30));
+    assert.throws(() => insertEvent(events, 0, ron(1, 3, 2, 20), R4), /ありえない翻符/);
+    assert.throws(() => replaceEvent(events, 0, ron(1, 3, 2, 20), R4), /ありえない翻符/);
+    // 記録済みの古いイベントは再計算で咎めない
+    const old = [{ ...ron(1, 3, 1, 20), deltas: undefined }];
+    assert.doesNotThrow(() => recalc(old, R4));
+  });
   test("挿入と削除も以降を再計算する", () => {
     const events = build(R4, ron(1, 3, 1, 30), ron(1, 2, 1, 30));
     const inserted = insertEvent(events, 0, exhaustive([0]), R4);

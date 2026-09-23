@@ -288,3 +288,23 @@ test("途中流局は古い rule に abortiveRyuukyoku が残っていても全�
   const labels = box.findAll((el) => el.tag === "button" && (el.className || "").includes("chip")).map((el) => el.textContent);
   assert.deepEqual(labels, ["九種九牌", "四風連打", "四家立直", "四開槓", "三家和"]);
 });
+
+test("和了入力はありえない符を選べず、ロンに変えると 20符を 30符に寄せる", (t) => {
+  mockDom(t);
+  const rule = makeRule();
+  const confirmed = [];
+  const { box } = openAgariSheet({ state: initialState(rule), rule, names: ["A", "B", "C", "D"], seat: 1, onConfirm: (ev) => confirmed.push(ev) });
+  const inRow = (row, label) => box.find((el) => el.matches(row)).find((el) => el.tag === "button" && el.textContent === label);
+  // ツモ・1翻: 20符と 25符は選べない
+  assert.equal(inRow(".grid4", "20").disabled, true);
+  assert.equal(inRow(".grid4", "25").disabled, true);
+  inRow(".grid5", "2").handlers.click();
+  assert.equal(inRow(".grid4", "20").disabled, false);
+  inRow(".grid4", "20").handlers.click();
+  inRow(".big", "ロン").handlers.click();
+  box.find((el) => el.matches(".grid3")).find((el) => el.tag === "button").handlers.click();
+  assert.equal(inRow(".grid4", "20").disabled, true);
+  assert.equal(inRow(".grid4", "25").disabled, false);
+  button(box, "確定").handlers.click();
+  assert.equal(confirmed.at(-1).winners[0].fu, 30);
+});

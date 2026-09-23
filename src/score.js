@@ -130,6 +130,18 @@ function manganUnit(rule) {
   return scoreUnit({ han: 5, fu: 30, yakumanCount: 0 }, rule);
 }
 
+/**
+ * 翻と符の組み合わせがありうるか（§6.1）。20符は平和ツモ（2翻以上）だけ、25符は七対子（2翻以上）だけ。
+ * 満貫以上・役満・関西式（符を使わない）は符を見ないので常に真。
+ */
+export function isPossibleHanFu(winner, { tsumo, rule }) {
+  if ((winner.yakumanCount || 0) > 0 || winner.han >= 5) return true;
+  if (rule.playerCount === 3 && rule.sanmaScoring === "kansai") return true;
+  if (winner.fu === 20) return !!tsumo && winner.han >= 2;
+  if (winner.fu === 25) return winner.han >= 2;
+  return true;
+}
+
 // ---- 和了 ----------------------------------------------------------------
 
 /** 放銃者から反時計回りに最も近い和了者 */

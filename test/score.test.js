@@ -5,6 +5,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
+  isPossibleHanFu,
   basePoints,
   agariDeltas,
   winnerDeltas,
@@ -747,5 +748,24 @@ describe("チップ（agariChips）", () => {
     const winners = [w(1, 3, 30, { chips: 1 }), w(3, 3, 30, { chips: 2 })];
     assert.deepEqual(agariChips({ rule, tsumo: false, from: 2, winners }), [0, 1, -3, 2]);
     assert.deepEqual(agariChips({ rule: { ...rule, multiRon: false }, tsumo: false, from: 2, winners }), [0, 0, -2, 2]);
+  });
+});
+
+describe("ありえない翻符（§6.1）", () => {
+  const ok = (han, fu, tsumo, rule = R4) => isPossibleHanFu({ han, fu, yakumanCount: 0 }, { tsumo, rule });
+  test("20符は 2翻以上のツモだけ、25符は 2翻以上だけ", () => {
+    assert.equal(ok(1, 20, true), false);
+    assert.equal(ok(2, 20, true), true);
+    assert.equal(ok(3, 20, false), false);
+    assert.equal(ok(1, 25, false), false);
+    assert.equal(ok(1, 25, true), false);
+    assert.equal(ok(2, 25, false), true);
+    assert.equal(ok(1, 30, false), true);
+    assert.equal(ok(1, 110, true), true);
+  });
+  test("満貫以上・役満・関西式は符を見ない", () => {
+    assert.equal(ok(5, 20, false), true);
+    assert.equal(isPossibleHanFu({ han: 0, fu: 0, yakumanCount: 1 }, { tsumo: false, rule: R4 }), true);
+    assert.equal(ok(1, 20, false, makeRule({ playerCount: 3, length: 6, uma: [20, 0, -20], sanmaScoring: "kansai" })), true);
   });
 });

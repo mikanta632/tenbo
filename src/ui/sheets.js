@@ -7,6 +7,7 @@
 import { h, clear, append } from "./dom.js";
 import { applyEvent, dealerOf, ranksOf } from "../reduce.js";
 import { withDeltas } from "../edit.js";
+import { isPossibleHanFu } from "../score.js";
 import { fmtPoints, fmtDelta, fmtPt, fmtYen, hanName, windName, ABORTIVE_KIND_NAMES } from "./format.js";
 
 // ---- 共通のシート枠 -----------------------------------------------------
@@ -192,8 +193,11 @@ function winnerSummary(s, rule = null) {
  * 翻・符・役満の詳細を入力するフォーム。行は常に同じ位置に描画する。
  * 変更のたびに onChange() を呼ぶ（呼び出し側が再描画する）。
  */
-function winnerForm({ s, state, rule, names, onChange }) {
+function winnerForm({ s, state, rule, names, tsumo, onChange }) {
   const n = rule.playerCount;
+  // ありえない翻符（§6.1）は選ばせない。翻やツモ/ロンを変えてありえなくなったら 30符に寄せる
+  const possible = (fu) => isPossibleHanFu({ han: s.han, fu, yakumanCount: 0 }, { tsumo, rule });
+  if (!s.yakuman && !possible(s.fu)) s.fu = 30;
   const others = [];
   for (let i = 0; i < n; i++) if (i !== s.who) others.push(i);
   const frag = document.createDocumentFragment();
@@ -222,7 +226,7 @@ function winnerForm({ s, state, rule, names, onChange }) {
     append(slot,
       h("div", { class: "label" }, kansai ? "符（関西式のため不要）" : fuDim ? `符（${hanName(s.han)}のため不要）` : "符"),
       choice(
-        FU_ITEMS.map((it) => ({ ...it, disabled: fuDim })),
+        FU_ITEMS.map((it) => ({ ...it, disabled: fuDim || !possible(it.value) })),
         fuDim ? undefined : s.fu,
         (v) => {
           s.fu = v;
@@ -389,7 +393,7 @@ export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = 
         { class: "grid3" },
       ),
     );
-    append(main, winnerForm({ s, state, rule, names, onChange: render }));
+    append(main, winnerForm({ s, state, rule, names, tsumo: f.tsumo, onChange: render }));
 
     if (valid()) {
       const ev = buildEvent();
@@ -469,7 +473,7 @@ export function openMultiRonSheet({ state, rule, names, onConfirm, initial = nul
         ),
       );
       if (on) {
-        append(body, h("div", { class: "subform" }, winnerForm({ s: forms.get(i), state, rule, names, onChange: render })));
+        append(body, h("div", { class: "subform" }, winnerForm({ s: forms.get(i), state, rule, names, tsumo: false, onChange: render })));
       }
     }
     if (valid()) {
