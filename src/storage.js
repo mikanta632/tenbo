@@ -313,7 +313,7 @@ export function createStorage(ls = globalThis.localStorage, now = () => new Date
  * - 対局は ID で突き合わせ、無いものを追加。同じ ID は既存を残す
  * - プレイヤーは ID が同じなら同一人物。ID が違っても名前が同じなら同一人物とみなして既存の ID に寄せ、
  *   取り込む対局の席もその ID に書き換える（別の端末で同じ名前を登録した場合に成績を分裂させない）。
- *   寄せた結果ひとつの対局に同じ人が 2 席出るときは、その対局だけ寄せずに元の ID のまま取り込む
+ *   1 人の既存 ID に寄せるのは 1 人だけ。取り込み側に同じ名前が複数いれば、最初の 1 人だけを寄せ、残りは別人として足す
  * - 進行中の対局は既存を保持する
  * - 繰越（carry）は既存に無い（playerId, playerCount）だけ足す
  * 戻り値 { merged, summary: { games, skippedGames, players, mergedPlayers, carry } }
@@ -325,8 +325,10 @@ export function mergeImport(existing, incoming) {
   for (const p of roster) if (!byName.has(p.name.trim())) byName.set(p.name.trim(), p);
   const incomingIds = new Set(incoming.roster.map((p) => p.id));
 
-  // 取り込む ID → 既存の ID。名前で寄せるのは、その既存 ID が取り込み側に無い場合だけ（1 人が 2 人に化けない）
+  // 取り込む ID → 既存の ID。名前で寄せるのは、その既存 ID が取り込み側に無く、まだ誰も寄せていない場合だけ。
+  // 寄せ先を 1 人に 1 人とすることで、1 つの対局に同じ人が 2 席出ることも、次のマージで寄せ方が変わることも無くなる
   const map = new Map();
+  const targets = new Set();
   let mergedPlayers = 0;
   const unmapped = [];
   for (const p of incoming.roster) {
@@ -335,8 +337,9 @@ export function mergeImport(existing, incoming) {
       continue;
     }
     const same = byName.get(p.name.trim());
-    if (same && !incomingIds.has(same.id)) {
+    if (same && !incomingIds.has(same.id) && !targets.has(same.id)) {
       map.set(p.id, same.id);
+      targets.add(same.id);
       mergedPlayers++;
     } else unmapped.push(p);
   }
@@ -350,7 +353,8 @@ export function mergeImport(existing, incoming) {
   const remapSeats = (seats) => {
     const mapped = seats.map(remap);
     if (new Set(mapped).size === mapped.length) return mapped;
-    // 寄せると同じ人が 2 席になる対局。元の ID のまま取り込み、その人を別人として足す
+    // 寄せ先は 1 人に 1 人なので通常は起きない（取り込み側の名簿に無い ID を席に持つ壊れたデータへの備え）。
+    // 元の ID のまま取り込み、その人を別人として足す
     for (const id of seats) if (map.get(id) !== id && incomingPlayer.has(id)) addPlayer(incomingPlayer.get(id));
     return seats.slice();
   };

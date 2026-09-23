@@ -359,6 +359,27 @@ describe("マージ（§8.7）", () => {
     assert.equal(merged.roster.find((p) => p.id === "a").name, "太郎"); // 既存の名前を残す
   });
 
+  test("取り込み側に同じ名前が 2 人いれば 1 人だけ寄せ、もう 1 人は別人として足す。同じファイルを 2 回マージしても変わらない", () => {
+    const existing = dump([player("a", "太郎"), player("e", "花子"), player("c", "C"), player("d", "D")], []);
+    const incoming = dump(
+      [player("b1", "太郎"), player("b2", "太郎"), player("b3", "花子"), player("b4", "新人")],
+      [game("g_1", ["b1", "b2", "b3", "b4"], "2026-09-04T00:00:00Z"), game("g_2", ["b1", "b3", "c", "d"], "2026-09-05T00:00:00Z")],
+      { carry: [carry("b1", 4)] },
+    );
+    const once = mergeImport(existing, incoming);
+    assert.deepEqual(once.merged.games.find((g) => g.id === "g_1").seats, ["a", "b2", "e", "b4"]);
+    assert.deepEqual(once.merged.games.find((g) => g.id === "g_2").seats, ["a", "e", "c", "d"]);
+    assert.deepEqual(once.merged.roster.map((p) => p.id), ["a", "e", "c", "d", "b2", "b4"]);
+    assert.deepEqual(once.summary, { games: 2, skippedGames: 0, players: 2, mergedPlayers: 2, carry: 1 });
+    // 2 回目: 何も増えず、次の対局も同じ人に寄る
+    const next = { ...incoming, games: [...incoming.games, game("g_3", ["b1", "b2", "c", "d"], "2026-09-06T00:00:00Z")] };
+    const twice = mergeImport(once.merged, next);
+    assert.deepEqual(twice.merged.games.find((g) => g.id === "g_3").seats, ["a", "b2", "c", "d"]);
+    assert.equal(twice.merged.roster.length, 6);
+    assert.equal(twice.merged.carry.length, 1);
+    assert.deepEqual(twice.summary, { games: 1, skippedGames: 2, players: 0, mergedPlayers: 2, carry: 0 });
+  });
+
   test("進行中の対局は既存を保持し、繰越は無いものだけ足す", () => {
     const cur = game("g_cur", ["a", "b", "c", "d"], "2026-09-05T00:00:00Z");
     const existing = dump([player("a", "A"), player("b", "B"), player("c", "C"), player("d", "D")], [], { current: cur, carry: [carry("a", 4)] });
