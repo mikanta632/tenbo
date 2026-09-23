@@ -194,6 +194,13 @@ describe("五捨六入でもトップに卓外の分を吸わせない", () => {
 });
 
 describe("同点トップと残り供託", () => {
+  test("3人が同点のとき、円の丸めの端数は起家に近い方が引き受け、卓外の授受を作らない", () => {
+    const rule = makeRule({ tieBreak: "split", rate: 50 });
+    const s = computeSettlement(game(rule, adjust([5000, 5000, 5000, -15000])));
+    assert.deepEqual(s.yen, [666, 667, 667, -2000]);
+    assert.equal(s.yen.reduce((a, b) => a + b, 0), 0);
+    assert.equal(s.transfers.some((t) => t.from === null || t.to === null), false);
+  });
   const SPLIT = makeRule({ tieBreak: "split" });
   test("トップが並んでいれば、残り供託は並んだ者で等分する", () => {
     const g = game(SPLIT, riichi(2), riichi(3), adjust([5000, 5000, -6000, -4000]));

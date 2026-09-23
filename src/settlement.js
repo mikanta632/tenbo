@@ -179,6 +179,14 @@ export function computeSettlement(game) {
 
   const yen = pt.map((p, i) => p * rule.rate + chipYen[i]);
   const rounded = yen.map((y) => Math.round(y));
+  // 同点で等分したグループは、1人ずつ丸めると合計がずれる（666.67円 × 3 → 667円 × 3 で +1円）。
+  // グループの合計を丸めた値に合わせ、ずれは起家に近い方（グループの先頭）が引き受ける
+  for (const group of groups) {
+    if (group.length < 2) continue;
+    const target = Math.round(group.reduce((sum, seat) => sum + yen[seat], 0));
+    const diff = target - group.reduce((sum, seat) => sum + rounded[seat], 0);
+    rounded[group[0]] += diff;
+  }
 
   // 卓外差額（点とチップ）。adjust は非ゼロサムを許すので、合計を明示する
   let outsideDiff = 0;
