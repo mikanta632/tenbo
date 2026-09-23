@@ -3,7 +3,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { gameStats, aggregate, derive, playerGames, combineGames } from "../src/stats.js";
-import { ptSeries } from "../src/ui/player.js";
+import { ptSeries, niceTicks } from "../src/ui/player.js";
 import { makeRule } from "../src/rules.js";
 import { appendEvent } from "../src/edit.js";
 
@@ -142,6 +142,18 @@ describe("ptSeries", () => {
   });
   test("対局が無ければ 0 だけ", () => {
     assert.deepEqual(ptSeries([]), [0]);
+  });
+});
+
+describe("niceTicks（pt の推移の目盛り）", () => {
+  test("1・2・5×10^k の刻みで範囲を広げ、0 を目盛りに含める", () => {
+    assert.deepEqual(niceTicks(-12, 37), { lo: -20, hi: 40, step: 20, ticks: [-20, 0, 20, 40] });
+    assert.deepEqual(niceTicks(0, 5).ticks, [0, 2, 4, 6]);
+    assert.deepEqual(niceTicks(-250, 0).ticks, [-300, -200, -100, 0]);
+  });
+  test("幅が 0 でも範囲を作り、小数の刻みも誤差なく出す", () => {
+    assert.deepEqual(niceTicks(0, 0).ticks, [-1, -0.5, 0, 0.5, 1]);
+    assert.deepEqual(niceTicks(0, 0.6).ticks, [0, 0.2, 0.4, 0.6]);
   });
 });
 

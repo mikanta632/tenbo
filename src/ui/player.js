@@ -35,28 +35,69 @@ function rankBar(rankDist, pc, games) {
   );
 }
 
-/** 累積 pt の折れ線（§8.5）。SVG を組み立てるだけ */
+/**
+ * 目盛り（§8.5）。min〜max をおよそ target 個に区切る 1・2・5×10^k の刻みと、それで広げた範囲を返す。
+ */
+export function niceTicks(min, max, target = 4) {
+  if (min === max) {
+    min -= 1;
+    max += 1;
+  }
+  const raw = (max - min) / target;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 5, 10].map((m) => m * mag).find((x) => x >= raw - 1e-9);
+  const lo = Math.floor(min / step + 1e-9) * step;
+  const hi = Math.ceil(max / step - 1e-9) * step;
+  const ticks = [];
+  for (let k = Math.round(lo / step); k <= Math.round(hi / step); k++) ticks.push(Number((k * step).toPrecision(12)));
+  return { lo, hi, step, ticks };
+}
+
+/**
+ * 累積 pt の折れ線（§8.5）。SVG を組み立てるだけ。
+ * 縦軸は pt の目盛りと格子線（0 の線だけ濃く）、横軸は対局数。終点に丸と今の累積 pt を添える。
+ */
 function ptChart(list) {
   const W = 320;
-  const H = 110;
-  const PAD = 10;
+  const H = 170;
+  const T = 10;
+  const B = 22; // 横軸の目盛りの高さ
   const values = ptSeries(list);
-  const max = Math.max(...values);
-  const min = Math.min(...values); // 系列は 0 から始まるので 0 は必ず範囲に入る
-  const span = max - min || 1;
-  const px = (i) => PAD + (i * (W - PAD * 2)) / Math.max(values.length - 1, 1);
-  const py = (v) => PAD + ((max - v) * (H - PAD * 2)) / span;
-  const last = values[values.length - 1];
+  const n = values.length - 1; // 対局数。系列は 0 から始まる
+  const y = niceTicks(Math.min(...values), Math.max(...values), 5); // 0 は必ず範囲に入る
+  const last = values[n];
+  // 左は縦軸の目盛り、右は終点の値の幅。桁が増えてもはみ出さないよう文字数で決める
+  const L = 12 + Math.max(...y.ticks.map((v) => fmtPt(v).length)) * 6;
+  const R = 16 + fmtPt(last).length * 8;
+  const xStep = Math.max(1, Math.ceil(niceTicks(0, n).step));
+  const px = (i) => L + (i * (W - L - R)) / Math.max(n, 1);
+  const py = (v) => T + ((y.hi - v) * (H - T - B)) / (y.hi - y.lo);
   const color = last > 0 ? "#7fe3a1" : last < 0 ? "#ff9d8c" : "#b9c9bf";
-  const points = values.map((v, i) => `${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(" ");
-  // 目盛りは最大・最小の2つだけ。終点の丸と重ならないよう左端に置く
-  const label = (v, y) => `<text x="${PAD}" y="${y}" font-size="10" fill="#b9c9bf">${v > 0 ? "+" : ""}${Math.round(v)}</text>`;
-  return svg(`<svg class="pt-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="累積 pt の推移">
-    <line x1="${PAD}" y1="${py(0).toFixed(1)}" x2="${W - PAD}" y2="${py(0).toFixed(1)}" stroke="rgba(255,255,255,0.28)" stroke-width="1" stroke-dasharray="3 3"/>
+  const muted = "#b9c9bf";
+  const f = (v) => v.toFixed(1);
+
+  const grid = y.ticks
+    .map((v) => {
+      const yy = f(py(v));
+      const stroke = v === 0 ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.1)";
+      return `<line x1="${L}" y1="${yy}" x2="${W - R}" y2="${yy}" stroke="${stroke}" stroke-width="1"/>
+    <text x="${L - 6}" y="${yy}" font-size="10" fill="${muted}" text-anchor="end" dominant-baseline="middle">${fmtPt(v)}</text>`;
+    })
+    .join("");
+  const xTicks = [];
+  for (let i = 0; i <= n; i += xStep) xTicks.push(i);
+  const xAxis = xTicks
+    .map((i, k) => `<text x="${f(px(i))}" y="${H - 6}" font-size="10" fill="${muted}" text-anchor="middle">${i}${k === xTicks.length - 1 ? "局" : ""}</text>`)
+    .join("");
+  const points = values.map((v, i) => `${f(px(i))},${f(py(v))}`).join(" ");
+  // 今の値は終点の右に置く。上下にはみ出さないよう寄せる
+  const labelY = Math.min(Math.max(py(last), T + 6), H - B - 4);
+  return svg(`<svg class="pt-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="累積 pt の推移。${n}対局で ${fmtPt(last)}">
+    ${grid}
+    ${xAxis}
     <polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-    <circle cx="${px(values.length - 1).toFixed(1)}" cy="${py(last).toFixed(1)}" r="3" fill="${color}"/>
-    ${max > 0 ? label(max, PAD + 4) : ""}
-    ${min < 0 ? label(min, H - PAD + 2) : ""}
+    <circle cx="${f(px(n))}" cy="${f(py(last))}" r="4.5" fill="${color}" stroke="#0e2a1c" stroke-width="2"/>
+    <text class="pt-chart-now" x="${f(px(n) + 9)}" y="${f(labelY)}" font-size="13" font-weight="700" fill="#f4f4f4" dominant-baseline="middle">${fmtPt(last)}</text>
   </svg>`);
 }
 
