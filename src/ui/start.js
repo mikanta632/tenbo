@@ -180,6 +180,7 @@ export function renderStart(props) {
           if (name) {
             const p = storage.addPlayer(name);
             posPlayers[key] = p.id;
+            if (emptyPosition === key) emptyPosition = null; // 空席に人を入れたら、空席を選び直してもらう（選択肢から選んだときと同じ）
           }
           editingPos = null;
           render();
