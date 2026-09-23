@@ -534,7 +534,8 @@ export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = 
   }
 
   render();
-  return openSheet({ title: initial ? "和了の編集" : "和了入力", body, fixed: true });
+  // 高さは中身に合わせる（画面いっぱいにしない。卓面が見えたまま入れられる）
+  return openSheet({ title: initial ? "和了の編集" : "和了入力", body });
 }
 
 // ---- 複数和了（ダブロン・トリロン） -----------------------------------------

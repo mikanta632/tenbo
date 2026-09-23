@@ -366,19 +366,19 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 
 /* 和了入力（§8.3）: 1画面に1項目。選択肢を大きく出す */
 .choice.grid1 { display: grid; grid-template-columns: 1fr; }
-.wizard-body { display: flex; flex-direction: column; }
-.wz-nav { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 2px 0 4px; }
-.wz-back { flex: none; }
+.wizard-body { display: flex; flex-direction: column; padding-bottom: 12px; }
+.wz-nav { display: flex; align-items: center; gap: 10px; min-height: 40px; margin: 0 0 2px; }
+.wz-back { flex: none; min-height: 36px; padding: 6px 12px; }
 .wz-crumbs { flex: 1; min-width: 0; font-size: 15px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wz-title { font-size: 15px; color: var(--muted); margin: 6px 0 8px; }
-.wz-grid { gap: 8px; }
-.wz-grid .chip { min-height: 60px; font-size: 20px; }
-.wz-grid.wz-big .chip { min-height: 140px; font-size: 28px; font-weight: 700; }
-.wz-han { display: grid; grid-template-columns: repeat(2, 1fr); }
+.wz-title { font-size: 14px; color: var(--muted); margin: 4px 0 6px; }
+.wz-grid { gap: 6px; }
+.wz-grid .chip { min-height: 48px; font-size: 18px; }
+.wz-grid.wz-big .chip { min-height: 64px; font-size: 22px; font-weight: 700; }
+.wz-han { display: grid; grid-template-columns: repeat(3, 1fr); }
 .wz-fu { display: grid; grid-template-columns: repeat(3, 1fr); }
 .wz-items { display: flex; flex-direction: column; gap: 6px; }
 .wz-item {
-  display: flex; justify-content: space-between; align-items: center; min-height: 44px; padding: 0 14px;
+  display: flex; justify-content: space-between; align-items: center; min-height: 40px; padding: 0 14px;
   border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.06); font-size: 17px;
 }
 .wz-item-label { color: var(--muted); font-size: 14px; }
@@ -393,9 +393,8 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
   .sheet.fixed .sheet-head { padding: 6px 16px 0; }
   .slot-detail { min-height: 138px; }
   .wizard-body .who-line { font-size: 16px; margin: 0; }
-  .wz-grid .chip { min-height: 50px; font-size: 18px; }
-  .wz-grid.wz-big .chip { min-height: 110px; }
-  .wz-item { min-height: 38px; }
+  .wz-grid .chip { min-height: 44px; }
+  .wz-item { min-height: 36px; }
   .wz-side .preview .prow-line { padding: 0; font-size: 14px; }
 }
 
@@ -408,7 +407,8 @@ body.app-landscape .wizard-body .who-line { font-size: 16px; margin: 0; }
 body.app-landscape .wz-nav { min-height: 40px; margin: 0; }
 body.app-landscape .wz-title { margin: 2px 0 6px; }
 body.app-landscape .wz-grid .chip { white-space: nowrap; }
-body.app-landscape .wz-grid.wz-big .chip { min-height: 120px; }
+body.app-landscape .wz-grid .chip { min-height: 44px; }
+body.app-landscape .wz-grid.wz-big .chip { min-height: 56px; }
 body.app-landscape .wz-han { grid-template-columns: repeat(5, 1fr); }
 body.app-landscape .wz-fu { grid-template-columns: repeat(6, 1fr); }
 body.app-landscape .wz-grid.grid1 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
