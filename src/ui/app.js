@@ -1123,10 +1123,14 @@ document.addEventListener("visibilitychange", () => {
 
 // ---- Service Worker（§10） ----------------------------------------------
 // 更新は次回起動時に適用する（skipWaiting は使わない）。localhost / https 以外では登録できない。
+// このページの版（キャッシュから読んだ version.js）で登録すると、SW の URL が古い版のままになり、
+// 新しい版を取り込めない（取り込もうとした SW は配信元の版と合わずに install を失敗させる）。
+// そこで公開中の版を読み、その版で登録する。新しい SW は待機し、ページを全部閉じたあと（次回起動時）に有効になる。
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register(swUrl(APP_VERSION), { updateViaCache: "none" }).catch(() => {
+  window.addEventListener("load", async () => {
+    const latest = navigator.onLine ? await fetchLatestVersion() : null;
+    navigator.serviceWorker.register(swUrl(latest || APP_VERSION), { updateViaCache: "none" }).catch(() => {
       /* 登録できなくても動作には影響しない（オフラインで開けないだけ） */
     });
   });

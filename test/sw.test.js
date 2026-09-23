@@ -128,6 +128,8 @@ test("配信元の version.js が SW の版と違えば取り込まない（古�
   const sw = worker({ scriptUrl: "https://example.test/tenbo/sw.js?v=9.9.9", originVersion: "9.9.8" });
   await assert.rejects(sw.install(), /9\.9\.8/);
   assert.deepEqual(sw.puts, []);
+  // 照合に要る version.js だけを取り、残りのファイルは取りに行かない
+  assert.deepEqual(sw.network, ["https://example.test/tenbo/version.js?v=9.9.9"]);
 });
 
 test("?v= 無しで登録された SW は版の照合をしない", async () => {

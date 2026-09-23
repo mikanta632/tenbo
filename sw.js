@@ -54,26 +54,27 @@ const PRECACHE = [
  * - HTTP キャッシュを通さない（cache: "reload"）。通すと、更新直後に古いファイルを取り込んでしまう
  * - 配信元の CDN（GitHub Pages）は URL 単位で最大 10 分キャッシュするので、版をクエリに付けて必ず配信元から取る。
  *   保存はクエリ無しの URL で行い、ページからの要求にそのまま当たるようにする
- * - 取れた version.js の版がこの SW の版と違えば（配置の途中で配信元がまだ古い）、取り込まずに失敗させる。
- *   古い版のファイルを新しい版の名前で固定すると、以後「更新を確認」しても同じ URL なので取り直せなくなる
+ * - 取れた version.js の版がこの SW の版と違えば（配置の途中で配信元がまだ古い、またはこの SW の版が古い）、
+ *   取り込まずに失敗させる。古い版のファイルを新しい版の名前で固定すると、以後「更新を確認」しても同じ URL なので
+ *   取り直せなくなる。照合は version.js だけを先に取って行い、合わなければ残りのファイルは取りに行かない
  */
 async function precache() {
-  const cache = await caches.open(CACHE);
   const abs = (url) => new URL(url, self.location.href).href;
   const bust = (url) => new Request(`${abs(url)}?v=${encodeURIComponent(VERSION)}`, { cache: "reload" });
-  const fetched = await Promise.all(
-    PRECACHE.map(async (url) => {
-      const res = await fetch(bust(url));
-      if (!res || !res.ok) throw new Error(`事前キャッシュに失敗: ${url} ${res && res.status}`);
-      return [url, res];
-    }),
-  );
+  const get = async (url) => {
+    const res = await fetch(bust(url));
+    if (!res || !res.ok) throw new Error(`事前キャッシュに失敗: ${url} ${res && res.status}`);
+    return [url, res];
+  };
+  const version = await get("./version.js");
   if (VERSION_FROM_URL) {
-    const text = await fetched.find(([url]) => url === "./version.js")[1].clone().text();
+    const text = await version[1].clone().text();
     const m = text.match(/APP_VERSION\s*=\s*"([^"]+)"/);
     if (m && m[1] !== VERSION_FROM_URL) throw new Error(`配信元の版が違う: ${m[1]} != ${VERSION_FROM_URL}`);
   }
-  await Promise.all(fetched.map(([url, res]) => cache.put(new Request(abs(url)), res)));
+  const rest = await Promise.all(PRECACHE.filter((url) => url !== "./version.js").map(get));
+  const cache = await caches.open(CACHE);
+  await Promise.all([version, ...rest].map(([url, res]) => cache.put(new Request(abs(url)), res)));
 }
 
 self.addEventListener("install", (event) => {
