@@ -123,6 +123,10 @@ export function computeSettlement(game) {
   const n = rule.playerCount;
   const state = reduce(game.events, rule);
   const points = state.points.slice();
+  // 順位と同点のグループは供託を足す前の持ち点で決める（等分の端数で同点が崩れないように）。
+  // 供託の端数は順位が上の者へ渡すので、足したあとも順位は変わらない
+  const ranks = ranksOf(points);
+  const groups = rankGroups(points, ranks, rule);
 
   let kyotakuToTop = 0;
   let kyotakuRemain = 0;
@@ -130,16 +134,18 @@ export function computeSettlement(game) {
     if (rule.finalKyotaku === "remain") {
       kyotakuRemain = state.kyotaku;
     } else {
-      const top = ranksOf(points).indexOf(0);
+      // トップが受け取る。同点を等分するルールでトップが並んでいれば、並んだ者で等分する
+      // （100点単位で切り捨て、端数は起家に近い方へ。§5.2 の供託の等分と同じ）
       kyotakuToTop = state.kyotaku * 1000;
-      points[top] += kyotakuToTop;
+      const takers = groups[0];
+      const share = Math.floor(kyotakuToTop / takers.length / 100) * 100;
+      for (const seat of takers) points[seat] += share;
+      points[takers[0]] += kyotakuToTop - share * takers.length;
     }
   }
 
-  const ranks = ranksOf(points);
   const oka = ((rule.returnPoints - rule.startPoints) * n) / 1000;
   const rounding = rule.ptRounding === "none" ? (d) => d / 1000 : round56;
-  const groups = rankGroups(points, ranks, rule);
 
   // 順位点: グループが占める順位のウマ（トップを含むならオカも）を人数で割る
   const share = new Array(n).fill(0);

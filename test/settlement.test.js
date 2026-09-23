@@ -164,6 +164,27 @@ describe("同点の等分", () => {
   });
 });
 
+describe("同点トップと残り供託", () => {
+  const SPLIT = makeRule({ tieBreak: "split" });
+  test("トップが並んでいれば、残り供託は並んだ者で等分する", () => {
+    const g = game(SPLIT, riichi(2), riichi(3), adjust([5000, 5000, -6000, -4000]));
+    const s = computeSettlement(g);
+    assert.deepEqual(s.points, [31000, 31000, 18000, 20000]);
+    assert.equal(s.kyotakuToTop, 2000);
+    assert.equal(s.pt[0], s.pt[1]);
+    // 起家優先なら起家に近い方が全部受け取る
+    assert.deepEqual(computeSettlement(game(R4, riichi(2), riichi(3), adjust([5000, 5000, -6000, -4000]))).points, [32000, 30000, 18000, 20000]);
+  });
+  test("割り切れない端数は起家に近い方へ渡し、同点の扱いは崩さない", () => {
+    const g = game(SPLIT, riichi(3), adjust([5000, 5000, 5000, -15000]));
+    const s = computeSettlement(g);
+    assert.deepEqual(s.points, [30400, 30300, 30300, 9000]);
+    assert.deepEqual(s.ranks, [0, 1, 2, 3]);
+    assert.equal(s.pt[0], s.pt[1]);
+    assert.equal(s.pt[1], s.pt[2]);
+  });
+});
+
 // ---- 祝儀（§7） -----------------------------------------------------------------
 
 describe("チップの精算", () => {
