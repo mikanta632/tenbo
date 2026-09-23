@@ -713,12 +713,25 @@ describe("延長戦", () => {
     assert.ok(s2.points[1] >= 30000);
     assert.equal(s2.over, true);
   });
-  test("延長は 1 場まで。西4 を終えたら点数に関わらず終局", () => {
+  test("延長は 1 場まで。西4 で親が流れたら点数に関わらず終局", () => {
     const events = [...eight(), ...Array.from({ length: 4 }, () => exhaustive([]))];
     const states = reduceAll(build(EXT, ...events), EXT);
     assert.equal(states[10].over, false);
     assert.equal(states[11].kyoku, 12);
     assert.equal(states[11].over, true);
+  });
+  test("西4 で親が連荘したら、通常のオーラスと同じく続ける（アガリやめは出さない）", () => {
+    const west4 = build(EXT, ...eight(), exhaustive([]), exhaustive([]), exhaustive([]));
+    assert.equal(reduce(west4, EXT).kyoku, 11);
+    const renchan = appendEvent(west4, exhaustive([3]), EXT); // 親 3 のテンパイ連荘
+    const s = reduce(renchan, EXT);
+    assert.equal(s.kyoku, 11);
+    assert.equal(s.honba, 4);
+    assert.ok(Math.max(...s.points) < 30000);
+    assert.equal(s.over, false);
+    assert.equal(agariYameAvailableAfter(renchan, EXT), false);
+    // 親が流れたら終局
+    assert.equal(reduce(appendEvent(renchan, exhaustive([]), EXT), EXT).over, true);
   });
   test("東風は南入し、南4 まで", () => {
     const rule = makeRule({ extension: true, length: 4 });
