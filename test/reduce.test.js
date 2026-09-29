@@ -9,6 +9,7 @@ import {
   reduce,
   reduceAll,
   kyokuGroups,
+  pointsByKyoku,
   dealerOf,
   seatWind,
   roundWind,
@@ -833,5 +834,42 @@ describe("チップ", () => {
     const events = build(CH, { t: "agari", tsumo: true, from: null, winners: [wc(1, 3, 30, 1)] }, { t: "agari", tsumo: false, from: 0, winners: [wc(2, 1, 30, 2)] });
     const edited = replaceEvent(events, 0, { t: "agari", tsumo: false, from: 3, winners: [wc(1, 3, 30, 3)] }, CH);
     assert.deepEqual(reduce(edited, CH).chips, [-2, 3, 2, -3]);
+  });
+});
+
+// ---- 局ごとの持ち点の推移 ---------------------------------------------------
+
+describe("9. pointsByKyoku", () => {
+  test("開始点と、局末ごとの持ち点を返す（局の途中のリーチは含めない）", () => {
+    const events = build(R4, riichi(1), ron(1, 3, 1, 30), exhaustive([0]), riichi(2));
+    const series = pointsByKyoku(events, R4);
+    assert.equal(series.length, 3);
+    assert.deepEqual(series[0], [25000, 25000, 25000, 25000]);
+    assert.deepEqual(series[1], reduce(events.slice(0, 2), R4).points);
+    assert.deepEqual(series[2], reduce(events.slice(0, 3), R4).points);
+  });
+
+  test("チョンボも 1 局として数える", () => {
+    const events = build(R4, chombo(0));
+    const series = pointsByKyoku(events, R4);
+    assert.equal(series.length, 2);
+    assert.deepEqual(series[1], reduce(events, R4).points);
+  });
+
+  test("最後の局末より後の手動修正は、最後の時点として足す。動いていなければ足さない", () => {
+    const base = build(R4, ron(1, 3, 1, 30));
+    const adjusted = build(R4, ron(1, 3, 1, 30), adjust([100, 0, 0, -100]));
+    assert.equal(pointsByKyoku(base, R4).length, 2);
+    assert.equal(pointsByKyoku([...base, { t: "end" }], R4).length, 2);
+    const series = pointsByKyoku(adjusted, R4);
+    assert.equal(series.length, 3);
+    assert.deepEqual(series[2], reduce(adjusted, R4).points);
+  });
+
+  test("イベントが無ければ開始点だけ。入力は書き換えない", () => {
+    assert.deepEqual(pointsByKyoku([], R4), [[25000, 25000, 25000, 25000]]);
+    const series = pointsByKyoku(build(R4, ron(1, 3, 1, 30)), R4);
+    series[0][0] = 0;
+    assert.deepEqual(pointsByKyoku([], R4)[0][0], 25000);
   });
 });

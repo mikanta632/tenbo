@@ -349,3 +349,26 @@ export function kyokuGroups(events) {
   groups.push(current);
   return groups;
 }
+
+/**
+ * 局の終わりごとの持ち点の推移（結果画面のグラフ用。§8.6）。
+ * 最初は開始点、以降は各局末イベント（和了・流局・チョンボ）を適用した直後の持ち点。
+ * 最後の局末より後に手動修正（adjust）があれば、それを足した持ち点を最後に足す。
+ * 局の途中のリーチなどで供託に出した点は含めない（局末で決まる値だけを結ぶ）。
+ * 戻り値は「時点ごとの席ごとの持ち点」の配列。
+ */
+export function pointsByKyoku(events, rule) {
+  const states = reduceAll(events, rule);
+  const groups = kyokuGroups(events);
+  const series = [initialState(rule).points];
+  for (const group of groups) {
+    if (group.endIndex !== null) series.push(states[group.endIndex].points);
+  }
+  const adjusts = groups[groups.length - 1].indices.map((i) => events[i]).filter((e) => e.t === "adjust");
+  if (adjusts.length > 0) {
+    const points = series[series.length - 1].slice();
+    for (const e of adjusts) addDeltas(points, e.deltas);
+    if (points.some((p, i) => p !== series[series.length - 1][i])) series.push(points);
+  }
+  return series.map((points) => points.slice());
+}
