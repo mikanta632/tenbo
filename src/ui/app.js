@@ -19,7 +19,7 @@ import { renderPlayer } from "./player.js";
 import { renderSettings } from "./settings.js";
 import { renderMisc } from "./misc.js";
 import { renderTabBar } from "./tabs.js";
-import { persist } from "./persist.js";
+import { persist, requestPersistentStorage } from "./persist.js";
 import {
   openAgariSheet,
   openMultiRonSheet,
@@ -1154,4 +1154,5 @@ if ("serviceWorker" in navigator) {
 
 // ---- 起動 -----------------------------------------------------------------
 
+requestPersistentStorage(); // 消されにくい保存領域を頼む（§9.3）。結果は待たない
 show();

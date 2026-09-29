@@ -14,3 +14,18 @@ export function persist(write, notify = (message) => alert(message)) {
     return false;
   }
 }
+
+/**
+ * 保存領域を「消されにくい」ものにするよう頼む（起動時に呼ぶ。docs/design.md §9.3）。
+ * 断られても、対応していなくても動作には影響しない。頼めたかどうかを返す（テスト用）。
+ */
+export async function requestPersistentStorage(nav = globalThis.navigator) {
+  const storage = nav && nav.storage;
+  if (!storage || typeof storage.persist !== "function") return false;
+  try {
+    if (typeof storage.persisted === "function" && (await storage.persisted())) return true;
+    return await storage.persist();
+  } catch {
+    return false;
+  }
+}
