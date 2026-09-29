@@ -137,3 +137,18 @@ test("?v= 無しで登録された SW は版の照合をしない", async () => 
   await sw.install();
   assert.ok(sw.puts.length > 10);
 });
+
+test("src/ 配下のすべての JS が事前キャッシュに入っている（漏れるとオフラインで起動できない）", async () => {
+  const { readdir } = await import("node:fs/promises");
+  const listed = new Set([...source.matchAll(/"\.\/(src\/[^"]+\.js)"/g)].map((m) => m[1]));
+  async function walk(dir) {
+    const out = [];
+    for (const entry of await readdir(new URL(`../${dir}/`, import.meta.url), { withFileTypes: true })) {
+      if (entry.isDirectory()) out.push(...(await walk(`${dir}/${entry.name}`)));
+      else if (entry.name.endsWith(".js")) out.push(`${dir}/${entry.name}`);
+    }
+    return out;
+  }
+  const missing = (await walk("src")).filter((file) => !listed.has(file));
+  assert.deepEqual(missing, []);
+});
