@@ -480,6 +480,7 @@ body.app-landscape .menu-list { display: grid; grid-template-columns: 1fr 1fr; }
 .transfer .amt { font-weight: 700; color: var(--digit); font-variant-numeric: tabular-nums; }
 .kv { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; color: var(--muted); }
 .kv b { color: var(--ink); font-weight: 600; }
+.kv b.warn { color: var(--accent); }
 .stats-wrap { overflow-x: auto; }
 .stats-wrap .rtable { min-width: 560px; }
 .stats-wrap .rtable td, .stats-wrap .rtable th { white-space: nowrap; }

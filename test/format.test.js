@@ -2,7 +2,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { seatPositions, positionsFor, landscapePositions, isLandscapeGame, bodyRotation, landscapeTarget, kyokuName, windName, fmtPoints, fmtDelta, fmtPt, fmtYen, fmtElapsed, rankBadgeClass, hanName, fmtDateTime, fmtDate, gameDateTime } from "../src/ui/format.js";
+import { seatPositions, positionsFor, landscapePositions, isLandscapeGame, bodyRotation, landscapeTarget, kyokuName, windName, fmtPoints, fmtDelta, fmtPt, fmtYen, fmtElapsed, rankBadgeClass, hanName, fmtDateTime, fmtDate, gameDateTime, backupStatus } from "../src/ui/format.js";
 import { buildGame, seatsFromPositions } from "../src/ui/start.js";
 import { makeRule } from "../src/rules.js";
 import { createStorage, memoryStorage } from "../src/storage.js";
@@ -181,5 +181,27 @@ describe("画面の擬似固定（§10）", () => {
     assert.equal(Math.abs(bodyRotation(fromLandscape, -90)), 180);
     assert.equal(bodyRotation(fromLandscape, 0), 90);
     assert.equal(landscapeTarget({ deviceLandscape: true, angle: 270 }), -90);
+  });
+});
+
+describe("backupStatus", () => {
+  const TZ = "Asia/Tokyo";
+  const game = (endedAt) => ({ startedAt: "2026-09-01T00:00:00.000Z", endedAt });
+  const at = "2026-09-10T03:00:00.000Z"; // 東京 12:00
+
+  test("一度もエクスポートしていなければ未実施。対局があれば強調する", () => {
+    assert.deepEqual(backupStatus([game("2026-09-02T00:00:00.000Z")], null, TZ), { text: "未実施（対局 1件）", warn: true });
+    assert.deepEqual(backupStatus([], null, TZ), { text: "未実施", warn: false });
+    assert.equal(backupStatus([], "壊れた値", TZ).text, "未実施");
+  });
+
+  test("エクスポート後に終局した対局を数える。強調するのは 1件以上のとき", () => {
+    const games = [game("2026-09-11T00:00:00.000Z"), game("2026-09-10T03:00:01.000Z"), game("2026-09-10T03:00:00.000Z"), game("2026-09-02T00:00:00.000Z")];
+    assert.deepEqual(backupStatus(games, at, TZ), { text: "2026-09-10 12:00（その後 2件）", warn: true });
+    assert.deepEqual(backupStatus(games.slice(2), at, TZ), { text: "2026-09-10 12:00（新しい対局なし）", warn: false });
+  });
+
+  test("終局時刻が無い対局は開始時刻で数える", () => {
+    assert.equal(backupStatus([{ startedAt: "2026-09-11T00:00:00.000Z", endedAt: null }], at, TZ).warn, true);
   });
 });

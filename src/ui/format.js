@@ -90,6 +90,18 @@ export function gameDateTime(game, timeZone) {
   return fmtDateTime(game.endedAt || game.startedAt, timeZone);
 }
 
+/**
+ * バックアップの状態（docs/design.md §9.4）。games は終了した対局、at は最後にエクスポートした時刻（ISO、無ければ null）。
+ * 「その後」の対局は、終局（無ければ開始）がエクスポートより後のもの。warn はエクスポートしていない対局があること。
+ */
+export function backupStatus(games, at, timeZone) {
+  const t = at ? Date.parse(at) : NaN;
+  if (Number.isNaN(t)) return { text: games.length ? `未実施（対局 ${games.length}件）` : "未実施", warn: games.length > 0 };
+  const since = games.filter((g) => Date.parse(g.endedAt || g.startedAt) > t).length;
+  const when = fmtDateTime(at, timeZone);
+  return { text: since ? `${when}（その後 ${since}件）` : `${when}（新しい対局なし）`, warn: since > 0 };
+}
+
 /** 対局 ID。同じ時刻に開始しても別対局になるよう一意な接尾辞を付ける。 */
 export function gameId(date) {
   const p = (x) => String(x).padStart(2, "0");

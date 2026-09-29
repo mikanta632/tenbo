@@ -3,7 +3,7 @@
 import { h } from "./dom.js";
 
 /**
- * props: { sound: { enabled }, version, gamesCount, onSound({enabled}), onTestSound, onExport, onImport(file) }
+ * props: { sound: { enabled }, version, gamesCount, backup: { text, warn }, onSound({enabled}), onTestSound, onExport, onImport(file) }
  */
 export function renderMisc(props) {
   const s = props.sound;
@@ -34,6 +34,7 @@ export function renderMisc(props) {
       { class: "card" },
       h("h2", null, "バックアップ"),
       h("div", { class: "hint" }, `終了した対局 ${props.gamesCount}件。データは端末内だけにあります。`),
+      backupRow(props.backup),
       h(
         "div",
         { class: "sheet-actions two" },
@@ -50,6 +51,12 @@ export function renderMisc(props) {
       updateBlock(props),
     ),
   );
+}
+
+/** 最後のエクスポートの状態。エクスポートしていない対局があれば強調する */
+export function backupRow(backup) {
+  if (!backup) return null;
+  return h("div", { class: "kv" }, h("span", null, "最後のエクスポート"), h("b", { class: backup.warn ? "warn" : "" }, backup.text));
 }
 
 /** 「更新を確認」。onCheckUpdate(setStatus) を呼び、進み具合を文で出す */

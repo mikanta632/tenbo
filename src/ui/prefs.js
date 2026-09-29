@@ -26,6 +26,16 @@ export function savePrefs(p) {
   }
 }
 
+/** 最後にエクスポートした時刻（ISO）。端末だけの記録で、エクスポートには含めない（§9.4） */
+export function loadLastExport() {
+  const at = loadPrefs().lastExportAt;
+  return typeof at === "string" ? at : null;
+}
+
+export function recordExport(at) {
+  savePrefs({ ...loadPrefs(), lastExportAt: at });
+}
+
 const copy = (r) => JSON.parse(JSON.stringify(r));
 const newId = () => "r_" + Math.random().toString(36).slice(2, 10);
 const pcOf = (preset) => (preset.rule && preset.rule.playerCount === 3 ? 3 : 4);

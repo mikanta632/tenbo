@@ -6,7 +6,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { memoryStorage } from "../src/storage.js";
 import { PRESETS, presetFor, makeRule } from "../src/rules.js";
-import { ensurePresets, loadPresets, presetsFor, selectedPreset, selectPreset, updatePreset, addPreset, deletePreset, loadPrefs, savePrefs } from "../src/ui/prefs.js";
+import { loadLastExport, recordExport, ensurePresets, loadPresets, presetsFor, selectedPreset, selectPreset, updatePreset, addPreset, deletePreset, loadPrefs, savePrefs } from "../src/ui/prefs.js";
 
 function withStorage(t, initial = null) {
   const previous = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
@@ -90,5 +90,20 @@ describe("プリセットの管理", () => {
     assert.equal(deletePreset(selectedPreset(4).id), false, "最後の 1つ");
     assert.equal(presetsFor(4).length, 1);
     assert.equal(deletePreset("zzz"), false);
+  });
+});
+
+describe("最後のエクスポート", () => {
+  test("記録した時刻を読み戻せる。他の設定は消さない。無ければ null", (t) => {
+    withStorage(t, { sound: "off" });
+    assert.equal(loadLastExport(), null);
+    recordExport("2026-09-10T03:00:00.000Z");
+    assert.equal(loadLastExport(), "2026-09-10T03:00:00.000Z");
+    assert.equal(loadPrefs().sound, "off");
+  });
+
+  test("壊れた値は無いものとして扱う", (t) => {
+    withStorage(t, { lastExportAt: 123 });
+    assert.equal(loadLastExport(), null);
   });
 });

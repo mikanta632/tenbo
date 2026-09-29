@@ -2,11 +2,12 @@
 
 import { h } from "./dom.js";
 import { fmtPoints, fmtDelta, fmtPt, fmtYen } from "./format.js";
+import { backupRow } from "./misc.js";
 
 /**
- * props: { game, names, settlement, title, onBack, onLog, onExport }
+ * props: { game, names, settlement, title, backup, onBack, onLog, onExport }
  */
-export function renderResult({ game, names, settlement: s, title, onBack, onLog, onExport }) {
+export function renderResult({ game, names, settlement: s, title, backup, onBack, onLog, onExport }) {
   const rule = game.rule;
   const n = rule.playerCount;
   const order = [...Array(n).keys()].sort((a, b) => s.ranks[a] - s.ranks[b]);
@@ -75,6 +76,7 @@ export function renderResult({ game, names, settlement: s, title, onBack, onLog,
           "section",
           { class: "card" },
           h("h2", null, "バックアップ"),
+          backupRow(backup),
           h("div", { class: "sheet-actions" }, h("button", { type: "button", class: "btn-secondary", onclick: onExport }, "JSON をエクスポート")),
         )
       : null,

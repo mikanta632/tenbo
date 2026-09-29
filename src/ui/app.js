@@ -38,8 +38,8 @@ import {
   openRateSheet,
   openCombinedSettlement,
 } from "./sheets.js";
-import { fmtElapsed, kyokuName, gameDateTime, bodyRotation, landscapeTarget, isLandscapeGame } from "./format.js";
-import { ensurePresets, presetsFor, selectedPreset, selectedPresetId, selectPreset, updatePreset, addPreset, deletePreset } from "./prefs.js";
+import { fmtElapsed, kyokuName, gameDateTime, bodyRotation, landscapeTarget, isLandscapeGame, backupStatus } from "./format.js";
+import { loadLastExport, recordExport, ensurePresets, presetsFor, selectedPreset, selectedPresetId, selectPreset, updatePreset, addPreset, deletePreset } from "./prefs.js";
 import {
   soundEnabled,
   setSoundEnabled,
@@ -406,6 +406,7 @@ function miscContent() {
     sound: { enabled: soundEnabled() },
     version: APP_VERSION,
     gamesCount: storage.loadGames().length,
+    backup: currentBackupStatus(),
     onSound: ({ enabled }) => {
       setSoundEnabled(enabled);
       show("misc");
@@ -762,6 +763,7 @@ function renderResultScreen() {
       names: playerNames(g),
       settlement: settlementOf(g),
       title: `結果 ${gameDateTime(g)}`,
+      backup: currentBackupStatus(),
       onBack: () => show(resultBack),
       onLog: () => {
         logTarget = { kind: "finished", id: g.id };
@@ -889,6 +891,16 @@ function exportFilename() {
   return `mj-export-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.json`;
 }
 
+function currentBackupStatus() {
+  return backupStatus(storage.loadGames(), loadLastExport());
+}
+
+/** エクスポートできた時刻を残し、その状態を出している画面を描き直す（§9.4） */
+function exportDone() {
+  recordExport(new Date().toISOString());
+  if (screen === "misc" || screen === "result") show();
+}
+
 /** 全データを JSON で書き出す。共有シートが使えればそれを、なければダウンロードリンクを使う。 */
 async function exportJson() {
   const data = storage.exportAll();
@@ -898,6 +910,7 @@ async function exportJson() {
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: name });
+      exportDone();
       return;
     } catch (e) {
       if (e && e.name === "AbortError") return;
@@ -911,6 +924,7 @@ async function exportJson() {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
+  exportDone();
 }
 
 /** JSON を読み込んで全データを置き換える。確認してから反映する。 */
