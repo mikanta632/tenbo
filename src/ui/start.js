@@ -13,6 +13,7 @@
 import { h, clear } from "./dom.js";
 import { validateRule } from "../rules.js";
 import { reduce } from "../reduce.js";
+import { persist } from "./persist.js";
 import { kyokuName, gameId, positionsFor, POSITION_ORDER } from "./format.js";
 
 const POS_LABEL = { bottom: "自分", right: "右", top: "対面", left: "左" };
@@ -177,9 +178,9 @@ export function renderStart(props) {
         const input = h("input", { type: "text", placeholder: "新しい名前", autocomplete: "off", enterkeyhint: "done" });
         const commit = () => {
           const name = input.value.trim();
-          if (name) {
-            const p = storage.addPlayer(name);
-            posPlayers[key] = p.id;
+          let added = null;
+          if (name && persist(() => (added = storage.addPlayer(name)))) {
+            posPlayers[key] = added.id;
             if (emptyPosition === key) emptyPosition = null; // 空席に人を入れたら、空席を選び直してもらう（選択肢から選んだときと同じ）
           }
           editingPos = null;

@@ -19,6 +19,7 @@ import { renderPlayer } from "./player.js";
 import { renderSettings } from "./settings.js";
 import { renderMisc } from "./misc.js";
 import { renderTabBar } from "./tabs.js";
+import { persist } from "./persist.js";
 import {
   openAgariSheet,
   openMultiRonSheet,
@@ -192,20 +193,6 @@ function closeSheet() {
   }
 }
 
-/**
- * 保存する。失敗（端末の保存領域が足りない等）したら知らせて false を返す。
- * 呼び出し側は、保存できたときだけ画面の状態を進める（保存されていない操作を画面に残さない）。
- */
-function persist(write) {
-  try {
-    write();
-    return true;
-  } catch {
-    alert("保存できませんでした。端末の保存領域が足りない可能性があります。この操作は反映していません。");
-    return false;
-  }
-}
-
 /** 現在局（最後の局末イベントより後）にある seat の riichi イベントの添字。無ければ -1。 */
 function findCurrentRiichiIndex(events, seat) {
   for (let i = events.length - 1; i >= 0; i--) {
@@ -236,8 +223,8 @@ function gameTabContent() {
         message: "進行中の対局を破棄します。保存されません。",
         okLabel: "破棄する",
         onOk: () => {
+          if (!persist(() => storage.clearCurrent())) return;
           game = null;
-          storage.clearCurrent();
           show("game");
         },
       });
@@ -379,8 +366,7 @@ function pickGame(id) {
             message: `${date} の対局を削除します。元に戻せません。`,
             okLabel: "削除する",
             onOk: () => {
-              storage.deleteGame(id);
-              show("stats");
+              if (persist(() => storage.deleteGame(id))) show("stats");
             },
           });
         },
@@ -407,8 +393,7 @@ function renderPlayerScreen() {
         show("result");
       },
       onRename: (id, name) => {
-        storage.renamePlayer(id, name);
-        show("player");
+        if (persist(() => storage.renamePlayer(id, name))) show("player");
       },
     }),
   );
@@ -727,8 +712,8 @@ function showOver(state, names) {
       // 精算を確定して焼き込み、終了した対局に移す（§7, §9.2）
       const finished = { ...game, endedAt: new Date().toISOString() };
       finished.settlement = { ...computeSettlement(finished), computedAt: finished.endedAt };
-      if (!persist(() => storage.appendGame(finished))) return;
-      storage.clearCurrent();
+      // 対局を移してから進行中を消す。消せなくても appendGame は同じ id を置き換えるので、押し直せる
+      if (!persist(() => storage.appendGame(finished)) || !persist(() => storage.clearCurrent())) return;
       game = null;
       resultId = finished.id;
       resultBack = "game";
@@ -741,8 +726,8 @@ function showOver(state, names) {
         message: "この対局を保存せずに破棄します。成績にも残りません。",
         okLabel: "破棄する",
         onOk: () => {
+          if (!persist(() => storage.clearCurrent())) return;
           game = null;
-          storage.clearCurrent();
           show("game");
         },
       });
