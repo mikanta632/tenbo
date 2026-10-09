@@ -15,12 +15,20 @@ export function setSoundEnabled(on) {
 
 // ---- Web Audio ----------------------------------------------------------
 
+// iOS は割り込み（着信・Siri・他アプリの音・長いロック）のあと、AudioContext が
+// "interrupted" のまま resume に応えなくなったり、"running" を名乗ったまま時刻が進まず
+// 無音になったりする。こうなると resume では戻らないので、捨てて作り直す（再起動で治るのと同じ）。
+// 作り直しは次の audio() 呼び出し、つまりタップの処理の中で行うので、新しい文脈もそのまま鳴る。
+
 let ctx = null;
+let broken = false; // resume が効かなかった。次の audio() で作り直す
+let probe = null; // 前回 audio() を呼んだときの文脈の時刻と実時間（running のときだけ）
 
 function audio() {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return null;
-  if (!ctx || ctx.state === "closed") {
+  if (ctx && (broken || ctx.state === "closed" || stalled(ctx))) discard();
+  if (!ctx) {
     try {
       ctx = new AC();
     } catch {
@@ -28,13 +36,38 @@ function audio() {
       return null;
     }
   }
-  if (ctx.state !== "running") ctx.resume().catch(() => {});
+  if (ctx.state !== "running") revive(ctx);
+  probe = ctx.state === "running" ? { time: ctx.currentTime, wall: performance.now() } : null;
   return ctx;
+}
+
+/** running なのに、前回から実時間ほど文脈の時刻が進んでいない（音が出ない状態） */
+function stalled(c) {
+  if (!probe || c.state !== "running") return false;
+  const wall = (performance.now() - probe.wall) / 1000;
+  return wall > 1 && c.currentTime - probe.time < wall / 2;
+}
+
+/** resume を試み、失敗するか、しばらくしても running にならなければ壊れたとみなす */
+function revive(c) {
+  const giveUp = () => {
+    if (c === ctx && c.state !== "running") broken = true;
+  };
+  c.resume().then(giveUp, giveUp);
+  setTimeout(giveUp, 500); // interrupted の間は resume の約束が解決しないことがある
+}
+
+function discard() {
+  const old = ctx;
+  ctx = null;
+  broken = false;
+  probe = null;
+  old.close().catch(() => {});
 }
 
 /** 画面に戻ったときやタッチで、止まっていた音声を起こす */
 function wake() {
-  if (ctx && ctx.state !== "running") ctx.resume().catch(() => {});
+  if (ctx && ctx.state !== "running") revive(ctx);
 }
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") wake();
