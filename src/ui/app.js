@@ -357,6 +357,15 @@ function pickGame(id) {
         },
       },
       {
+        // 実際の支払いが済んでいない印（§8.5）。無ければ精算済み
+        label: g.unsettled ? "精算済みにする" : "未精算にする",
+        onPick: () => {
+          const { unsettled, ...rest } = g;
+          const next = unsettled ? rest : { ...rest, unsettled: true };
+          if (persist(() => storage.updateGame(next))) show("stats");
+        },
+      },
+      {
         label: "削除",
         sub: playerNames(g).join(" / "),
         danger: true,

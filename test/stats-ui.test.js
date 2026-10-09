@@ -93,3 +93,14 @@ test("対局が1つも無くても登録プレイヤーの一覧を出す", (t) 
   const list = renderStats({ ...base, games: [] });
   assert.match(list.textContent, /終了した対局がありません/);
 });
+
+test("未精算の印が付いた対局だけ、カードに「未精算」を出す", (t) => {
+  mockDom(t);
+  const f = fixture();
+  f.games[1] = { ...f.games[1], unsettled: true };
+  const root = renderStats(f);
+  const cards = root.findAll((el) => el.matches(".game-card"));
+  const marked = cards.filter((c) => c.find((el) => el.matches(".unsettled")));
+  assert.equal(marked.length, 1);
+  assert.equal(marked[0].find((el) => el.matches(".unsettled")).textContent, "未精算");
+});

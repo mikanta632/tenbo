@@ -203,6 +203,7 @@ export function renderStats(props) {
         { class: "game-card-head" },
         h("label", { class: "pick" }, check),
         h("button", { type: "button", class: "link-btn", onclick: () => props.onPickGame(g.id) }, `${date} ・ ${n}人 ›`),
+        g.unsettled ? h("span", { class: "tag unsettled" }, "未精算") : null,
       ),
       h(
         "table",
