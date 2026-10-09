@@ -33,7 +33,7 @@ export function renderMisc(props) {
       "section",
       { class: "card" },
       h("h2", null, "バックアップ"),
-      h("div", { class: "hint" }, `終了した対局 ${props.gamesCount}件。データは端末内だけにあります。`),
+      h("div", { class: "hint" }, `終了した対局 ${props.gamesCount}件`),
       backupRow(props.backup),
       h(
         "div",

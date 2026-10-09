@@ -26,3 +26,10 @@ test("最後のエクスポートの状態を出す。未エクスポートの�
   const calm = renderMisc(props({ text: "2026-09-10 12:00（新しい対局なし）", warn: false }));
   assert.equal(calm.findAll((el) => el.matches(".warn")).length, 0);
 });
+
+test("バックアップには件数だけを出し、説明文を置かない（§8.1）", (t) => {
+  mockDom(t);
+  const root = renderMisc({ sound: { enabled: true }, version: "x", gamesCount: 7, onSound() {}, onTestSound() {}, onExport() {}, onImport() {} });
+  assert.ok(root.textContent.includes("終了した対局 7件"));
+  assert.ok(!root.textContent.includes("端末内だけ"));
+});
