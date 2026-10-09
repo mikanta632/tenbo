@@ -81,6 +81,16 @@ describe("持ち点の推移", () => {
     assert.ok(markup.includes("とても長…"));
   });
 
+  test("全員の持ち点が動かなくても、目盛りは整数の持ち点にする", (t) => {
+    captureSvg(t);
+    const series = [[25000, 25000, 25000, 25000], [25000, 25000, 25000, 25000]];
+    const markup = pointsChart(series, names, 25000).markup;
+    const ticks = [...markup.matchAll(/text-anchor="end"[^>]*>([^<]+)<\/text>/g)].map((m) => m[1]);
+    assert.ok(ticks.length >= 2, `${ticks}`);
+    for (const tick of ticks) assert.match(tick, /^−?[\d,]+$/, tick);
+    assert.ok(!markup.includes("NaN"));
+  });
+
   test("局末が 1 つも無い対局には出さない。あれば出す", (t) => {
     captureSvg(t);
     const none = resultOf({ id: "g", seats: ["a", "b", "c", "d"], rule, events: [] });

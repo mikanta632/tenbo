@@ -9,6 +9,9 @@ import { backupRow } from "./misc.js";
 // 席ごとの線の色。席の順に固定し、順位では変えない（検証済みの並び。暗い面に合わせた段）
 const SEAT_COLORS = ["#3987e5", "#d95926", "#199e70", "#c98500"];
 
+/** 縦軸に取る持ち点の最小の幅 */
+const MIN_SPAN = 1000;
+
 /** 名前の描画幅の見積り（全角は 11px、半角は 6.5px の文字として） */
 const textWidth = (text) => [...text].reduce((w, c) => w + (c.charCodeAt(0) > 255 ? 11 : 6.5), 0);
 const shortName = (name) => ([...name].length > 5 ? [...name].slice(0, 4).join("") + "…" : name);
@@ -42,7 +45,11 @@ export function pointsChart(series, names, startPoints) {
   const n = names.length;
   const K = series.length - 1;
   const all = series.flat();
-  const y = niceTicks(Math.min(...all), Math.max(...all), 5);
+  // 持ち点の幅が狭いと目盛りが小数（24,999.5 など）になるので、最低 1,000 点の幅を取る
+  const lo = Math.min(...all);
+  const hi = Math.max(...all);
+  const pad = Math.max(0, MIN_SPAN - (hi - lo)) / 2;
+  const y = niceTicks(lo - pad, hi + pad, 5);
   const W = 320;
   const H = 190;
   const T = 10;
