@@ -6,8 +6,9 @@ import { niceTicks } from "./player.js";
 import { fmtPoints, fmtDelta, fmtPt, fmtYen } from "./format.js";
 import { backupRow } from "./misc.js";
 
-// 席ごとの線の色。席の順に固定し、順位では変えない（検証済みの並び。暗い面に合わせた段）
-const SEAT_COLORS = ["#3987e5", "#d95926", "#199e70", "#c98500"];
+// 席ごとの線の色（青・橙・水色・黄）。席の順に固定し、順位では変えない（検証済みの並び。暗い面に合わせた段）。
+// 青は水色と見分けがつくよう紫寄りにしてある
+const SEAT_COLORS = ["#3d6ff0", "#d95926", "#14a6c4", "#c98500"];
 
 /** 縦軸に取る持ち点の最小の幅 */
 const MIN_SPAN = 1000;

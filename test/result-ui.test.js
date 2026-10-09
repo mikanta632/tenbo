@@ -65,7 +65,7 @@ describe("持ち点の推移", () => {
     assert.equal((markup.match(/<polyline/g) || []).length, 4);
     assert.equal((markup.match(/<circle/g) || []).length, 4);
     const colors = [...markup.matchAll(/<polyline[^>]*stroke="(#[0-9a-f]{6})"/g)].map((m) => m[1]);
-    assert.deepEqual(colors, ["#3987e5", "#d95926", "#199e70", "#c98500"]);
+    assert.deepEqual(colors, ["#3d6ff0", "#d95926", "#14a6c4", "#c98500"]);
     for (const name of names) assert.ok(markup.includes(`>${name}</text>`), name);
     assert.match(markup, /stroke-dasharray/, "開始点の破線");
     assert.match(markup, /aria-label="持ち点の推移。2局を終えて A /);
