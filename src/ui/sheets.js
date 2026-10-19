@@ -495,7 +495,15 @@ export function openAgariSheet({ state, rule, names, seat, onConfirm, initial = 
       history.length ? h("button", { type: "button", class: "btn-flat wz-back", onclick: back }, "戻る") : null,
       h("div", { class: "wz-crumbs" }, passed.map(valueOf).join("・")),
     );
-    append(body, whoLine(seat, state, names), nav);
+    // 進み具合。今の入力で通る画面の数で区切る（選び直しで通る画面が変われば区切りも変わる）。
+    // ツモ／ロンを選ぶ前は既定のツモに寄せず、放銃者の画面も数える（ロンを選んで区切りが増えないように）
+    const bar = !chosen.has("form") && !list.includes("from") ? [...list.slice(0, list.indexOf("form") + 1), "from", ...list.slice(list.indexOf("form") + 1)] : list;
+    const progress = h(
+      "div",
+      { class: "wz-progress", role: "img", "aria-label": `${bar.length}項目中${bar.indexOf(step) + 1}項目め` },
+      bar.map((k) => h("span", { class: `wz-step${k === step ? " now" : chosen.has(k) ? " done" : ""}` })),
+    );
+    append(body, whoLine(seat, state, names), progress, nav);
 
     if (step !== "confirm") {
       append(body, h("div", { class: "wz-title" }, STEP_TITLES[step]), stepChoice(step));

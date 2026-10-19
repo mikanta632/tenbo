@@ -369,6 +369,11 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .wizard-body { display: flex; flex-direction: column; padding-bottom: 12px; }
 .wz-nav { display: flex; align-items: center; gap: 10px; min-height: 40px; margin: 0 0 2px; }
 .wz-back { flex: none; min-height: 36px; padding: 6px 12px; }
+/* 和了入力の進み具合。選んだ画面は金、今の画面は薄い金、まだの画面は暗く */
+.wz-progress { display: flex; gap: 6px; margin: 6px 0 8px; }
+.wz-step { flex: 1; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.12); }
+.wz-step.done { background: var(--accent); }
+.wz-step.now { background: #ffe3a0; }
 .wz-crumbs { flex: 1; min-width: 0; font-size: 15px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wz-title { font-size: 14px; color: var(--muted); margin: 4px 0 6px; }
 .wz-grid { gap: 6px; }

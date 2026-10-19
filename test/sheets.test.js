@@ -394,3 +394,23 @@ test("レートの変更は 0 以上の数だけ確定でき、今と同じ値�
     assert.equal(picked.at(-1), rate);
   }
 });
+
+test("和了入力: 進み具合のバーを、今の入力で通る画面の数で区切る", (t) => {
+  mockDom(t);
+  const rule = makeRule();
+  const { box } = openAgariSheet({ state: initialState(rule), rule, names: ["A", "B", "C", "D"], seat: 1, onConfirm: () => {} });
+  const bar = () => box.find((el) => el.matches(".wz-progress"));
+  const marks = () => bar().children.map((el) => (el.matches(".now") ? "now" : el.matches(".done") ? "done" : "-"));
+  // 最初はロンかツモか分からないので放銃者の画面も数える: ツモ／ロン・放銃者・翻・符・確認
+  assert.deepEqual(marks(), ["now", "-", "-", "-", "-"]);
+  pickStep(box, "ロン");
+  assert.deepEqual(marks(), ["done", "now", "-", "-", "-"]);
+  assert.equal(bar()["aria-label"], "5項目中2項目め");
+  button(box, "戻る").handlers.click();
+  pickStep(box, "ツモ");
+  // ツモなら放銃者の画面が無くなる
+  assert.deepEqual(marks(), ["done", "now", "-", "-"]);
+  pickStep(box, "満貫");
+  // 満貫なら符の画面も無くなる
+  assert.deepEqual(marks(), ["done", "done", "now"]);
+});
