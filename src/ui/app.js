@@ -299,6 +299,14 @@ function statsContent() {
       show("player");
     },
     onPickGame: (id) => pickGame(id),
+    onToggleUnsettled: (id) => {
+      // 実際の支払いが済んでいない印（§8.5）。無ければ精算済み
+      const g = storage.findGame(id);
+      if (!g) return;
+      const { unsettled, ...rest } = g;
+      const next = unsettled ? rest : { ...rest, unsettled: true };
+      if (persist(() => storage.updateGame(next))) show("stats");
+    },
     onSettle: (ids) => {
       const roster = storage.loadRoster();
       const nameOf = (id) => (roster.find((p) => p.id === id) || { name: "?" }).name;
@@ -354,15 +362,6 @@ function pickGame(id) {
               if (persist(() => storage.updateGame(next))) show("stats");
             },
           });
-        },
-      },
-      {
-        // 実際の支払いが済んでいない印（§8.5）。無ければ精算済み
-        label: g.unsettled ? "精算済みにする" : "未精算にする",
-        onPick: () => {
-          const { unsettled, ...rest } = g;
-          const next = unsettled ? rest : { ...rest, unsettled: true };
-          if (persist(() => storage.updateGame(next))) show("stats");
         },
       },
       {

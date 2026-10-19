@@ -469,7 +469,12 @@ body.app-landscape .menu-list { display: grid; grid-template-columns: 1fr 1fr; }
 .game-card-head .pick { display: flex; align-items: center; padding: 6px; margin: -6px; }
 .game-card-head .pick input[type=checkbox] { width: 24px; height: 24px; }
 .game-card-head .link-btn { flex: 1; min-width: 0; font-size: 15px; }
-.tag.unsettled { flex: none; background: rgba(224,83,60,0.25); color: #ff9d8c; font-weight: 600; }
+/* 未精算の印。押して付け外しする。付いていないときは目立たせない */
+.settle-toggle {
+  flex: none; min-height: 36px; padding: 0 12px; border-radius: 18px; font-size: 13px; font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.2); background: transparent; color: var(--muted);
+}
+.settle-toggle.on { background: #c23a28; border-color: #c23a28; color: #fff; }  /* --danger だと白の文字が薄い */
 .game-rtable td.rank, .game-rtable th:first-child { width: 3.5em; }
 .game-rtable td.name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 6em; }
 .stats-screen .choice { margin-bottom: 14px; }

@@ -94,13 +94,17 @@ test("対局が1つも無くても登録プレイヤーの一覧を出す", (t) 
   assert.match(list.textContent, /終了した対局がありません/);
 });
 
-test("未精算の印が付いた対局だけ、カードに「未精算」を出す", (t) => {
+test("各カードの「未精算」ボタンで印を付け外しし、付いている対局だけ押した状態にする", (t) => {
   mockDom(t);
-  const f = fixture();
+  const toggled = [];
+  const f = { ...fixture(), onToggleUnsettled: (id) => toggled.push(id) };
   f.games[1] = { ...f.games[1], unsettled: true };
   const root = renderStats(f);
-  const cards = root.findAll((el) => el.matches(".game-card"));
-  const marked = cards.filter((c) => c.find((el) => el.matches(".unsettled")));
-  assert.equal(marked.length, 1);
-  assert.equal(marked[0].find((el) => el.matches(".unsettled")).textContent, "未精算");
+  const toggles = root.findAll((el) => el.matches(".settle-toggle"));
+  assert.equal(toggles.length, 3, "対局ごとに 1 つ");
+  assert.deepEqual(toggles.map((b) => b.textContent), ["未精算", "未精算", "未精算"]);
+  assert.deepEqual(toggles.map((b) => b["aria-pressed"]), ["false", "true", "false"]);
+  toggles[1].handlers.click();
+  toggles[0].handlers.click();
+  assert.deepEqual(toggled, ["g2", "g1"]);
 });

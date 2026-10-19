@@ -22,7 +22,7 @@ const FILTERS = [
 /**
  * props: {
  *   games, roster, carry, onBack, initialTab, onTab(key), initialPc, onPc(n),
- *   onPlayer(playerId), onPickGame(gameId), onSettle(gameIds), initialListState, onListState(state), now
+ *   onPlayer(playerId), onPickGame(gameId), onToggleUnsettled(gameId), onSettle(gameIds), initialListState, onListState(state), now
  * }
  */
 export function renderStats(props) {
@@ -203,7 +203,17 @@ export function renderStats(props) {
         { class: "game-card-head" },
         h("label", { class: "pick" }, check),
         h("button", { type: "button", class: "link-btn", onclick: () => props.onPickGame(g.id) }, `${date} ・ ${n}人 ›`),
-        g.unsettled ? h("span", { class: "tag unsettled" }, "未精算") : null,
+        // 未精算の印（§8.5）。押すたびに付け外しし、付いているときは赤く塗る
+        h(
+          "button",
+          {
+            type: "button",
+            class: `settle-toggle${g.unsettled ? " on" : ""}`,
+            "aria-pressed": g.unsettled ? "true" : "false",
+            onclick: () => props.onToggleUnsettled(g.id),
+          },
+          "未精算",
+        ),
       ),
       h(
         "table",
