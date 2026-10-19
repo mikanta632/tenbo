@@ -1,13 +1,14 @@
 /* 麻雀 点数表示器 — iOS Safari のみを対象 */
 
 :root {
-  --felt: #176b3f;
-  --felt-dark: #0f3d27;
-  --panel: #111;
+  --felt: #0f4a31;
+  --felt-dark: #0a3523;
+  --panel: #0b0e0c;
+  --pts-ink: #f6f8f5;                           /* 対局画面の点数の白（§8.2） */
   --digit: #ffd400;
   --ink: #f4f4f4;
-  --muted: #b9c9bf;
-  --accent: #ffb300;
+  --muted: #a9c2b4;
+  --accent: #ffbf24;
   --danger: #e0533c;
   --ph: 116px;                                  /* パネル群の高さ（ボタン列 + パネル） */
   --adj-w: 52px;                                /* 点数パネルの右に置く点差ボタンの幅 */
@@ -17,7 +18,7 @@
   /* 上下・左右とも同じ長さにする。小さい画面では収まる長さに全員が合わせる */
   --pw: min(340px, calc(100vw - 16px), var(--pw-avail));
   --pw-side: var(--pw);
-  --bar: #0b2a1b;                               /* 下部タブバーの色 */
+  --bar: #081f15;                               /* 下部タブバーの色 */
   /* セーフエリア。env() は端末の向き基準なので、body を回すときは app.js が --sat 等を並べ替えて上書きする */
   --env-sat: env(safe-area-inset-top, 0px);
   --env-sar: env(safe-area-inset-right, 0px);
@@ -94,8 +95,8 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 
 /* 対局タブの席。自分（基準）から見た 右・対面・左 を行で並べる */
 .seat-rows { display: flex; flex-direction: column; gap: 8px; margin: 16px 0 8px; }
-.seat-slot { display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.25); border-radius: 10px; padding: 6px 6px 6px 10px; border: 2px solid transparent; }
-.seat-slot.chiicha { border-color: var(--accent); }
+.seat-slot { display: flex; align-items: center; gap: 10px; min-height: 56px; background: rgba(0,0,0,0.28); border-radius: 14px; padding: 6px 6px 6px 12px; border: 1.5px solid transparent; }
+.seat-slot.chiicha { border-color: var(--accent); background: rgba(255,191,36,0.07); }
 .seat-slot.empty { opacity: 0.6; }
 .seat-slot .seat-pos { flex: 0 0 3em; }
 /* 起家の選択。選ぶと太字になるので、折り返して高さが変わらないよう 1行で省略する */
@@ -111,14 +112,14 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .tab-content .plain-screen { min-height: 0; padding-bottom: 24px; }
 .tab-content .start-screen { padding-bottom: 24px; }
 .tab {
-  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 8px 0 6px; background: none; border: none; color: var(--muted); font-size: 11px;
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 8px 0 6px; background: none; border: none; color: #8fa99b; font-size: 11px;
 }
-.tab.on { color: var(--digit); }
+.tab.on { color: #ffcf33; }
 /* アイコンは currentColor の線画。選択中は後ろに角丸の面を敷く */
-.tab-icon { padding: 3px 14px; border-radius: 13px; line-height: 0; }
+.tab-icon { padding: 3px 16px; border-radius: 14px; line-height: 0; }
 .tab-icon svg { display: block; width: 24px; height: 24px; }
-.tab.on .tab-icon { background: rgba(255, 212, 0, 0.18); }
+.tab.on .tab-icon { background: rgba(255, 191, 36, 0.16); }
 .rule-summary { font-size: 13px; color: var(--muted); margin: 4px 0 8px; line-height: 1.5; }
 .row-note { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .settings-screen .row select:disabled, .settings-screen .row input:disabled { opacity: 0.4; }
@@ -154,7 +155,7 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .ver { font-size: 12px; color: var(--muted); font-weight: normal; }
 .pt-chart, .points-chart { display: block; width: 100%; height: auto; }
 .pts-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.card { background: rgba(0,0,0,0.35); border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+.card { background: rgba(0,0,0,0.3); border-radius: 18px; padding: 14px; margin-bottom: 14px; }
 .row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
 .row > span:first-child { min-width: 5.5em; color: var(--muted); font-size: 14px; }
 .row select, .row input[type="text"] {
@@ -169,11 +170,13 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .table-screen {
   display: flex; flex-direction: column; height: var(--app-h);
   padding-top: var(--sat); padding-bottom: var(--sab);
+  /* 卓の中央を少し明るくして、緑の面に奥行きを出す */
+  background: radial-gradient(ellipse 85% 60% at 50% 54%, #17603f 0%, var(--felt) 58%, var(--felt-dark) 100%);
 }
 /* 対局画面の上下バー。座席の配置図にも top / bottom があるので、この画面の中だけに効かせる */
 .table-screen > .top {
   display: flex; align-items: center; justify-content: center; gap: 16px;
-  padding: 6px 12px; font-size: 26px; font-weight: 600;
+  padding: 6px 12px; font-size: 26px; font-weight: 900; letter-spacing: 2px;
 }
 .honba { font-weight: normal; font-size: 21px; color: var(--muted); }
 .kyotaku { display: flex; align-items: center; gap: 4px; font-size: 20px; color: var(--muted); }
@@ -184,9 +187,10 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .bar-left { display: flex; align-items: center; gap: 10px; }
 .elapsed { font-size: 13px; color: var(--muted); }
 .btn-flat {
-  background: rgba(0,0,0,0.3); border: none; border-radius: 10px; padding: 8px 14px; font-size: 15px; min-height: 40px;
+  background: rgba(4,20,13,0.42); border: 1px solid rgba(255,255,255,0.14); border-radius: 999px;
+  padding: 8px 16px; font-size: 14px; font-weight: 500; min-height: 40px;
 }
-.btn-flat:active { background: rgba(0,0,0,0.5); }
+.btn-flat:active { background: rgba(4,20,13,0.7); }
 .table-screen > .bottom { display: flex; justify-content: space-between; align-items: center; padding: 4px 10px 6px; }
 .over-note { font-size: 14px; color: var(--accent); font-weight: 600; }
 
@@ -221,18 +225,18 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 /* ボタン行の幅は点数パネルにそろえる（左の起家の印のぶんだけ空ける。右は焼き鳥の印が点差ボタンの上に同じ幅で乗る） */
 .pbtns { display: flex; gap: 8px; height: 44px; flex: none; margin: 0 0 0 calc(var(--chiicha-w) + 8px); }
 .ibtn {
-  flex: 1 1 0; min-width: 0; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25);
-  background: rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center;
+  flex: 1 1 0; min-width: 0; border-radius: 12px; border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(4,20,13,0.42); display: flex; align-items: center; justify-content: center;
 }
 .ibtn svg { width: 60px; height: 22px; }
 .ibtn.on { background: var(--accent); border-color: var(--accent); }
-.ibtn.text { font-size: 18px; font-weight: 700; letter-spacing: 2px; }
+.ibtn.text { font-size: 17px; font-weight: 700; letter-spacing: 3px; }
 .ibtn.text.on { color: #111; }
 .ibtn:active { transform: scale(0.96); }
 /* 焼き鳥の印。点差ボタンの真上に同じ幅で置き、リーチ・副露の幅は変えない。和了したら透明にして場所だけ残す */
 .bird {
-  flex: 0 0 var(--adj-w); border-radius: 10px; border: 1px solid rgba(255,179,0,0.5);
-  background: rgba(0,0,0,0.25); color: var(--accent); display: flex; align-items: center; justify-content: center;
+  flex: 0 0 var(--adj-w); border-radius: 12px; border: 1px dashed rgba(255,191,36,0.55);
+  background: none; color: var(--accent); display: flex; align-items: center; justify-content: center;
 }
 .bird svg { width: 32px; height: 24px; }
 .bird.off { visibility: hidden; }
@@ -240,42 +244,50 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 /* 点数パネルと、その横の点差ボタン */
 .prow-outer { display: flex; gap: 8px; flex: 1; min-height: 0; }
 .panel {
-  position: relative; flex: 1; min-width: 0; background: var(--panel); border-radius: 12px; padding: 5px 10px;
+  position: relative; flex: 1; min-width: 0; background: var(--panel); border-radius: 14px; padding: 5px 12px 5px 10px;
   display: flex; flex-direction: column; justify-content: space-between;
-  border: 2px solid transparent; box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  border: 2px solid #2a332e; box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 6px 16px rgba(0,0,0,0.45);
 }
-.panel.dealer { border-color: var(--accent); box-shadow: inset 0 0 0 3px var(--accent), 0 2px 8px rgba(0,0,0,0.4); }
-.panel:active { background: #1c1c1c; }
-.pmeta { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #ddd; white-space: nowrap; overflow: hidden; }
-.wind { font-weight: 700; font-size: 15px; color: var(--ink); }
-.panel.dealer .wind { color: var(--accent); }
+.panel.dealer { border-color: var(--accent); box-shadow: inset 0 0 0 3px var(--accent), 0 0 0 4px rgba(255,191,36,0.14), 0 6px 16px rgba(0,0,0,0.45); }
+.panel:active { background: #161b18; }
+.pmeta { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #c9d3cd; white-space: nowrap; overflow: hidden; }
+/* 風は丸の中に入れる。今の親は金で塗る */
+.wind {
+  flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid #6f7d75;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 900; font-size: 12px; color: var(--ink);
+}
+.panel.dealer .wind { background: var(--accent); border-color: var(--accent); color: #1d1400; }
 /* 起家の印。点差ボタンと同じ形でパネルの左に置く。起家でない席は透明な場所取り。
    対局タブの座席スロット（.seat-slot.chiicha）と当たらないよう別の名前にする */
 .chiicha-mark {
   flex: 0 0 var(--chiicha-w); align-self: stretch;
   display: flex; align-items: center; justify-content: center;
-  background: var(--danger); color: #fff; border-radius: 8px;
-  writing-mode: vertical-rl; font-size: 12px; font-weight: 700; letter-spacing: 1px;
+  background: #c23a28; color: #fff; border-radius: 10px;
+  writing-mode: vertical-rl; font-size: 12px; font-weight: 700; letter-spacing: 2px;
 }
 .chiicha-mark.off { background: none; }
 .pname { overflow: hidden; text-overflow: ellipsis; }
-.flag { font-size: 11px; background: var(--danger); color: #fff; border-radius: 4px; padding: 1px 5px; }
+.flag { flex: none; font-size: 10px; font-weight: 700; letter-spacing: 1px; background: #d8432f; color: #fff; border-radius: 999px; padding: 2px 7px; }
 .prow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.pts { font-size: 34px; font-weight: 700; color: var(--digit); font-variant-numeric: tabular-nums; letter-spacing: 1px; line-height: 1; }
+.pts { font-size: 34px; font-weight: 900; color: var(--pts-ink); font-variant-numeric: tabular-nums; letter-spacing: 1px; line-height: 1; text-shadow: 0 0 14px rgba(255,255,255,0.22); }
 .pts.neg { color: #ff6b57; }
 .adj {
   flex: 0 0 var(--adj-w); align-self: stretch;
-  background: #2a2a2a; border: 1px solid #555; border-radius: 10px; color: #ddd;
+  background: #151b18; border: 1px solid #33403a; border-radius: 12px; color: #c9d3cd;
   display: flex; align-items: center; justify-content: center;
 }
 .adj svg { width: 26px; height: 26px; }
 
 .btn-special {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  width: 120px; height: 84px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.3);
-  background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;
-  font-size: 20px; font-weight: 600; letter-spacing: 2px;
+  width: 120px; height: 84px; border-radius: 18px; border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(4,20,13,0.5); box-shadow: inset 0 0 0 5px rgba(255,255,255,0.03);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  font-size: 19px; font-weight: 700; letter-spacing: 6px; padding-left: 6px;
 }
+/* 終局ボタンの下の金の短い線 */
+.btn-special::after { content: ""; width: 28px; height: 2px; border-radius: 1px; background: var(--accent); margin-right: 6px; }
 
 /* ---- シート ---- */
 .overlay {
@@ -284,11 +296,13 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 }
 .overlay-dialog { align-items: center; padding: 20px; }
 .sheet, .dialog {
-  background: #15221b; color: var(--ink); width: 100%; max-width: 520px;
-  border-radius: 18px 18px 0 0; max-height: calc(var(--app-h) - 40px);
+  background: #121c17; color: var(--ink); width: 100%; max-width: 520px;
+  border-radius: 24px 24px 0 0; border-top: 1px solid rgba(255,255,255,0.08); box-shadow: 0 -12px 40px rgba(0,0,0,0.5); max-height: calc(var(--app-h) - 40px);
   display: flex; flex-direction: column; padding-bottom: var(--sab);
 }
-.dialog { border-radius: 18px; }
+.dialog { border-radius: 20px; border: 1px solid rgba(255,255,255,0.08); }
+/* シートのつまみ */
+.sheet::before { content: ""; flex: none; align-self: center; width: 40px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.22); margin-top: 8px; }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 4px; }
 .sheet-title { font-size: 17px; font-weight: 600; }
 .sheet-close { background: none; border: none; font-size: 15px; color: var(--muted); padding: 8px; }
@@ -306,8 +320,8 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .choice.grid7 { display: grid; grid-template-columns: repeat(7, 1fr); }
 .choice.grid6 { display: grid; grid-template-columns: repeat(6, 1fr); }
 .chip {
-  min-height: 44px; padding: 6px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25);
-  background: rgba(255,255,255,0.06); font-size: 16px; flex: 1 0 auto;
+  min-height: 44px; padding: 6px 10px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.05); font-size: 16px; flex: 1 0 auto;
 }
 .chip.on { background: var(--accent); color: #111; border-color: var(--accent); font-weight: 700; }
 .chip.dim { opacity: 0.35; }
@@ -327,11 +341,11 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .sheet-actions { display: flex; gap: 10px; margin-top: 14px; }
 .sheet-actions.two > * { flex: 1; }
 .btn-primary {
-  flex: 1; min-height: 52px; border-radius: 12px; border: none;
-  background: var(--accent); color: #111; font-size: 18px; font-weight: 700;
+  flex: 1; min-height: 52px; border-radius: 16px; border: none;
+  background: var(--accent); color: #1d1400; font-size: 18px; font-weight: 900; letter-spacing: 2px;
 }
 .btn-secondary {
-  min-height: 52px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.3);
+  min-height: 52px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.2);
   background: transparent; font-size: 16px; padding: 0 16px;
 }
 /* 和了入力: 高さ固定でがたつかせない */
@@ -358,7 +372,11 @@ body.tabs-screen:not(.rotated) { overflow: hidden; height: var(--app-h); }
 .wz-crumbs { flex: 1; min-width: 0; font-size: 15px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wz-title { font-size: 14px; color: var(--muted); margin: 4px 0 6px; }
 .wz-grid { gap: 6px; }
-.wz-grid .chip { min-height: 48px; font-size: 18px; }
+.wz-grid .chip { min-height: 48px; font-size: 18px; font-weight: 700; }
+/* 翻の選択肢: 満貫以上は薄い金、役満は金の枠で 1 行に（縦向きのとき） */
+.wz-han .chip:nth-child(n+5):not(.on) { color: #ffe3a0; border-color: rgba(255,191,36,0.3); background: rgba(255,191,36,0.06); }
+.wz-han .chip:last-child { grid-column: 1 / -1; letter-spacing: 4px; }
+.wz-han .chip:last-child:not(.on) { color: #ffcf33; border: 1.5px solid var(--accent); background: rgba(255,191,36,0.1); }
 .wz-grid.wz-big .chip { min-height: 64px; font-size: 22px; font-weight: 700; }
 .wz-han { display: grid; grid-template-columns: repeat(3, 1fr); }
 .wz-fu { display: grid; grid-template-columns: repeat(3, 1fr); }
@@ -396,6 +414,7 @@ body.app-landscape .wz-grid .chip { white-space: nowrap; }
 body.app-landscape .wz-grid .chip { min-height: 44px; }
 body.app-landscape .wz-grid.wz-big .chip { min-height: 56px; }
 body.app-landscape .wz-han { grid-template-columns: repeat(5, 1fr); }
+body.app-landscape .wz-han .chip:last-child { grid-column: auto; }
 body.app-landscape .wz-fu { grid-template-columns: repeat(6, 1fr); }
 body.app-landscape .wz-grid.grid1 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 body.app-landscape .wz-grid.grid3 { grid-template-columns: repeat(6, 1fr); }
@@ -455,6 +474,8 @@ body.app-landscape .menu-list { display: grid; grid-template-columns: 1fr 1fr; }
 .plain-screen { min-height: var(--app-h); padding: var(--sat) 12px calc(20px + var(--sab)); max-width: 520px; margin: 0 auto; }
 .plain-top { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
 .plain-title { flex: 1; font-size: 17px; font-weight: 600; }
+/* タブ（対局・設定・戦績・その他）の見出しは大きく。結果やログの見出しは日時が付いて長いので今のまま */
+.tab-content .plain-title { font-size: 26px; font-weight: 900; letter-spacing: 2px; }
 .rtable { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .rtable th, .rtable td { padding: 6px 4px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.12); font-size: 14px; }
 .rtable th { color: var(--muted); font-weight: normal; font-size: 12px; }
