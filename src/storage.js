@@ -274,9 +274,9 @@ export function createStorage(ls = globalThis.localStorage, now = () => new Date
     importAll(data) {
       writeAll(prepareImport(data));
     },
-    /** 今のデータに取り込む（§8.7 マージ）。戻り値は mergeImport の summary */
-    mergeAll(data) {
-      const { merged, summary } = mergeImport(this.exportAll(), prepareImport(data));
+    /** 今のデータに取り込む（§8.7 マージ）。choices は mergeImport と同じ。戻り値は mergeImport の summary */
+    mergeAll(data, choices = {}) {
+      const { merged, summary } = mergeImport(this.exportAll(), prepareImport(data), choices);
       writeAll(merged);
       return summary;
     },
@@ -309,26 +309,107 @@ export function createStorage(ls = globalThis.localStorage, now = () => new Date
 }
 
 /**
+ * 名前による自動の寄せ先（§8.7）。今のデータに同じ ID が無い取り込み側の人について、取り込み ID → 既存 ID を返す。
+ * 名前（前後の空白を除く）が同じ既存の人に寄せる。ただし、その既存 ID が取り込み側にも居る場合と、
+ * すでに誰かを寄せた場合は寄せない（1 人の既存 ID に寄せるのは 1 人だけ。1 つの対局に同じ人が 2 席出ることも、
+ * 次のマージで寄せ方が変わることも無くなる）。
+ */
+function nameTargets(existing, incoming) {
+  const byId = new Set(existing.roster.map((p) => p.id));
+  const byName = new Map();
+  for (const p of existing.roster) if (!byName.has(p.name.trim())) byName.set(p.name.trim(), p);
+  const incomingIds = new Set(incoming.roster.map((p) => p.id));
+  const map = new Map();
+  const targets = new Set();
+  for (const p of incoming.roster) {
+    if (byId.has(p.id)) continue;
+    const same = byName.get(p.name.trim());
+    if (same && !incomingIds.has(same.id) && !targets.has(same.id)) {
+      map.set(p.id, same.id);
+      targets.add(same.id);
+    }
+  }
+  return map;
+}
+
+/**
+ * マージで対応を決める取り込み側の人（§8.7）。今のデータに同じ ID が無い人だけを、取り込み側の名簿の順に返す。
+ * [{ id, name, games, target }]。games はその人が出ている取り込み側の対局の数。
+ * target は最初の選択: 名前による自動の寄せ先（nameTargets）の既存 ID、無ければ null（新しく追加）。
+ */
+export function importCandidates(existing, incoming) {
+  const byId = new Set(existing.roster.map((p) => p.id));
+  const byName = nameTargets(existing, incoming);
+  return incoming.roster
+    .filter((p) => !byId.has(p.id))
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      games: incoming.games.filter((g) => g.seats.includes(p.id)).length,
+      target: byName.get(p.id) ?? null,
+    }));
+}
+
+/**
+ * 対応の選び方の誤り（§8.7）。無ければ空の配列。choices は mergeImport と同じ形。
+ * - 新しく足す人の名前が空、今のデータの誰かと同じ、新しく足す別の人と同じ
+ * - 今回足す対局で、同じ人が 2 席に出ることになる（同じ対局の 2 人を同じ人に揃えた）
+ */
+export function checkImportChoices(existing, incoming, choices) {
+  const errors = [];
+  const existingNames = new Set(existing.roster.map((p) => p.name.trim()));
+  const nameOf = new Map(incoming.roster.map((p) => [p.id, p.name]));
+  const byId = new Set(existing.roster.map((p) => p.id));
+  const newNames = new Map();
+  for (const p of incoming.roster) {
+    if (byId.has(p.id)) continue;
+    const c = choices[p.id];
+    if (!c || c.to) continue;
+    const name = (c.name ?? p.name).trim();
+    if (!name) errors.push(`${p.name} の新しい名前を入れてください`);
+    else if (existingNames.has(name)) errors.push(`「${name}」は今のデータにいます。別の名前にしてください`);
+    else if (newNames.has(name)) errors.push(`「${name}」が 2 人になります。別の名前にしてください`);
+    newNames.set(name, p.id);
+  }
+  const resolve = (id) => (byId.has(id) ? id : (choices[id] && choices[id].to) || id);
+  const existingGameIds = new Set(existing.games.map((g) => g.id));
+  if (existing.current) existingGameIds.add(existing.current.id);
+  const pairs = new Set();
+  for (const g of incoming.games) {
+    if (existingGameIds.has(g.id)) continue;
+    const seen = new Map();
+    for (const id of g.seats) {
+      const to = resolve(id);
+      if (seen.has(to)) {
+        const pair = `${nameOf.get(seen.get(to)) ?? seen.get(to)} と ${nameOf.get(id) ?? id}`;
+        if (!pairs.has(pair)) {
+          pairs.add(pair);
+          errors.push(`${pair} は同じ対局に出ているので、同じ人には揃えられません`);
+        }
+      } else seen.set(to, id);
+    }
+  }
+  return errors;
+}
+
+/**
  * マージ（§8.7）。existing に incoming を足した新しい全データを返す。どちらも変更しない。
  * - 対局は ID で突き合わせ、無いものを追加。同じ ID は既存を残す
- * - プレイヤーは ID が同じなら同一人物。ID が違っても名前が同じなら同一人物とみなして既存の ID に寄せ、
- *   取り込む対局の席もその ID に書き換える（別の端末で同じ名前を登録した場合に成績を分裂させない）。
- *   1 人の既存 ID に寄せるのは 1 人だけ。取り込み側に同じ名前が複数いれば、最初の 1 人だけを寄せ、残りは別人として足す
+ * - プレイヤーは ID が同じなら同一人物。今のデータに ID が無い人は choices に従い、
+ *   既存の人に揃えるか（{ to: 既存 ID }）、新しい人として足す（{ name }。名前を変えて足せる）。
+ *   取り込む対局の席も揃えた先の ID に書き換える。
+ *   choices に無い人は名前による自動の寄せ先（nameTargets）に寄せ、無ければ新しい人として足す
  * - 進行中の対局は既存を保持する
  * - 繰越（carry）は既存に無い（playerId, playerCount）だけ足す
  * 戻り値 { merged, summary: { games, skippedGames, players, mergedPlayers, carry } }
  */
-export function mergeImport(existing, incoming) {
+export function mergeImport(existing, incoming, choices = {}) {
   const roster = existing.roster.map((p) => ({ ...p }));
   const byId = new Map(roster.map((p) => [p.id, p]));
-  const byName = new Map();
-  for (const p of roster) if (!byName.has(p.name.trim())) byName.set(p.name.trim(), p);
-  const incomingIds = new Set(incoming.roster.map((p) => p.id));
+  const auto = nameTargets(existing, incoming);
 
-  // 取り込む ID → 既存の ID。名前で寄せるのは、その既存 ID が取り込み側に無く、まだ誰も寄せていない場合だけ。
-  // 寄せ先を 1 人に 1 人とすることで、1 つの対局に同じ人が 2 席出ることも、次のマージで寄せ方が変わることも無くなる
+  // 取り込む ID → 既存の ID
   const map = new Map();
-  const targets = new Set();
   let mergedPlayers = 0;
   const unmapped = [];
   for (const p of incoming.roster) {
@@ -336,12 +417,12 @@ export function mergeImport(existing, incoming) {
       map.set(p.id, p.id);
       continue;
     }
-    const same = byName.get(p.name.trim());
-    if (same && !incomingIds.has(same.id) && !targets.has(same.id)) {
-      map.set(p.id, same.id);
-      targets.add(same.id);
+    const c = choices[p.id];
+    const to = c ? (c.to && byId.has(c.to) ? c.to : null) : (auto.get(p.id) ?? null);
+    if (to !== null) {
+      map.set(p.id, to);
       mergedPlayers++;
-    } else unmapped.push(p);
+    } else unmapped.push(c && c.name !== undefined ? { ...p, name: c.name.trim() } : p);
   }
   const added = new Map(); // 追加するプレイヤー（ID → Player）
   const addPlayer = (p) => {

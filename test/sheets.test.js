@@ -414,3 +414,38 @@ test("和了入力: 進み具合のバーを、今の入力で通る画面の数
   // 満貫なら符の画面も無くなる
   assert.deepEqual(marks(), ["done", "done", "now"]);
 });
+
+import { openImportMapping } from "../src/ui/sheets.js";
+
+test("マージの名前の対応: 揃える先を選び、名前がかぶる人だけ名前の欄を出し、誤りがあれば確定できない", (t) => {
+  mockDom(t);
+  const roster = [{ id: "a", name: "あきら" }, { id: "c", name: "C" }];
+  const candidates = [
+    { id: "x1", name: "アキラ", games: 2, target: "a" },
+    { id: "x2", name: "C", games: 1, target: null },
+  ];
+  let confirmed = null;
+  // 新しく足す人の名前が今のデータとかぶっていれば誤り
+  const check = (choices) => Object.values(choices).filter((c) => !c.to && c.name.trim() === "C").map(() => "かぶり");
+  const { box } = openImportMapping({ candidates, roster, check, onConfirm: (c) => (confirmed = c) });
+  const rows = box.findAll((el) => el.matches(".map-row"));
+  const isHidden = (el) => el.hidden === true || el.hidden === "";
+  const nameRowOf = (row) => row.find((el) => el.matches(".map-name"));
+  const selectOf = (row) => row.find((el) => el.tag === "select");
+  const confirm = button(box, "マージする");
+
+  assert.equal(rows.length, 2);
+  assert.ok(isHidden(nameRowOf(rows[0])), "揃える人には名前の欄を出さない");
+  assert.ok(!isHidden(nameRowOf(rows[1])), "今のデータとかぶる名前で足す人には出す");
+  assert.equal(confirm.disabled, true);
+
+  // 名前を変えれば確定できる
+  nameRowOf(rows[1]).find((el) => el.tag === "input").handlers.input({ target: { value: "シー" } });
+  assert.equal(confirm.disabled, false);
+  // 揃える先を変えると名前の欄を閉じる
+  selectOf(rows[1]).handlers.change({ target: { value: "c" } });
+  assert.ok(isHidden(nameRowOf(rows[1])));
+  selectOf(rows[0]).handlers.change({ target: { value: "" } });
+  confirm.handlers.click();
+  assert.deepEqual(confirmed, { x1: { to: null, name: "アキラ" }, x2: { to: "c" } });
+});

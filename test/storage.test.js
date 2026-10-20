@@ -2,7 +2,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { createStorage, memoryStorage, migrate, prepareImport, mergeImport, SCHEMA_VERSION, KEYS } from "../src/storage.js";
+import { createStorage, memoryStorage, migrate, prepareImport, mergeImport, importCandidates, checkImportChoices, SCHEMA_VERSION, KEYS } from "../src/storage.js";
 import { makeRule } from "../src/rules.js";
 import { appendEvent } from "../src/edit.js";
 import { computeSettlement } from "../src/settlement.js";
@@ -403,5 +403,56 @@ describe("マージ（§8.7）", () => {
     assert.equal(summary.games, 1);
     assert.equal(st.loadGames().length, 2);
     assert.throws(() => st.mergeAll({ meta: { schemaVersion: 999 } }), /schemaVersion/);
+  });
+});
+
+describe("マージの名前の対応（§8.7）", () => {
+  const game = (id, seats, startedAt) => ({ ...backup().games[0], id, seats, startedAt });
+  const player = (id, name) => ({ id, name, createdAt: "2026-09-01T00:00:00Z" });
+  const dump = (roster, games, extra = {}) => ({ meta: { schemaVersion: SCHEMA_VERSION }, roster, current: null, games, carry: [], ...extra });
+  const existing = dump([player("a", "あきら"), player("b", "B"), player("c", "C"), player("d", "D")], [game("g_old", ["a", "b", "c", "d"], "2026-09-01T00:00:00Z")]);
+
+  test("候補は今のデータに ID が無い人だけ。最初の選択は、同じ名前の人、無ければ新しく追加", () => {
+    const incoming = dump(
+      [player("b", "B"), player("x1", "アキラ"), player("x2", "C"), player("x3", "新人")],
+      [game("g_old", ["x1", "b", "c", "d"], "2026-09-01T00:00:00Z"), game("g_new", ["x1", "b", "x2", "x3"], "2026-09-02T00:00:00Z")],
+    );
+    assert.deepEqual(importCandidates(existing, incoming), [
+      { id: "x1", name: "アキラ", games: 2, target: null }, // 名前が違えば、前のマージで揃えていても新しく追加から
+      { id: "x2", name: "C", games: 1, target: "c" },
+      { id: "x3", name: "新人", games: 1, target: null },
+    ]);
+  });
+
+  test("選んだ対応で寄せ、名前を変えて足せる", () => {
+    const incoming = dump([player("x1", "アキラ"), player("x2", "C"), player("x3", "B"), player("x4", "D")], [game("g_new", ["x1", "x2", "x3", "x4"], "2026-09-02T00:00:00Z")]);
+    const choices = { x1: { to: "a" }, x2: { to: null, name: "C" }, x3: { to: null, name: "B2" }, x4: { to: "d" } };
+    assert.deepEqual(checkImportChoices(existing, incoming, choices), ["「C」は今のデータにいます。別の名前にしてください"]);
+    choices.x2 = { to: null, name: " シー " };
+    assert.deepEqual(checkImportChoices(existing, incoming, choices), []);
+    const { merged, summary } = mergeImport(existing, incoming, choices);
+    assert.deepEqual(merged.games.find((g) => g.id === "g_new").seats, ["a", "x2", "x3", "d"]);
+    assert.deepEqual(merged.roster.slice(4).map((p) => [p.id, p.name]), [["x2", "シー"], ["x3", "B2"]]);
+    assert.equal(summary.mergedPlayers, 2);
+    assert.equal(summary.players, 2);
+  });
+
+  test("同じ対局の 2 人を同じ人に揃えると誤り。別々の対局なら揃えてよい。新しい名前の空と重複も誤り", () => {
+    const incoming = dump(
+      [player("x1", "アキラ"), player("x2", "あきら2"), player("x3", "E"), player("x4", "F")],
+      [game("g_1", ["x1", "b", "c", "x3"], "2026-09-02T00:00:00Z"), game("g_2", ["x2", "b", "c", "x4"], "2026-09-03T00:00:00Z")],
+    );
+    const ok = { x1: { to: "a" }, x2: { to: "a" }, x3: { to: null, name: "E" }, x4: { to: null, name: "F" } };
+    assert.deepEqual(checkImportChoices(existing, incoming, ok), []);
+    const together = { ...ok, x3: { to: "a" } };
+    assert.deepEqual(checkImportChoices(existing, incoming, together), ["アキラ と E は同じ対局に出ているので、同じ人には揃えられません"]);
+    const names = { ...ok, x3: { to: null, name: " " }, x4: { to: null, name: "E" } };
+    assert.deepEqual(checkImportChoices(existing, incoming, { ...names, x3: { to: null, name: "E" } }), ["「E」が 2 人になります。別の名前にしてください"]);
+    assert.deepEqual(checkImportChoices(existing, incoming, names), ["E の新しい名前を入れてください"]);
+  });
+
+  test("今のデータにすでにある対局は、揃え方の誤りに数えない", () => {
+    const incoming = dump([player("x1", "アキラ"), player("x2", "あきら2")], [game("g_old", ["x1", "x2", "c", "d"], "2026-09-01T00:00:00Z")]);
+    assert.deepEqual(checkImportChoices(existing, incoming, { x1: { to: "a" }, x2: { to: "a" } }), []);
   });
 });

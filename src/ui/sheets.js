@@ -1064,6 +1064,80 @@ export function openRateSheet({ rate, onConfirm }) {
   return openSheet({ title: "レートを変更", body });
 }
 
+/**
+ * マージの名前の対応（§8.7）。取り込むデータの人ごとに、今のデータの誰に揃えるか、新しい人として足すかを選ぶ。
+ * candidates: importCandidates の戻り値。roster: 今のデータの名簿。
+ * check(choices) は誤りの文の配列を返す（空なら確定できる）。onConfirm(choices)。
+ * 新しく足す人の名前が今のデータや他の候補とかぶるときだけ、その行に名前の入力欄を出す。
+ */
+export function openImportMapping({ candidates, roster, check, onConfirm }) {
+  const body = h("div", { class: "sheet-body" });
+  const choices = Object.fromEntries(candidates.map((c) => [c.id, c.target ? { to: c.target } : { to: null, name: c.name }]));
+  const existingNames = new Set(roster.map((p) => p.name.trim()));
+  const errorsBox = h("div", { class: "hint error map-errors", "aria-live": "polite" });
+  const confirmBtn = h(
+    "button",
+    {
+      type: "button",
+      class: "btn-primary",
+      onclick: () => {
+        if (check(choices).length === 0) onConfirm(choices);
+      },
+    },
+    "マージする",
+  );
+  const refresh = () => {
+    const errors = check(choices);
+    errorsBox.textContent = errors.join("\n");
+    confirmBtn.disabled = errors.length > 0;
+  };
+
+  const row = (c) => {
+    const collides = existingNames.has(c.name.trim()) || candidates.some((o) => o !== c && o.name.trim() === c.name.trim());
+    const nameInput = h("input", {
+      type: "text",
+      value: c.name,
+      autocomplete: "off",
+      "aria-label": `${c.name} を足すときの名前`,
+      oninput: (e) => {
+        choices[c.id] = { to: null, name: e.target.value };
+        refresh();
+      },
+    });
+    const nameRow = h("div", { class: "map-name", hidden: !!c.target || !collides }, nameInput);
+    const select = h(
+      "select",
+      {
+        "aria-label": `${c.name} を揃える先`,
+        onchange: (e) => {
+          const to = e.target.value;
+          choices[c.id] = to ? { to } : { to: null, name: nameInput.value };
+          nameRow.hidden = !!to || !collides;
+          refresh();
+        },
+      },
+      h("option", { value: "", selected: !c.target }, "新しく追加"),
+      roster.map((p) => h("option", { value: p.id, selected: c.target === p.id }, `${p.name} に揃える`)),
+    );
+    return h(
+      "div",
+      { class: "map-row" },
+      h("div", { class: "map-head" }, h("b", null, c.name), h("span", { class: "map-sub" }, `対局 ${c.games}件`)),
+      select,
+      nameRow,
+    );
+  };
+
+  append(body,
+    h("div", { class: "label" }, "取り込むデータの人を、今のデータの誰に揃えるか選んでください"),
+    candidates.map(row),
+    errorsBox,
+    h("div", { class: "sheet-actions" }, confirmBtn),
+  );
+  refresh();
+  return openSheet({ title: "名前の対応", body });
+}
+
 /** 確認ダイアログ */
 export function openConfirm({ title, message, okLabel = "OK", onOk }) {
   const body = h("div", { class: "sheet-body" });

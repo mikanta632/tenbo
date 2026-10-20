@@ -3,7 +3,7 @@
 //
 // 画面: 初期画面はタブ（対局・設定・戦績・その他）。対局中・ログ・結果・個人ページはタブ無しの全画面。
 
-import { createStorage, prepareImport } from "../storage.js";
+import { createStorage, prepareImport, importCandidates, checkImportChoices } from "../storage.js";
 import { validateRule, normalizeRule, presetFor } from "../rules.js";
 import { reduce, isEndOfKyoku, agariYameAvailableAfter, dealerOf, kyokuGroups } from "../reduce.js";
 import { appendEvent, removeEvent, replaceEvent, insertEvent, insertIndexOf, deleteKyoku, withEvents } from "../edit.js";
@@ -37,6 +37,7 @@ import {
   openActionSheet,
   openRateSheet,
   openCombinedSettlement,
+  openImportMapping,
 } from "./sheets.js";
 import { fmtElapsed, kyokuName, gameDateTime, bodyRotation, landscapeTarget, isLandscapeGame, backupStatus } from "./format.js";
 import { loadLastExport, recordExport, ensurePresets, presetsFor, selectedPreset, selectedPresetId, selectPreset, updatePreset, addPreset, deletePreset } from "./prefs.js";
@@ -935,6 +936,25 @@ async function exportJson() {
   exportDone();
 }
 
+/** マージして結果を知らせる（§8.7）。choices は名前の対応 */
+function mergeImported(data, choices) {
+  let summary;
+  try {
+    summary = storage.mergeAll(data, choices);
+  } catch (error) {
+    alert("インポートに失敗しました: " + error.message);
+    return;
+  }
+  const parts = [`対局 ${summary.games}件を追加`];
+  if (summary.skippedGames) parts.push(`同じ対局 ${summary.skippedGames}件は飛ばした`);
+  if (summary.players) parts.push(`プレイヤー ${summary.players}人を追加`);
+  if (summary.mergedPlayers) parts.push(`${summary.mergedPlayers}人を今のデータの人に揃えた`);
+  if (summary.carry) parts.push(`繰越 ${summary.carry}件を追加`);
+  game = storage.loadCurrent();
+  show(game ? "table" : "stats");
+  alert("マージしました。" + parts.join("、") + "。");
+}
+
 /** JSON を読み込んで全データを置き換える。確認してから反映する。 */
 function importJson(file) {
   if (!file) return;
@@ -962,21 +982,22 @@ function importJson(file) {
           label: "マージ（今のデータに追加）",
           sub: `${head}。無い対局と人を足す。進行中の対局は今のまま`,
           onPick: () => {
-            let summary;
-            try {
-              summary = storage.mergeAll(data);
-            } catch (error) {
-              alert("インポートに失敗しました: " + error.message);
+            // 今のデータに ID が無い人がいれば、誰に揃えるかを選んでからマージする（§8.7）
+            const existing = storage.exportAll();
+            const candidates = importCandidates(existing, data);
+            if (candidates.length === 0) {
+              mergeImported(data, {});
               return;
             }
-            const parts = [`対局 ${summary.games}件を追加`];
-            if (summary.skippedGames) parts.push(`同じ対局 ${summary.skippedGames}件は飛ばした`);
-            if (summary.players) parts.push(`プレイヤー ${summary.players}人を追加`);
-            if (summary.mergedPlayers) parts.push(`同名 ${summary.mergedPlayers}人は同一人物として寄せた`);
-            if (summary.carry) parts.push(`繰越 ${summary.carry}件を追加`);
-            game = storage.loadCurrent();
-            show(game ? "table" : "stats");
-            alert("マージしました。" + parts.join("、") + "。");
+            openSheetHandle = openImportMapping({
+              candidates,
+              roster: existing.roster,
+              check: (choices) => checkImportChoices(existing, data, choices),
+              onConfirm: (choices) => {
+                closeSheet();
+                mergeImported(data, choices);
+              },
+            });
           },
         },
         {

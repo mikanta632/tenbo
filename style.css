@@ -495,6 +495,17 @@ body.app-landscape .menu-list { display: grid; grid-template-columns: 1fr 1fr; }
 .game-card-head .pick { display: flex; align-items: center; padding: 6px; margin: -6px; }
 .game-card-head .pick input[type=checkbox] { width: 24px; height: 24px; }
 .game-card-head .link-btn { flex: 1; min-width: 0; font-size: 15px; }
+/* マージの名前の対応（§8.7）。1 人 1 行で、揃える先を選ぶ */
+.map-row { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.map-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 16px; }
+.map-sub { font-size: 12px; color: var(--muted); }
+.map-row select, .map-row input[type=text] {
+  width: 100%; font: inherit; font-size: 16px; padding: 10px; border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.25); background: #0b2a1b; color: var(--ink);
+}
+.map-name[hidden] { display: none; }
+.map-errors { white-space: pre-line; }
+.map-errors:empty { display: none; }
 /* 未精算の印。押して付け外しする。付いていないときは目立たせない */
 .settle-toggle {
   flex: none; min-height: 36px; padding: 0 12px; border-radius: 18px; font-size: 13px; font-weight: 600;
