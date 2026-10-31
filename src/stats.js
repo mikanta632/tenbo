@@ -126,6 +126,7 @@ export function gameStats(game) {
  *
  * carry は旧アプリからの繰越（§8.5）。対局単位の記録を持たないので、集計値のまま足し込む。
  * 呼び出し側で人数（playerCount）を games と揃えておくこと。
+ * 未精算の印（unsettled）が付いた対局の円は、まだ払っていないので yenSum に入れない（pt などは入れる）。
  */
 export function aggregate(games, carry = []) {
   const map = new Map();
@@ -139,7 +140,7 @@ export function aggregate(games, carry = []) {
       a.rankDist[s.rank]++;
       a.pointsSum += s.points;
       a.ptSum += s.pt;
-      a.yenSum += s.yen;
+      if (!game.unsettled) a.yenSum += s.yen;
       a.maxPoints = a.maxPoints === null ? s.points : Math.max(a.maxPoints, s.points);
       for (const key of COUNTERS) a[key] += s[key];
     }
@@ -198,6 +199,39 @@ export function combineGames(games) {
   return { players, transfers: settleTransfers(players.map((p) => p.yen)) };
 }
 
+/** まとまりの区切り（§8.5）。前の対局の終わりから次の開始までがこれ以内なら同じまとまり */
+export const SESSION_GAP_MS = 3 * 60 * 60 * 1000;
+
+/**
+ * 連続して行われた対局のまとまり（§8.5）。
+ * 開始（無ければ終局）の順に並べ、それまでの終局（無ければ開始）の最も遅いものから
+ * 次の開始までが gap 以内なら同じまとまりにする。日時の無い対局は 1つでまとまりにする。
+ * 返り値はまとまりの配列で、まとまりも中の対局も新しい順。
+ */
+export function sessionGroups(games, gap = SESSION_GAP_MS) {
+  const time = (iso) => (iso ? Date.parse(iso) : NaN);
+  const items = [...games]
+    .reverse() // 保存は新しい順。同時刻の対局は最後に裏返したとき保存の順に戻るようにする
+    .map((game) => {
+      const start = time(game.startedAt || game.endedAt);
+      const end = time(game.endedAt || game.startedAt);
+      return { game, start, end };
+    })
+    .sort((a, b) => Number.isNaN(a.start) - Number.isNaN(b.start) || a.start - b.start || 0);
+  const groups = [];
+  let last = null; // 今のまとまりの最も遅い終わり
+  for (const it of items) {
+    if (last !== null && !Number.isNaN(it.start) && it.start - last <= gap) {
+      groups.at(-1).push(it.game);
+      last = Math.max(last, it.end);
+    } else {
+      groups.push([it.game]);
+      last = Number.isNaN(it.start) ? null : it.end;
+    }
+  }
+  return groups.reverse().map((g) => g.reverse());
+}
+
 /** 合算値から率と平均を出す。分母が 0 のときは null。 */
 export function derive(a) {
   const div = (x, y) => (y > 0 ? x / y : null);
@@ -207,6 +241,7 @@ export function derive(a) {
     rankDist: a.rankDist,
     avgPoints: div(a.pointsSum, a.games),
     ptSum: a.ptSum,
+    avgPt: div(a.ptSum, a.games),
     yenSum: a.yenSum,
     chipSum: a.chipSum,
     effective: a.effective,

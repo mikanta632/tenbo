@@ -1,14 +1,15 @@
 // 戦績画面（docs/design.md §8.5）。「対局一覧」と「個人成績」の2つのタブを持つ。
 //
 // 対局一覧: 人数（4人／3人／すべて）で絞り込み、対局ごとに順位・素点・pt・収支を出す。
+//           連続して行われた対局のまとまりごとに見出しを置き、人ごとの合計を添える。
 //           複数選んで「まとめて精算」すると、その範囲の収支と支払いを見られる。
 // 個人成績: 4人麻雀と3人麻雀を分けて集計する（平均順位は人数が違うと比べられない）。
-//           表には名前・対局数・平均順位・通算pt・収支だけを出し、
+//           表には名前・対局数・平均順位・通算pt・平均pt・収支だけを出し、
 //           和了率などの細かい数字は名前をタップして個人ページで見る。
 
 import { h, clear } from "./dom.js";
-import { aggregate, derive, gameStats } from "../stats.js";
-import { fmtPoints, fmtDate, gameDateTime, fmtPt, fmtYen, rankBadgeClass } from "./format.js";
+import { aggregate, combineGames, derive, gameStats, sessionGroups } from "../stats.js";
+import { fmtPoints, fmtDate, fmtDateTime, gameDateTime, fmtPt, fmtYen, rankBadgeClass } from "./format.js";
 
 const num = (x, d = 1) => (x === null ? "—" : x.toFixed(d));
 const signClass = (x) => (x > 0 ? "plus" : x < 0 ? "minus" : "");
@@ -118,6 +119,7 @@ export function renderStats(props) {
     // 選択バーは常に出す。左のボタンは「すべて選択」と「選択解除」を状態で入れ替える
     if (shown.length > 0) {
       const allPicked = shown.every((g) => selected.has(g.id));
+      const unsettled = shown.filter((g) => g.unsettled);
       root.append(
         h(
           "section",
@@ -125,7 +127,7 @@ export function renderStats(props) {
           selected.size > 0 ? h("div", { class: "summary" }, `${selected.size}対局を選択中`) : null,
           h(
             "div",
-            { class: "sheet-actions two" },
+            { class: "sheet-actions three" },
             h(
               "button",
               {
@@ -138,6 +140,21 @@ export function renderStats(props) {
                 },
               },
               allPicked ? "選択解除" : "すべて選択",
+            ),
+            // 選択を表示中の未精算の対局だけに置き換える（§8.5）
+            h(
+              "button",
+              {
+                type: "button",
+                class: "btn-secondary",
+                disabled: unsettled.length === 0,
+                onclick: () => {
+                  selected.clear();
+                  for (const g of unsettled) selected.add(g.id);
+                  render();
+                },
+              },
+              "未精算を選択",
             ),
             h(
               "button",
@@ -153,30 +170,63 @@ export function renderStats(props) {
       root.append(h("section", { class: "card" }, h("div", { class: "hint" }, "この条件の対局はありません")));
       return;
     }
-    const days = new Map();
-    for (const game of shown) {
-      const day = gameDateTime(game).slice(0, 10) || "日付不明";
-      if (!days.has(day)) days.set(day, []);
-      days.get(day).push(game);
+    // まとまりは絞り込みの前の全対局で決め、表示する対局が無いまとまりは出さない（§8.5）
+    const shownIds = new Set(shown.map((g) => g.id));
+    for (const group of sessionGroups(games)) {
+      const groupGames = group.filter((g) => shownIds.has(g.id));
+      if (groupGames.length === 0) continue;
+      const allPicked = groupGames.every((g) => selected.has(g.id));
+      const from = fmtDateTime(groupGames.at(-1).startedAt || groupGames.at(-1).endedAt);
+      const to = gameDateTime(groupGames[0]);
+      const span = from && to ? `${from}〜${to.slice(0, 10) === from.slice(0, 10) ? to.slice(11) : to}` : from || to || "日付不明";
+      const hasToday = groupGames.some((g) => gameDateTime(g).slice(0, 10) === today);
+      root.append(
+        h("div", { class: "game-day" },
+          h("b", null, `${span}${hasToday ? "（今日）" : ""} ・ ${groupGames.length}対局`),
+          h("button", {
+            type: "button", class: "btn-secondary small",
+            "aria-label": `${span}の対局を${allPicked ? "選択解除" : "すべて選択"}`,
+            onclick: () => {
+              for (const g of groupGames) {
+                if (allPicked) selected.delete(g.id);
+                else selected.add(g.id);
+              }
+              render();
+            },
+          }, allPicked ? "このまとまりの選択解除" : "このまとまりをすべて選択"),
+        ),
+        sessionSummary(groupGames),
+      );
+      for (const game of groupGames) root.append(gameCard(game));
     }
-    for (const [day, dayGames] of days) {
-      const allPicked = dayGames.every((g) => selected.has(g.id));
-      root.append(h("div", { class: "game-day" },
-        h("b", null, `${day}${day === today ? "（今日）" : ""} ・ ${dayGames.length}対局`),
-        h("button", {
-          type: "button", class: "btn-secondary small",
-          "aria-label": `${day}の対局を${allPicked ? "選択解除" : "すべて選択"}`,
-          onclick: () => {
-            for (const g of dayGames) {
-              if (allPicked) selected.delete(g.id);
-              else selected.add(g.id);
-            }
-            render();
-          },
-        }, allPicked ? "この日の選択解除" : "この日をすべて選択"),
-      ));
-      for (const game of dayGames) root.append(gameCard(game));
-    }
+  }
+
+  /** まとまりの人ごとの合計（§8.5）。未精算の対局も含めた実際の額 */
+  function sessionSummary(groupGames) {
+    const { players } = combineGames(groupGames);
+    return h(
+      "section",
+      { class: "card session-sum" },
+      h(
+        "table",
+        { class: "rtable" },
+        h("thead", null, h("tr", null, h("th", null, "名前"), h("th", null, "対局"), h("th", null, "pt"), h("th", null, "収支（円）"))),
+        h(
+          "tbody",
+          null,
+          players.map((p) =>
+            h(
+              "tr",
+              null,
+              h("td", { class: "name" }, nameOf(p.playerId)),
+              h("td", null, String(p.games)),
+              h("td", { class: "pt" }, fmtPt(Math.round(p.pt * 10) / 10)),
+              h("td", { class: signClass(p.yen) }, fmtYen(p.yen)),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /** 1対局のカード。左のチェックで選択、日付をタップで操作（結果・編集・削除）。 */
@@ -290,7 +340,7 @@ export function renderStats(props) {
         h(
           "table",
           { class: "rtable" },
-          h("thead", null, h("tr", null, h("th", null, "名前"), h("th", null, "対局"), h("th", null, "平均順位"), h("th", null, "通算pt"), h("th", null, "収支（円）"))),
+          h("thead", null, h("tr", null, h("th", null, "名前"), h("th", null, "対局"), h("th", null, "平均順位"), h("th", null, "通算pt"), h("th", null, "平均pt"), h("th", null, "収支（円）"))),
           h(
             "tbody",
             null,
@@ -302,6 +352,7 @@ export function renderStats(props) {
                 h("td", null, r.d ? String(r.d.games) : "0"),
                 h("td", null, r.d ? num(r.d.avgRank, 2) : "—"),
                 h("td", { class: "pt" }, r.d ? fmtPt(Math.round(r.d.ptSum * 10) / 10) : "—"),
+                h("td", { class: "pt" }, r.d ? fmtPt(Math.round(r.d.avgPt * 10) / 10) : "—"),
                 h("td", { class: r.d ? signClass(r.d.yenSum) : "" }, r.d ? fmtYen(r.d.yenSum) : "—"),
               ),
             ),

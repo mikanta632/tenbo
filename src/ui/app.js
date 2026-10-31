@@ -315,10 +315,23 @@ function statsContent() {
       if (picked.length === 0) return;
       const { players, transfers } = combineGames(picked);
       closeSheet();
+      const unsettledIds = new Set(picked.filter((g) => g.unsettled).map((g) => g.id));
       openSheetHandle = openCombinedSettlement({
         count: picked.length,
         players: players.map((p) => ({ ...p, name: nameOf(p.playerId) })),
         transfers,
+        unsettledCount: unsettledIds.size,
+        onMarkSettled: () => {
+          // 選んだ対局の未精算の印をまとめて外す（§8.5）。1回の書き込みで保存する
+          const next = storage.loadGames().map((g) => {
+            if (!unsettledIds.has(g.id)) return g;
+            const { unsettled, ...rest } = g;
+            return rest;
+          });
+          if (!persist(() => storage.saveGames(next))) return;
+          closeSheet();
+          show("stats");
+        },
       });
     },
   });

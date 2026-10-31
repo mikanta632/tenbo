@@ -519,6 +519,9 @@ body.app-landscape .menu-list { display: grid; grid-template-columns: 1fr 1fr; }
 .select-bar .sheet-actions { margin-top: 0; }
 .game-day { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 18px 0 8px; flex-wrap: wrap; }
 .game-day b { font-size: 14px; }
+.select-bar .sheet-actions.three > * { width: 100%; padding-left: 2px; padding-right: 2px; font-size: 14px; white-space: nowrap; }
+.session-sum { padding-top: 8px; padding-bottom: 8px; }
+.session-sum .rtable td.name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 7em; }
 
 .transfer { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.12); font-size: 15px; }
 .transfer .amt { font-weight: 700; color: var(--digit); font-variant-numeric: tabular-nums; }

@@ -1168,10 +1168,11 @@ export function openConfirm({ title, message, okLabel = "OK", onOk }) {
 
 /**
  * 選んだ対局をまとめた収支と支払い（§8.5）。
- * props: { count, players: [{ name, games, pt, yen }], transfers: [{from,to,amount}] }
+ * props: { count, players: [{ name, games, pt, yen }], transfers: [{from,to,amount}], unsettledCount, onMarkSettled }
  * transfers の from / to は players の添字。null は卓外。
+ * unsettledCount が 1 以上なら「精算済みにする」を出し、押すと onMarkSettled を呼ぶ。
  */
-export function openCombinedSettlement({ count, players, transfers }) {
+export function openCombinedSettlement({ count, players, transfers, unsettledCount = 0, onMarkSettled }) {
   const label = (i) => (i === null ? "卓外" : players[i].name);
   const withChips = players.some((p) => p.chips);
   const body = h("div", { class: "sheet-body" });
@@ -1200,6 +1201,9 @@ export function openCombinedSettlement({ count, players, transfers }) {
     transfers.length
       ? transfers.map((t) => h("div", { class: "transfer" }, h("span", null, `${label(t.from)} → ${label(t.to)}`), h("span", { class: "amt" }, `${t.amount.toLocaleString("ja-JP")}円`)))
       : h("div", { class: "hint" }, "支払いはありません"),
+    unsettledCount > 0 && onMarkSettled
+      ? h("div", { class: "sheet-actions" }, h("button", { type: "button", class: "btn-primary", onclick: () => onMarkSettled() }, `精算済みにする（${unsettledCount}対局）`))
+      : null,
   );
   return openSheet({ title: `まとめて精算（${count}対局）`, body });
 }

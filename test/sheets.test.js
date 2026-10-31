@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { openAdjustSheet, openAbortiveSheet, openMenu, openOverDialog } from "../src/ui/sheets.js";
+import { openAdjustSheet, openAbortiveSheet, openMenu, openOverDialog, openCombinedSettlement } from "../src/ui/sheets.js";
 import { renderSettings } from "../src/ui/settings.js";
 import { makeRule, PRESETS } from "../src/rules.js";
 import { initialState } from "../src/reduce.js";
@@ -448,4 +448,17 @@ test("マージの名前の対応: 揃える先を選び、名前がかぶる人
   selectOf(rows[0]).handlers.change({ target: { value: "" } });
   confirm.handlers.click();
   assert.deepEqual(confirmed, { x1: { to: null, name: "アキラ" }, x2: { to: "c" } });
+});
+
+test("まとめて精算は未精算の対局があるときだけ「精算済みにする」を出す", (t) => {
+  mockDom(t);
+  const players = [{ name: "A", games: 1, pt: 10, yen: 1000 }, { name: "B", games: 1, pt: -10, yen: -1000 }];
+  const transfers = [{ from: 1, to: 0, amount: 1000 }];
+  const none = openCombinedSettlement({ count: 1, players, transfers, unsettledCount: 0, onMarkSettled: () => {} });
+  assert.equal(none.box.find((el) => el.tag === "button" && /精算済みにする/.test(el.textContent)), undefined);
+  none.close();
+  let marked = 0;
+  const some = openCombinedSettlement({ count: 2, players, transfers, unsettledCount: 2, onMarkSettled: () => marked++ });
+  button(some.box, "精算済みにする（2対局）").handlers.click();
+  assert.equal(marked, 1);
 });

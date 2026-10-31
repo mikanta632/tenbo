@@ -2,7 +2,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { gameStats, aggregate, derive, playerGames, combineGames } from "../src/stats.js";
+import { gameStats, aggregate, derive, playerGames, combineGames, sessionGroups } from "../src/stats.js";
 import { ptSeries, niceTicks } from "../src/ui/player.js";
 import { makeRule } from "../src/rules.js";
 import { appendEvent } from "../src/edit.js";
@@ -101,6 +101,28 @@ describe("aggregate / derive", () => {
   test("対局が無ければ空", () => {
     assert.equal(aggregate([]).size, 0);
   });
+  test("平均 pt は通算 pt を対局数で割る。対局が無ければ null", () => {
+    const g1 = game("g1", ["a", "b", "c", "d"], ron(0, 1, 5, 30), { t: "end" });
+    const g2 = game("g2", ["b", "a", "c", "d"], ron(0, 1, 5, 30), { t: "end" });
+    const a = derive(aggregate([g1, g2]).get("a"));
+    assert.equal(a.avgPt, a.ptSum / 2);
+    assert.equal(derive({ ...aggregate([g1]).get("a"), games: 0, ptSum: 0 }).avgPt, null);
+  });
+  test("未精算の対局の円は通算の円に入れず、pt などは入れる（§8.5）", () => {
+    const g1 = game("g1", ["a", "b", "c", "d"], ron(0, 1, 5, 30), { t: "end" });
+    const g2 = game("g2", ["a", "b", "c", "d"], ron(1, 0, 5, 30), { t: "end" });
+    const all = derive(aggregate([g1, g2]).get("a"));
+    const part = derive(aggregate([g1, { ...g2, unsettled: true }]).get("a"));
+    const g1yen = gameStats(g1).seats[0].yen;
+    assert.notEqual(all.yenSum, g1yen, "前提: 2局目にも円がある");
+    assert.equal(part.yenSum, g1yen);
+    assert.equal(part.ptSum, all.ptSum);
+    assert.equal(part.games, 2);
+    assert.equal(part.avgRank, all.avgRank);
+    // まとめて精算は未精算も含めた額
+    const combined = combineGames([g1, { ...g2, unsettled: true }]).players.find((p) => p.playerId === "a");
+    assert.equal(combined.yen, all.yenSum);
+  });
   test("旧アプリからの繰越を集計値のまま足す", () => {
     const g = game("g1", ["a", "b", "c", "d"], ron(0, 1, 5, 30));
     const c = {
@@ -170,6 +192,33 @@ describe("playerGames", () => {
     assert.equal(list[0].agari, 1);
     assert.equal(list[0].effective, 1);
     assert.deepEqual(playerGames([g1], "zzz"), []);
+  });
+});
+
+describe("sessionGroups", () => {
+  const at = (id, start, end) => ({ id, startedAt: start, endedAt: end });
+  test("前の対局の終わりから次の開始まで 3時間以内なら同じまとまり。新しい順に返す", () => {
+    const games = [
+      at("g4", "2026-11-02T10:00:00Z", "2026-11-02T11:00:00Z"), // 前から 3時間1分 → 別
+      at("g3", "2026-11-01T18:00:00Z", "2026-11-02T06:59:00Z"), // 前から ちょうど 3時間 → 同じ（日付をまたぐ）
+      at("g2", "2026-11-01T13:00:00Z", "2026-11-01T15:00:00Z"),
+      at("g1", "2026-11-01T12:00:00Z", "2026-11-01T14:00:00Z"), // g2 と重なる
+    ];
+    const groups = sessionGroups(games);
+    assert.deepEqual(groups.map((g) => g.map((x) => x.id)), [["g4"], ["g3", "g2", "g1"]]);
+  });
+  test("終わりはそれまでの最も遅い終局で測る", () => {
+    const games = [
+      at("g3", "2026-11-01T17:30:00Z", "2026-11-01T18:00:00Z"), // g1 の終わり 15:00 から 2.5時間
+      at("g2", "2026-11-01T11:00:00Z", "2026-11-01T11:30:00Z"),
+      at("g1", "2026-11-01T10:00:00Z", "2026-11-01T15:00:00Z"),
+    ];
+    assert.deepEqual(sessionGroups(games).map((g) => g.map((x) => x.id)), [["g3", "g2", "g1"]]);
+  });
+  test("開始が無ければ終局を使い、日時の無い対局は 1つでまとまりにする", () => {
+    const games = [at("g2", undefined, "2026-11-01T14:00:00Z"), at("g1", "2026-11-01T12:00:00Z", undefined), at("gx", undefined, undefined)];
+    assert.deepEqual(sessionGroups(games).map((g) => g.map((x) => x.id)), [["gx"], ["g2", "g1"]]);
+    assert.deepEqual(sessionGroups([]), []);
   });
 });
 

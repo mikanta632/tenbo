@@ -178,6 +178,7 @@ export function renderPlayer(props) {
           kv("平均素点", pts(d.avgPoints)),
           kv("最高素点", pts(d.maxPoints)),
           kv("通算 pt", fmtPt(Math.round(d.ptSum * 10) / 10)),
+          kv("平均 pt", d.avgPt === null ? "—" : fmtPt(Math.round(d.avgPt * 10) / 10)),
           kv("通算 円", fmtYen(d.yenSum)),
           kv("通算チップ", `${fmtDelta(d.chipSum || 0)}枚`),
         ),
