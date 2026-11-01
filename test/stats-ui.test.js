@@ -14,22 +14,22 @@ function fixture() {
   return { now, games: [make("g1", 6, 4), make("g2", 6, 3), make("g3", 5, 4)], roster: ["a", "b", "c", "d"].map((id) => ({ id, name: id })) };
 }
 
-test("今日・人数で絞り込んだ対局だけを日単位で選択して精算する", (t) => {
+test("人数で絞り込んだ対局だけを日単位で選択して精算する", (t) => {
   mockDom(t);
   let picked;
   let state;
   const props = { ...fixture(), onSettle: (ids) => (picked = ids), onListState: (s) => (state = s) };
   const root = renderStats(props);
-  button(root, "今日").handlers.click();
-  assert.equal(root.findAll((el) => el.matches(".game-card")).length, 2);
-  button(root, "この日をすべて選択").handlers.click();
+  assert.equal(root.findAll((el) => el.matches(".game-card")).length, 3);
+  assert.equal(button(root, "今日"), undefined, "期間の絞り込みは無い");
+  const today = fmtDate(new Date(2026, 8, 6).toISOString());
+  root.find((el) => el["aria-label"] === `${today}の対局をすべて選択`).handlers.click();
   button(root, "まとめて精算").handlers.click();
   assert.deepEqual(picked, ["g1", "g2"]);
   button(root, "4人").handlers.click();
   assert.deepEqual(state.selectedIds, ["g1"]);
-  button(root, "この日の選択解除").handlers.click();
+  root.find((el) => el["aria-label"] === `${today}の対局を選択解除`).handlers.click();
   assert.equal(button(root, "まとめて精算").disabled, true);
-  button(root, "全期間").handlers.click();
   const yesterday = fmtDate(new Date(2026, 8, 5).toISOString());
   root.find((el) => el["aria-label"] === `${yesterday}の対局をすべて選択`).handlers.click();
   assert.deepEqual(state.selectedIds, ["g3"]);
@@ -61,7 +61,7 @@ test("チェック操作ではスクロール位置を維持し、絞り込み�
   root.find((el) => el.tag === "input").handlers.change({ target: { checked: true } });
   assert.equal(scroller.scrollTop, 700);
   assert.equal(state.scrollTop, 700);
-  button(root, "今日").handlers.click();
+  button(root, "4人").handlers.click();
   assert.equal(scroller.scrollTop, 0);
   assert.equal(state.scrollTop, 0);
 });
@@ -122,11 +122,11 @@ test("「未精算を選択」は選択を表示中の未精算の対局だけ�
   button(root, "4人").handlers.click();
   button(root, "未精算を選択").handlers.click();
   assert.deepEqual(state.selectedIds, ["g3"]);
-  button(root, "今日").handlers.click();
-  assert.equal(button(root, "未精算を選択").disabled, true);
+  const none = renderStats(fixture());
+  assert.equal(button(none, "未精算を選択").disabled, true);
 });
 
-test("まとまりごとの表示は見出しと人ごとの合計だけを出し、まとまりは絞り込み前の対局で決める", (t) => {
+test("まとまりごとの表示はまとまりのカードに合計だけを出し、まとまりは絞り込み前の対局で決める", (t) => {
   mockDom(t);
   const base = fixture();
   const make = (id, start, end, n = 4) => ({
@@ -139,7 +139,7 @@ test("まとまりごとの表示は見出しと人ごとの合計だけを出�
   assert.equal(root.findAll((el) => el.matches(".session-sum")).length, 0, "既定は対局ごと");
   button(root, "まとまりごと").handlers.click();
   assert.equal(root.findAll((el) => el.matches(".game-card")).length, 0, "対局のカードは出さない");
-  const heads = root.findAll((el) => el.matches(".game-day")).map((el) => el.querySelector("b").textContent);
+  const heads = root.findAll((el) => el.matches(".session-title")).map((el) => el.textContent);
   assert.equal(heads.length, 2);
   assert.match(heads[0], /23:00〜23:30（今日） ・ 1対局$/);
   assert.match(heads[1], /13:00〜19:00（今日） ・ 3対局$/);
@@ -149,7 +149,7 @@ test("まとまりごとの表示は見出しと人ごとの合計だけを出�
   assert.deepEqual(games4.sort(), ["2", "3", "3", "3"]); // d は 3人の対局にいない
   // 4人で絞ると 3人の対局が消えても、まとまりは g1・g3 のまま
   button(root, "4人").handlers.click();
-  const heads4 = root.findAll((el) => el.matches(".game-day")).map((el) => el.querySelector("b").textContent);
+  const heads4 = root.findAll((el) => el.matches(".session-title")).map((el) => el.textContent);
   assert.equal(heads4.length, 2);
   assert.match(heads4[1], /13:00〜19:00（今日） ・ 2対局$/);
 });
@@ -163,10 +163,32 @@ test("対局ごと／まとまりごとの切り替えは選択を残し、戦�
   button(root, "まとまりごと").handlers.click();
   assert.equal(state.view, "sessions");
   assert.deepEqual(state.selectedIds, ["g1", "g2"]);
-  assert.ok(button(root, "このまとまりの選択解除"), "選択はまとまりの見出しにも反映");
+  assert.deepEqual(root.findAll((el) => el.tag === "input").map((el) => !!el.checked), [true, false], "選択はまとまりのチェックにも反映");
   const back = renderStats({ ...props, initialListState: state });
   assert.match(button(back, "まとまりごと").className, /on/);
   assert.equal(back.findAll((el) => el.matches(".game-card")).length, 0);
   button(back, "対局ごと").handlers.click();
   assert.equal(back.findAll((el) => el.tag === "input" && el.checked).length, 2);
+});
+
+test("まとまりのチェックでそのまとまりの表示中の対局をまとめて選び、外すとまとめて外す", (t) => {
+  mockDom(t);
+  let picked;
+  let state;
+  const f = { ...fixture(), initialListState: { view: "sessions" }, onSettle: (ids) => (picked = ids), onListState: (s) => (state = s) };
+  const root = renderStats(f);
+  const checks = () => root.findAll((el) => el.tag === "input");
+  assert.equal(checks().length, 2, "まとまりごとに 1 つ");
+  checks()[0].handlers.change({ target: { checked: true } });
+  assert.deepEqual(state.selectedIds, ["g1", "g2"]);
+  button(root, "まとめて精算").handlers.click();
+  assert.deepEqual(picked, ["g1", "g2"]);
+  checks()[1].handlers.change({ target: { checked: true } });
+  assert.deepEqual(state.selectedIds.sort(), ["g1", "g2", "g3"]);
+  checks()[0].handlers.change({ target: { checked: false } });
+  assert.deepEqual(state.selectedIds, ["g3"]);
+  // 人数で絞ると表示中の対局だけを選ぶ
+  button(root, "4人").handlers.click();
+  checks()[0].handlers.change({ target: { checked: true } });
+  assert.deepEqual(state.selectedIds.sort(), ["g1", "g3"]);
 });

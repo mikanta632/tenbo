@@ -34,7 +34,6 @@ export function renderStats(props) {
   let tab = props.initialTab === "players" ? "players" : "games";
   const initial = props.initialListState || {};
   let filter = FILTERS.some((f) => f.key === initial.filter) ? initial.filter : "all";
-  let period = initial.period === "today" ? "today" : "all";
   let view = initial.view === "sessions" ? "sessions" : "games"; // 対局ごと／まとまりごと
   let pc = props.initialPc === 3 ? 3 : 4; // 個人成績の人数
   const selected = new Set((initial.selectedIds || []).filter((id) => games.some((g) => g.id === id)));
@@ -78,7 +77,7 @@ export function renderStats(props) {
     if (tab === "games") renderGameList();
     else renderPlayerStats();
     if (scroller) scroller.scrollTop = scrollTop;
-    props.onListState?.({ filter, period, view, selectedIds: [...selected], scrollTop });
+    props.onListState?.({ filter, view, selectedIds: [...selected], scrollTop });
   }
 
   // ---- 対局一覧 ----------------------------------------------------------
@@ -88,7 +87,7 @@ export function renderStats(props) {
       root.append(h("section", { class: "card" }, h("div", { class: "hint" }, "終了した対局がありません")));
       return;
     }
-    const shown = games.filter((g) => FILTERS.find((f) => f.key === filter).match(g) && (period !== "today" || gameDateTime(g).slice(0, 10) === today));
+    const shown = games.filter(FILTERS.find((f) => f.key === filter).match);
     // 絞り込みで消えた対局は選択から外す
     for (const id of [...selected]) if (!shown.some((g) => g.id === id)) selected.delete(id);
 
@@ -111,10 +110,6 @@ export function renderStats(props) {
           ),
         ),
       ),
-      h("div", { class: "choice grid2" }, [["all", "全期間"], ["today", "今日"]].map(([key, label]) => h("button", {
-        type: "button", class: `chip${period === key ? " on" : ""}`,
-        onclick: () => { period = key; render(true); },
-      }, label))),
       h("div", { class: "choice grid2" }, [["games", "対局ごと"], ["sessions", "まとまりごと"]].map(([key, label]) => h("button", {
         type: "button", class: `chip${view === key ? " on" : ""}`,
         onclick: () => { view = key; render(true); },
@@ -189,22 +184,31 @@ export function renderStats(props) {
       const to = gameDateTime(groupGames[0]);
       const span = from && to ? `${from}〜${to.slice(0, 10) === from.slice(0, 10) ? to.slice(11) : to}` : from || to || "日付不明";
       const hasToday = groupGames.some((g) => gameDateTime(g).slice(0, 10) === today);
+      // チェックでまとまりの対局をまとめて選ぶ。すべて選ばれているときだけ付く
+      const check = h("input", {
+        type: "checkbox",
+        "aria-label": `${span}のまとまりを選択`,
+        checked: allPicked,
+        onchange: (e) => {
+          for (const g of groupGames) {
+            if (e.target.checked) selected.add(g.id);
+            else selected.delete(g.id);
+          }
+          render();
+        },
+      });
       root.append(
-        h("div", { class: "game-day" },
-          h("b", null, `${span}${hasToday ? "（今日）" : ""} ・ ${groupGames.length}対局`),
-          h("button", {
-            type: "button", class: "btn-secondary small",
-            "aria-label": `${span}の対局を${allPicked ? "選択解除" : "すべて選択"}`,
-            onclick: () => {
-              for (const g of groupGames) {
-                if (allPicked) selected.delete(g.id);
-                else selected.add(g.id);
-              }
-              render();
-            },
-          }, allPicked ? "このまとまりの選択解除" : "このまとまりをすべて選択"),
+        h(
+          "section",
+          { class: "card session-card" },
+          h(
+            "div",
+            { class: "game-card-head" },
+            h("label", { class: "pick" }, check),
+            h("b", { class: "session-title" }, `${span}${hasToday ? "（今日）" : ""} ・ ${groupGames.length}対局`),
+          ),
+          sessionSummary(groupGames),
         ),
-        sessionSummary(groupGames),
       );
     }
   }
@@ -241,11 +245,8 @@ export function renderStats(props) {
   function sessionSummary(groupGames) {
     const { players } = combineGames(groupGames);
     return h(
-      "section",
-      { class: "card session-sum" },
-      h(
         "table",
-        { class: "rtable" },
+        { class: "rtable session-sum" },
         h("thead", null, h("tr", null, h("th", null, "名前"), h("th", null, "対局"), h("th", null, "pt"), h("th", null, "収支（円）"))),
         h(
           "tbody",
@@ -261,7 +262,6 @@ export function renderStats(props) {
             ),
           ),
         ),
-      ),
     );
   }
 
