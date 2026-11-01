@@ -1,7 +1,7 @@
 // 戦績画面（docs/design.md §8.5）。「対局一覧」と「個人成績」の2つのタブを持つ。
 //
 // 対局一覧: 人数（4人／3人／すべて）で絞り込み、対局ごとに順位・素点・pt・収支を出す。
-//           連続して行われた対局のまとまりごとに見出しを置き、人ごとの合計を添える。
+//           「まとまりごと」に切り替えると、連続して行われた対局のまとまりごとに人ごとの合計を出す。
 //           複数選んで「まとめて精算」すると、その範囲の収支と支払いを見られる。
 // 個人成績: 4人麻雀と3人麻雀を分けて集計する（平均順位は人数が違うと比べられない）。
 //           表には名前・対局数・平均順位・通算pt・平均pt・収支だけを出し、
@@ -35,6 +35,7 @@ export function renderStats(props) {
   const initial = props.initialListState || {};
   let filter = FILTERS.some((f) => f.key === initial.filter) ? initial.filter : "all";
   let period = initial.period === "today" ? "today" : "all";
+  let view = initial.view === "sessions" ? "sessions" : "games"; // 対局ごと／まとまりごと
   let pc = props.initialPc === 3 ? 3 : 4; // 個人成績の人数
   const selected = new Set((initial.selectedIds || []).filter((id) => games.some((g) => g.id === id)));
   const today = fmtDate((props.now || new Date()).toISOString());
@@ -77,7 +78,7 @@ export function renderStats(props) {
     if (tab === "games") renderGameList();
     else renderPlayerStats();
     if (scroller) scroller.scrollTop = scrollTop;
-    props.onListState?.({ filter, period, selectedIds: [...selected], scrollTop });
+    props.onListState?.({ filter, period, view, selectedIds: [...selected], scrollTop });
   }
 
   // ---- 対局一覧 ----------------------------------------------------------
@@ -113,6 +114,10 @@ export function renderStats(props) {
       h("div", { class: "choice grid2" }, [["all", "全期間"], ["today", "今日"]].map(([key, label]) => h("button", {
         type: "button", class: `chip${period === key ? " on" : ""}`,
         onclick: () => { period = key; render(true); },
+      }, label))),
+      h("div", { class: "choice grid2" }, [["games", "対局ごと"], ["sessions", "まとまりごと"]].map(([key, label]) => h("button", {
+        type: "button", class: `chip${view === key ? " on" : ""}`,
+        onclick: () => { view = key; render(true); },
       }, label))),
     );
 
@@ -170,6 +175,10 @@ export function renderStats(props) {
       root.append(h("section", { class: "card" }, h("div", { class: "hint" }, "この条件の対局はありません")));
       return;
     }
+    if (view === "games") {
+      renderByDay(shown);
+      return;
+    }
     // まとまりは絞り込みの前の全対局で決め、表示する対局が無いまとまりは出さない（§8.5）
     const shownIds = new Set(shown.map((g) => g.id));
     for (const group of sessionGroups(games)) {
@@ -197,7 +206,34 @@ export function renderStats(props) {
         ),
         sessionSummary(groupGames),
       );
-      for (const game of groupGames) root.append(gameCard(game));
+    }
+  }
+
+  /** 対局ごとの表示。日付ごとに見出しを置いてカードを並べる */
+  function renderByDay(shown) {
+    const days = new Map();
+    for (const game of shown) {
+      const day = gameDateTime(game).slice(0, 10) || "日付不明";
+      if (!days.has(day)) days.set(day, []);
+      days.get(day).push(game);
+    }
+    for (const [day, dayGames] of days) {
+      const allPicked = dayGames.every((g) => selected.has(g.id));
+      root.append(h("div", { class: "game-day" },
+        h("b", null, `${day}${day === today ? "（今日）" : ""} ・ ${dayGames.length}対局`),
+        h("button", {
+          type: "button", class: "btn-secondary small",
+          "aria-label": `${day}の対局を${allPicked ? "選択解除" : "すべて選択"}`,
+          onclick: () => {
+            for (const g of dayGames) {
+              if (allPicked) selected.delete(g.id);
+              else selected.add(g.id);
+            }
+            render();
+          },
+        }, allPicked ? "この日の選択解除" : "この日をすべて選択"),
+      ));
+      for (const game of dayGames) root.append(gameCard(game));
     }
   }
 
