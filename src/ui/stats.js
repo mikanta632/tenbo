@@ -183,7 +183,6 @@ export function renderStats(props) {
       const from = fmtDateTime(groupGames.at(-1).startedAt || groupGames.at(-1).endedAt);
       const to = gameDateTime(groupGames[0]);
       const span = from && to ? `${from}〜${to.slice(0, 10) === from.slice(0, 10) ? to.slice(11) : to}` : from || to || "日付不明";
-      const hasToday = groupGames.some((g) => gameDateTime(g).slice(0, 10) === today);
       // チェックでまとまりの対局をまとめて選ぶ。すべて選ばれているときだけ付く
       const check = h("input", {
         type: "checkbox",
@@ -205,7 +204,7 @@ export function renderStats(props) {
             "div",
             { class: "game-card-head" },
             h("label", { class: "pick" }, check),
-            h("div", { class: "session-title" }, h("b", null, `${span}${hasToday ? "（今日）" : ""}`), h("span", { class: "session-count" }, `${groupGames.length}対局`)),
+            h("div", { class: "session-title" }, h("b", null, span), h("span", { class: "session-count" }, `${groupGames.length}対局`)),
           ),
           sessionSummary(groupGames),
         ),

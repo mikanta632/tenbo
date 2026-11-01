@@ -141,8 +141,8 @@ test("まとまりごとの表示はまとまりのカードに合計だけを�
   assert.equal(root.findAll((el) => el.matches(".game-card")).length, 0, "対局のカードは出さない");
   const heads = root.findAll((el) => el.matches(".session-title")).map((el) => el.textContent);
   assert.equal(heads.length, 2);
-  assert.match(heads[0], /23:00〜23:30（今日）1対局$/);
-  assert.match(heads[1], /13:00〜19:00（今日）3対局$/);
+  assert.match(heads[0], /23:00〜23:301対局$/);
+  assert.match(heads[1], /13:00〜19:003対局$/);
   const sums = root.findAll((el) => el.matches(".session-sum"));
   const rows = sums[1].querySelector("tbody").findAll((el) => el.tag === "tr");
   const games4 = rows.map((r) => r.findAll((el) => el.tag === "td")[1].textContent);
@@ -151,7 +151,7 @@ test("まとまりごとの表示はまとまりのカードに合計だけを�
   button(root, "4人").handlers.click();
   const heads4 = root.findAll((el) => el.matches(".session-title")).map((el) => el.textContent);
   assert.equal(heads4.length, 2);
-  assert.match(heads4[1], /13:00〜19:00（今日）2対局$/);
+  assert.match(heads4[1], /13:00〜19:002対局$/);
 });
 
 test("対局ごと／まとまりごとの切り替えは選択を残し、戦績画面を作り直しても戻る", (t) => {
