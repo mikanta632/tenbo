@@ -521,6 +521,7 @@ body.app-landscape .menu-list { display: grid; grid-template-columns: 1fr 1fr; }
 .game-day b { font-size: 14px; }
 .select-bar .sheet-actions.three > * { width: 100%; padding-left: 2px; padding-right: 2px; font-size: 14px; white-space: nowrap; }
 .session-title { font-size: 14px; flex: 1; min-width: 0; }
+.session-count { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
 .session-card .session-sum { margin-top: 6px; }
 .session-sum td.name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 7em; }
 

@@ -205,7 +205,7 @@ export function renderStats(props) {
             "div",
             { class: "game-card-head" },
             h("label", { class: "pick" }, check),
-            h("b", { class: "session-title" }, `${span}${hasToday ? "（今日）" : ""} ・ ${groupGames.length}対局`),
+            h("div", { class: "session-title" }, h("b", null, `${span}${hasToday ? "（今日）" : ""}`), h("span", { class: "session-count" }, `${groupGames.length}対局`)),
           ),
           sessionSummary(groupGames),
         ),
